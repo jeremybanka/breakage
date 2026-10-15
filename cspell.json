@@ -19,6 +19,7 @@
 		"malva",
 		"oxlint",
 		"pathspecs",
+		"renovatebot",
 		"revparse",
 		"tagger",
 		"takua",
@@ -33,6 +34,7 @@
 		"worktrees"
 	],
 	"ignoreRegExpList": [
-		"/\\\\[nrt]/g"
+		"/\\\\[nrt]/g",
+		"/\\b(?:CHANGESETS|RENOVATE)_APP_PK_[A-Z0-9]+\\b/g"
 	]
 }
