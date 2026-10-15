@@ -52,6 +52,7 @@ describe(`CLI features`, () => {
 		`--tag-pattern`,
 		`--certify-command`,
 		`--base-dir`,
+		`--baseline-file`,
 	])(`offers %s before validating required options`, (option) => {
 		const result = runCli(`breakage`, [`__complete`, option])
 		expect(result.stdout).toContain(option)
@@ -73,6 +74,19 @@ describe(`CLI features`, () => {
 			expect(result.stdout).toContain(`sample-dir/`)
 			expect(result.stdout).not.toContain(`sample.json`)
 		}
+	})
+	it(`completes prelude options and snapshot paths without loading config`, () => {
+		writeFileSync(resolve(directory, `breakage.config.json`), `invalid json`)
+		writeFileSync(resolve(directory, `sample.json`), `{}`)
+		for (const words of [[`--baseline-file=sam`], [`prelude`, `--out=sam`]]) {
+			expect(
+				runCli(`breakage`, [`_carapace`, `export`, `breakage`, ...words])
+					.stdout,
+			).toContain(`sample.json`)
+		}
+		expect(
+			runCli(`breakage`, [`__complete`, `prelude`, `--o`]).stdout,
+		).toContain(`--out`)
 	})
 	it(`accepts the output alias and warns about ignored options before schema generation`, () => {
 		const result = runCli(`breakage`, [
