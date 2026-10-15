@@ -63,6 +63,8 @@ describe(`breakage`, () => {
 		const git = simpleGit(localRepoDirname)
 		await git
 			.init()
+			.addConfig(`user.name`, `Breakage Test`)
+			.addConfig(`user.email`, `breakage@example.invalid`)
 			.add(`.`)
 			.commit(`Initial commit`)
 			.addAnnotatedTag(`my-library@1.0.0`, `initial release`)
