@@ -2,6 +2,12 @@
 
 Breakage continues break-check's version sequence. Historical source and `break-check@` release tags are included in this repository; see the [history guide](../../docs/history/README.md) for provenance and commit mappings. Historical changelog commit IDs refer to the original [Wayforge](https://github.com/jeremybanka/wayforge) commits.
 
+## 0.8.2
+
+### Patch Changes
+
+- 13b5490: Add an uncached `breakage prelude` command and `breakagePrelude` API that resolve and fetch a release into an atomically written, gitignored snapshot. Use `--baseline-file` or `baselineFile` to replay contracts from that exact commit without rediscovering remote tags, allowing task runners to cache compatibility checks while invalidating them for new releases or moved tags. Document Turbo deferred hashing and compatibility replay against the tested package’s source while preserving ordinary checks, certification, and test restoration.
+
 ## 0.8.1
 
 ### First release as Breakage
