@@ -42,7 +42,8 @@
 	"markdown": {
 		"associations": [
 			"**/*.{md,mdx}"
-		]
+		],
+		"textWrap": "never"
 	},
 	"malva": {
 		"associations": [

@@ -1,6 +1,6 @@
 import { expect, it } from "bun:test"
 
-import { latestReleaseTag } from "../src/release-tag"
+import { latestReleaseTag } from "../src/release-tag.ts"
 
 it(`orders stable, prerelease, numeric and scoped package versions`, () => {
 	const refs = [

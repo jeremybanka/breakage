@@ -2,10 +2,10 @@ import type { InlineConfig, UserConfig } from "tsdown"
 import { defineConfig } from "tsdown"
 
 const config: UserConfig = defineConfig({
-	entry: [`src/break-check.ts`, `src/break-check.x.ts`],
+	entry: [`src/breakage.ts`, `src/breakage.x.ts`],
 
 	clean: true,
-	dts: { entry: [`src/break-check.ts`], sourcemap: true },
+	dts: { entry: [`src/breakage.ts`], sourcemap: true },
 	fixedExtension: false,
 	format: `esm`,
 	outDir: `dist`,

@@ -15,13 +15,13 @@ import { setTimeout } from "node:timers/promises"
 import { afterEach, beforeEach, expect, it } from "bun:test"
 import { simpleGit } from "simple-git"
 
-import { breakCheck } from "../src/break-check"
+import { breakage } from "../src/breakage.ts"
 
 let temporaryDirectory: string
 let repository: string
 
 beforeEach(async () => {
-	temporaryDirectory = mkdtempSync(path.join(tmpdir(), `break-check-targeted-`))
+	temporaryDirectory = mkdtempSync(path.join(tmpdir(), `breakage-targeted-`))
 	repository = path.join(temporaryDirectory, `repository`)
 	const remote = path.join(temporaryDirectory, `remote.git`)
 	await mkdir(repository)
@@ -29,8 +29,8 @@ beforeEach(async () => {
 	await simpleGit(remote).init([`--bare`])
 	await simpleGit(repository)
 		.init()
-		.addConfig(`user.name`, `Break Check Test`)
-		.addConfig(`user.email`, `break-check@example.invalid`)
+		.addConfig(`user.name`, `Breakage Test`)
+		.addConfig(`user.email`, `breakage@example.invalid`)
 		.addRemote(`origin`, remote)
 })
 
@@ -91,7 +91,7 @@ await Bun.write("artifact.txt", "test command output");
 process.exit(${exitCode});
 `,
 		)
-		const outcome = await breakCheck({
+		const outcome = await breakage({
 			baseDirname: path.join(repository, `package`),
 			tagPattern: `example@`,
 			testPattern: `public tests/*.test.js`,
@@ -120,7 +120,7 @@ process.exit(${exitCode});
 		)
 		expect(await git.revparse([`HEAD`])).toBe(headBefore)
 		expect(await git.raw([`stash`, `list`])).toBe(stashBefore)
-		expect(await readdir(path.join(repository, `.git/break-check`))).toEqual([])
+		expect(await readdir(path.join(repository, `.git/breakage`))).toEqual([])
 	},
 )
 
@@ -165,9 +165,9 @@ assert.equal(await Bun.file(filename).text(), "released " + name);
 		await writeFile(
 			runner,
 			`
-import { breakCheck } from ${JSON.stringify(path.resolve(import.meta.dir, `../src/break-check.ts`))};
+import { breakage } from ${JSON.stringify(path.resolve(import.meta.dir, `../src/breakage.ts`))};
 const name = process.argv[2];
-const result = await breakCheck({
+const result = await breakage({
   baseDirname: ${JSON.stringify(repository)} + ${fromRoot ? `""` : `"/" + name`},
   tagPattern: "example@",
   testPattern: ${fromRoot ? `name + "/"` : `""`} + "*.test.js",
@@ -192,12 +192,12 @@ console.log(JSON.stringify(result));
 				certifyCommand: `exit 1`,
 			}
 			await rejects(
-				breakCheck(options),
+				breakage(options),
 				/Concurrent checks must use disjoint test paths/,
 			)
 			await write(`unrelated.txt`, `uncommitted`)
 			expect(
-				await breakCheck({ ...options, testPattern: `b/*.test.js` }),
+				await breakage({ ...options, testPattern: `b/*.test.js` }),
 			).toMatchObject({ gitWasClean: false })
 			await rm(path.join(repository, `unrelated.txt`))
 			const next = Bun.spawn([process.execPath, runner, `b`], {
@@ -229,13 +229,13 @@ console.log(JSON.stringify(result));
 				])
 				expect(stderr).toBe(``)
 				expect(exitCode).toBe(0)
-				expect(JSON.parse(stdout)).toMatchObject({ breakingChangesFound: false })
+				expect(JSON.parse(stdout)).toMatchObject({
+					breakingChangesFound: false,
+				})
 			}
 			expect((await git.status()).isClean()).toBe(true)
 			expect(await git.raw([`stash`, `list`])).toBe(``)
-			expect(await readdir(path.join(repository, `.git/break-check`))).toEqual(
-				[],
-			)
+			expect(await readdir(path.join(repository, `.git/breakage`))).toEqual([])
 		} finally {
 			first.kill()
 			second?.kill()
@@ -252,7 +252,7 @@ it(`does not overwrite ignored files that occupy release-only test paths`, async
 	await simpleGit(repository).rm([`public.test.js`]).commit(`Remove test`)
 	await write(`public.test.js`, `ignored local file`)
 	await rejects(
-		breakCheck({
+		breakage({
 			baseDirname: repository,
 			tagPattern: `example@`,
 			testPattern: `*.test.js`,
@@ -264,7 +264,7 @@ it(`does not overwrite ignored files that occupy release-only test paths`, async
 	expect(await readFile(path.join(repository, `public.test.js`), `utf8`)).toBe(
 		`ignored local file`,
 	)
-	expect(await readdir(path.join(repository, `.git/break-check`))).toEqual([])
+	expect(await readdir(path.join(repository, `.git/breakage`))).toEqual([])
 })
 
 it(`supports linked Git worktrees`, async () => {
@@ -275,7 +275,7 @@ it(`supports linked Git worktrees`, async () => {
 	await git.add(`.`).commit(`Current tests`)
 	const linkedWorktree = path.join(temporaryDirectory, `linked-worktree`)
 	await git.raw([`worktree`, `add`, `--detach`, linkedWorktree, `HEAD`])
-	const outcome = await breakCheck({
+	const outcome = await breakage({
 		baseDirname: linkedWorktree,
 		tagPattern: `example@`,
 		testPattern: `*.test.js`,
@@ -292,7 +292,7 @@ it(`supports linked Git worktrees`, async () => {
 	const linkedGitDirectory = await simpleGit(linkedWorktree).revparse([
 		`--absolute-git-dir`,
 	])
-	expect(await readdir(path.join(linkedGitDirectory, `break-check`))).toEqual([])
+	expect(await readdir(path.join(linkedGitDirectory, `breakage`))).toEqual([])
 })
 import { rejects } from "node:assert/strict"
 
@@ -311,7 +311,7 @@ it(`selects conventional version tags and ignores malformed versions`, async () 
 	for (const tag of [`checkpoint`, `v99.0`, `v02.0.0`, `v3.0.0-01`])
 		await git.addTag(tag)
 	await git.push([`--tags`, `origin`])
-	const outcome = await breakCheck({
+	const outcome = await breakage({
 		baseDirname: repository,
 		testPattern: `*.test.js`,
 		testCommand: `${shellQuote(process.execPath)} -e ${shellQuote(`if (await Bun.file("public.test.js").text() !== "second") process.exit(1)`)}`,
@@ -331,7 +331,7 @@ it(`reports no release when remote tags have no supported version`, async () => 
 		.addTag(`checkpoint`)
 		.push([`--tags`, `origin`])
 	expect(
-		await breakCheck({
+		await breakage({
 			baseDirname: repository,
 			testPattern: `*.test.js`,
 			testCommand: `exit 0`,

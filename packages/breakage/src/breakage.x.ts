@@ -18,10 +18,10 @@ import {
 } from "comline"
 import logger from "takua"
 
-import type { BreakCheckOptions } from "./break-check"
-import { breakCheck } from "./break-check"
+import type { BreakageOptions } from "./breakage.ts"
+import { breakage } from "./breakage.ts"
 
-const BREAK_CHECK_MANUAL = options(
+const BREAKAGE_MANUAL = options(
 	`Check for breaking changes in a package.`,
 	type({
 		"tagPattern?": `string`,
@@ -81,10 +81,10 @@ const BREAK_CHECK_MANUAL = options(
 			parse: parseBooleanOption,
 		},
 	},
-) satisfies OptionsGroup<BreakCheckOptions>
+) satisfies OptionsGroup<BreakageOptions>
 
 const SCHEMA_MANUAL = options(
-	`Create a copy of the schema for configuring break-check.`,
+	`Create a copy of the schema for configuring breakage.`,
 	type({ "outdir?": `string` }),
 	{
 		outdir: {
@@ -100,25 +100,28 @@ const SCHEMA_MANUAL = options(
 
 const parse = cli(
 	{
-		cliName: `break-check`,
+		cliName: `breakage`,
 		routes: optional({ help: null, schema: null, $configPath: null }),
 		routeOptions: {
-			"": BREAK_CHECK_MANUAL,
-			$configPath: BREAK_CHECK_MANUAL,
+			"": BREAKAGE_MANUAL,
+			$configPath: BREAKAGE_MANUAL,
 			help: noOptions(`Show usage.`),
 			schema: SCHEMA_MANUAL,
 		},
 		positionalCompletions: { $configPath: { fileSystem: `files` } },
-		discoverConfigPath: (args) => {
+		discoverConfigPath: (args: readonly string[]) => {
 			if (args[0] === `help` || args[0] === `schema`) {
 				return
 			}
 			const configPath =
-				args[0] ?? path.join(process.cwd(), `break-check.config.json`)
+				args[0] ?? path.join(process.cwd(), `breakage.config.json`)
 			return configPath
 		},
 	},
-	logger,
+	{
+		info: (message, ...data) => logger.info(`breakage`, message, data),
+		error: (message, ...data) => logger.error(`breakage`, message, data),
+	},
 )
 
 const completion = await completionResponse(parse.definition, process.argv)
@@ -141,7 +144,7 @@ if (completion !== undefined) {
 			break
 		case ``:
 		case `$configPath`: {
-			const { returnValue } = await encapsulate(() => breakCheck(inputs.opts), {
+			const { returnValue } = await encapsulate(() => breakage(inputs.opts), {
 				console: true,
 				stdout: true,
 			})
@@ -151,7 +154,9 @@ if (completion !== undefined) {
 			if (`breakingChangesFound` in returnValue) {
 				if (returnValue.breakingChangesFound) {
 					if (returnValue.breakingChangesCertified) {
-						process.stdout.write(`👷 Breaking changes were found and certified.`)
+						process.stdout.write(
+							`👷 Breaking changes were found and certified.`,
+						)
 						process.exit(0)
 					} else {
 						process.stdout.write(
@@ -165,7 +170,7 @@ if (completion !== undefined) {
 				}
 			} else {
 				process.stdout.write(
-					`💥 Break check failed to determine breaking changes.` +
+					`💥 Breakage failed to determine breaking changes.` +
 						`\n` +
 						inspect(returnValue),
 				)

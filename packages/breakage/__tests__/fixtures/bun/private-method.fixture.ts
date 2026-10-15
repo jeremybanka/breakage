@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test"
-import MyClass from "./src.js"
+import MyClass from "./src.ts"
 
 describe("MyClass Private API Test", () => {
 	it("should test privateMethod", () => {

@@ -1,14 +1,14 @@
 import { describe, expect, it } from "bun:test"
 
-import type { BreakCheckOptions } from "../src/break-check"
+import type { BreakageOptions } from "../src/breakage.ts"
 
-async function parseOptions(args: string[]): Promise<BreakCheckOptions> {
+async function parseOptions(args: string[]): Promise<BreakageOptions> {
 	const child = Bun.spawn(
 		[
 			process.execPath,
 			`--preload`,
 			`${import.meta.dir}/fixtures/capture-cli-options.ts`,
-			`${import.meta.dir}/../src/break-check.x.ts`,
+			`${import.meta.dir}/../src/breakage.x.ts`,
 			`--testPattern=*__public.test.ts`,
 			`--testCommand=bun test`,
 			`--certifyCommand=bun certify.ts`,
@@ -21,7 +21,7 @@ async function parseOptions(args: string[]): Promise<BreakCheckOptions> {
 	return JSON.parse(stderr)
 }
 
-describe(`break-check CLI short options`, () => {
+describe(`breakage CLI short options`, () => {
 	it(`enables verbose output without setting a release tag pattern`, async () => {
 		const options = await parseOptions([`-v`])
 		expect(options.verbose).toBe(true)

@@ -30,6 +30,20 @@
 	],
 	"packageRules": [
 		{
+			"description": "Exempt packages authored by jeremybanka at every version; keep aligned with pnpm-workspace.yaml",
+			"matchDatasources": [
+				"npm"
+			],
+			"matchPackageNames": [
+				"break-check",
+				"breakage",
+				"comline",
+				"takua",
+				"treetrunks"
+			],
+			"minimumReleaseAge": null
+		},
+		{
 			"matchPackageNames": [
 				"jdx/mise"
 			],

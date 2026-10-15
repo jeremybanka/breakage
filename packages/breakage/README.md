@@ -1,10 +1,20 @@
-# break-check
+# breakage
 
-command line tooling to detect breaking changes before you ship them
+Run yesterday’s tests against tomorrow’s release.
 
-## can i use break-check?
+Command line tooling to detect breaking changes before you ship them.
 
-break-check is a tool for projects where
+## migrating from break-check
+
+Breakage continues [break-check](https://github.com/jeremybanka/wayforge/tree/break-check%400.8.1/packages/break-check) in its own repository. Install `breakage`, replace the `break-check` command with `breakage`, and rename `break-check.config.json` to `breakage.config.json`. Configuration keys and check outcomes are unchanged. Regenerate schemas with `breakage schema`; generated files now use the `breakage` prefix. Reinstall shell completions with `breakage completion install <shell>`.
+
+For programmatic use, import `breakage`, `BreakageOptions`, and `BreakageOutcome` from `breakage` in place of `breakCheck`, `BreakCheckOptions`, and `BreakCheckOutcome` from `break-check`.
+
+Finish active break-check runs and recover any interrupted runs before switching. Breakage stores new recovery records under `breakage/` in the worktree's Git directory and its fetch lock at `breakage-fetch.lock` in the common Git directory.
+
+## can i use breakage?
+
+breakage is a tool for projects where
 
 1. releases must follow semantic versioning
 2. source code and tests are kept in separate files
@@ -13,25 +23,25 @@ break-check is a tool for projects where
 
 **if that sounds like your project, read on!**
 
-break-check distinguishes two kinds of tests:
+breakage distinguishes two kinds of tests:
 
-1. Public tests record behavior consumers can rely on across releases. break-check restores their released versions so a proposed change cannot weaken an assertion alongside the implementation it checks.
+1. Public tests record behavior consumers can rely on across releases. breakage restores their released versions so a proposed change cannot weaken an assertion alongside the implementation it checks.
 2. Private tests cover implementation details, development diagnostics, and other behavior you want to verify without preserving it as a release commitment. They can detect real bugs too; they are not used as the historical compatibility contract.
 
 Identify the public tests with a glob pattern and provide a command that builds the current implementation as needed and runs those tests once. A passing comparison means the selected released tests passed; its strength depends on the promises those tests actually protect.
 
 ## help
 
-Run `break-check help` to show usage for the CLI, including the check options and `schema` command. Like `schema`, the `help` command skips configuration discovery; it works without required check options and even when `break-check.config.json` is malformed. It does not run checks or write schema files.
+Run `breakage help` to show usage for the CLI, including the check options and `schema` command. Like `schema`, the `help` command skips configuration discovery; it works without required check options and even when `breakage.config.json` is malformed. It does not run checks or write schema files.
 
-Use `break-check help` instead of the former `--help` or `-h` options. Configuration no longer controls help. The empty route and a configuration path still run checks; if your configuration file is named `help`, pass `./help` to select it explicitly.
+Use `breakage help` instead of the former `--help` or `-h` options. Configuration no longer controls help. The empty route and a configuration path still run checks; if your configuration file is named `help`, pass `./help` to select it explicitly.
 
 ## examples
 
 ### single-project repository
 
 ```bash
-npx break-check \
+npx breakage \
   --tagPattern="refs/tags/my-library@" \
   --testPattern="tests/public/**/*" \
   --testCommand="npm run test:public" \
@@ -43,7 +53,7 @@ Run this from the project root. It restores files matching `tests/public/**/*` f
 ### multi-project monorepo
 
 ```bash
-npx break-check \
+npx breakage \
   --tagPattern="refs/tags/my-library@" \
   --testPattern="packages/my-library/tests/public/**/*" \
   --testCommand="cd packages/my-library && npm run test:public" \
@@ -107,7 +117,7 @@ This illustrates the restore boundary; `test:public` is a project-provided comma
 
 Match the assertions and observation code, and leave the implementation they are meant to evaluate outside that boundary. When an observer also ships as a library feature, its restored implementation is trusted test infrastructure for this comparison; verify its current implementation separately too. Build after restoration so compiled observation code reflects the restored source.
 
-break-check restores matched Git files, not installed dependencies. A shared package manifest and workspace lockfile keep setup simple, but dependency upgrades must keep restored readers runnable. If a reader needs its own dependency versions, include that dependency description in the restore boundary and make your test command install it. Merely matching a lockfile does not perform an installation. Protect runner configuration and other support files when they determine how historical assertions execute.
+breakage restores matched Git files, not installed dependencies. A shared package manifest and workspace lockfile keep setup simple, but dependency upgrades must keep restored readers runnable. If a reader needs its own dependency versions, include that dependency description in the restore boundary and make your test command install it. Merely matching a lockfile does not perform an installation. Protect runner configuration and other support files when they determine how historical assertions execute.
 
 ### check that the tests can fail for the right reason
 
@@ -128,7 +138,7 @@ Also verify the restoration mechanism once: change a current observation helper 
 
 ### run current contracts and historical contracts
 
-Run the current public suite before invoking `break-check`, so newly added contracts are checked too. Let the CLI run the released suite through `testCommand`. Configure the command to fail when it selects no tests, build and type-check the package when needed, and avoid cached test results that can bypass execution of restored files. Tests should run once and terminate.
+Run the current public suite before invoking `breakage`, so newly added contracts are checked too. Let the CLI run the released suite through `testCommand`. Configure the command to fail when it selects no tests, build and type-check the package when needed, and avoid cached test results that can bypass execution of restored files. Tests should run once and terminate.
 
 Run the check from a clean checkout with access to `origin` and release tags. An initial release without matched public tests provides no baseline: preserve the CLI's inconclusive result until a release includes them. A missing baseline is not evidence of compatibility.
 
@@ -138,21 +148,21 @@ When the job fails, identify the phase before deciding on a breaking release. A 
 
 [Mondrian's adoption PR](https://github.com/jeremybanka/mondrian/pull/108) separated consumer contracts from implementation tests and exact visual proofs. Independent reviews introduced mutations that still passed the proposed public suite, including ignored positions and identifiers, collapsed resources, and disabled visual differences. Strengthening the corresponding scenarios made those regressions observable. Refactor probes also removed unintended commitments to rejection timing and flat artifact directories.
 
-An October 5, 2026 audit examined 237 subsequent Break Check jobs: 186 passed, 48 failed, and 3 were cancelled. Of the failures, 13 were the initial missing-release-baseline result; the other 35 stopped in current-suite type checking with mismatched Vitest dependencies before historical comparison ran. After the baseline was established, the default branch had 64 passing checks and no failing checks. No failed job in that audit was traced to an arbitrary PDF expectation. See the [workflow history](https://github.com/jeremybanka/mondrian/actions/workflows/test.yml), a [baseline failure](https://github.com/jeremybanka/mondrian/actions/runs/35064496994/job/104691685448), and a [runner-alignment failure](https://github.com/jeremybanka/mondrian/actions/runs/36281497246/job/108514056194).
+An October 5, 2026 audit examined 237 subsequent Breakage jobs: 186 passed, 48 failed, and 3 were cancelled. Of the failures, 13 were the initial missing-release-baseline result; the other 35 stopped in current-suite type checking with mismatched Vitest dependencies before historical comparison ran. After the baseline was established, the default branch had 64 passing checks and no failing checks. No failed job in that audit was traced to an arbitrary PDF expectation. See the [workflow history](https://github.com/jeremybanka/mondrian/actions/workflows/test.yml), a [baseline failure](https://github.com/jeremybanka/mondrian/actions/runs/35064496994/job/104691685448), and a [runner-alignment failure](https://github.com/jeremybanka/mondrian/actions/runs/36281497246/job/108514056194).
 
 The contracts continued to pass through [PDFium changes](https://github.com/jeremybanka/mondrian/actions/runs/35280593318/job/105401343541) and an [aligned Vite Plus upgrade](https://github.com/jeremybanka/mondrian/actions/runs/36543626809/job/109324668309). That is evidence for the chosen boundaries over the audited changes, not a claim that the suite covers every possible consumer regression.
 
 ## git environment
 
-break-check uses simple-git v4, which filters inherited `GIT_*` environment variables and certain other Git-related variables, including `SSH_ASKPASS`, from its Git subprocesses. Environment-based settings such as `GIT_SSH_COMMAND`, `GIT_ASKPASS`, and `GIT_CONFIG_*` no longer configure tag discovery, fetching, or file restoration. Configure authentication and Git behavior through Git configuration files, SSH configuration, or an SSH agent instead. This filtering applies to break-check's Git operations; test and certification commands still inherit the normal process environment.
+breakage uses simple-git v4, which filters inherited `GIT_*` environment variables and certain other Git-related variables, including `SSH_ASKPASS`, from its Git subprocesses. Environment-based settings such as `GIT_SSH_COMMAND`, `GIT_ASKPASS`, and `GIT_CONFIG_*` no longer configure tag discovery, fetching, or file restoration. Configure authentication and Git behavior through Git configuration files, SSH configuration, or an SSH agent instead. This filtering applies to breakage's Git operations; test and certification commands still inherit the normal process environment.
 
 ## parallel checks and file restoration
 
-Checks with disjoint public test paths can run their test and certification commands in parallel, in their original working directories. break-check coordinates Git setup and cleanup with a short-lived lock and records each running check's test paths. The clean-repository check ignores only the paths owned by active checks; unrelated uncommitted changes still prevent a new check from starting. Checks with overlapping test paths are rejected before replacing files. Remote tag discovery runs outside this lock, and fetches use a separate lock in the common Git directory. Cleanup waits for file-restoration access instead of giving up when a setup timeout expires.
+Checks with disjoint public test paths can run their test and certification commands in parallel, in their original working directories. breakage coordinates Git setup and cleanup with a short-lived lock and records each running check's test paths. The clean-repository check ignores only the paths owned by active checks; unrelated uncommitted changes still prevent a new check from starting. Checks with overlapping test paths are rejected before replacing files. Remote tag discovery runs outside this lock, and fetches use a separate lock in the common Git directory. Cleanup waits for file-restoration access instead of giving up when a setup timeout expires.
 
-Released tests are loaded with `git restore --worktree`. After testing and certification, including failures, break-check restores only those paths to their starting commit and removes tests that existed only in the release. The Git index and existing stashes are preserved. Unrelated files, command outputs, and changes made by other packages are left in place. There is no repository or dependency copy. Commands that themselves modify shared files or Git state still need their own coordination.
+Released tests are loaded with `git restore --worktree`. After testing and certification, including failures, breakage restores only those paths to their starting commit and removes tests that existed only in the release. The Git index and existing stashes are preserved. Unrelated files, command outputs, and changes made by other packages are left in place. There is no repository or dependency copy. Commands that themselves modify shared files or Git state still need their own coordination.
 
-If a process is forcibly interrupted or restoration fails, break-check retains recovery information under `break-check/` in the worktree's Git directory (`git rev-parse --absolute-git-dir`). After confirming the process has stopped, restore each recorded path from the recorded `head` commit, remove any recorded paths absent from that commit, and remove the record. An interrupted setup or cleanup can also leave the `break-check/lock` directory; remove it only after confirming no setup or cleanup is still running. An interrupted fetch can leave `break-check-fetch.lock` in the common Git directory; remove it only after confirming no fetch is still running.
+If a process is forcibly interrupted or restoration fails, breakage retains recovery information under `breakage/` in the worktree's Git directory (`git rev-parse --absolute-git-dir`). After confirming the process has stopped, restore each recorded path from the recorded `head` commit, remove any recorded paths absent from that commit, and remove the record. An interrupted setup or cleanup can also leave the `breakage/lock` directory; remove it only after confirming no setup or cleanup is still running. An interrupted fetch can leave `breakage-fetch.lock` in the common Git directory; remove it only after confirming no fetch is still running.
 
 ## options
 
@@ -205,7 +215,7 @@ If a process is forcibly interrupted or restoration fails, break-check retains r
 
 ## cli completion
 
-With `break-check` installed on PATH, run `break-check completion install bash` to install Bash completion. Replace `bash` with `zsh`, `fish`, `nushell`, or `carapace` for the other supported integrations. Installation uses the shell's existing completion setup and does not edit shell profiles; open a new shell afterward. `break-check completion bash` prints the integration for manual installation. See [Comline's shell setup requirements](../comline/README.md#shell-integrations).
+With `breakage` installed on PATH, run `breakage completion install bash` to install Bash completion. Replace `bash` with `zsh`, `fish`, `nushell`, or `carapace` for the other supported integrations. Installation uses the shell's existing completion setup and does not edit shell profiles; open a new shell afterward. `breakage completion bash` prints the integration for manual installation. See [Comline's shell setup requirements](https://github.com/jeremybanka/wayforge/tree/main/packages/comline#shell-integrations).
 
 Completion suggests commands, option names, config file paths, and directories for `--base-dir` and `schema --out-dir`. It works without a valid config file or required option values and does not run checks. Singleton options disappear from suggestions after use; parsing behavior is unchanged. The completion transport reserves its management and protocol command names; use an explicit path such as `./completion` for a config file whose name collides with a reserved command.
 
@@ -222,4 +232,4 @@ These aliases work alongside the original option names. Configuration file keys 
 | `--baseDirname`             | `--base-dir`, `--base-dirname` |
 | `--outdir` (schema command) | `--out-dir`                    |
 
-After successful parsing, break-check warns on stderr about unknown options and options that do not apply to the selected command. Warnings appear before check output is captured and do not change the command's exit status.
+After successful parsing, breakage warns on stderr about unknown options and options that do not apply to the selected command. Warnings appear before check output is captured and do not change the command's exit status.

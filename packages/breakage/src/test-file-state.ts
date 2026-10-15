@@ -15,7 +15,7 @@ import path from "node:path"
 import type { SimpleGit } from "simple-git"
 import { simpleGit } from "simple-git"
 
-import { withDirectoryLock } from "./directory-lock"
+import { withDirectoryLock } from "./directory-lock.ts"
 
 type ActiveCheck = {
 	pid: number
@@ -57,7 +57,7 @@ async function readRecoveryRecord(recordPath: string): Promise<ActiveCheck> {
 		return record
 	} catch (cause) {
 		throw new Error(
-			`A break-check run needs recovery. The record ${recordPath} is unreadable or invalid. Verify no check is running and recover its test files before removing this record.`,
+			`A breakage run needs recovery. The record ${recordPath} is unreadable or invalid. Verify no check is running and recover its test files before removing this record.`,
 			{ cause },
 		)
 	}
@@ -128,7 +128,7 @@ export async function withTestFileState<T>(
 	assertContained(root, baseDirname)
 	const stateDirectory = path.join(
 		await git.revparse([`--absolute-git-dir`]),
-		`break-check`,
+		`breakage`,
 	)
 	await mkdir(stateDirectory, { recursive: true })
 	const lock = path.join(stateDirectory, `lock`)
@@ -147,7 +147,7 @@ export async function withTestFileState<T>(
 			}
 			if (interrupted)
 				throw new Error(
-					`A break-check run needs recovery. Restore the test paths recorded in ${recordPath} before removing that record.`,
+					`A breakage run needs recovery. Restore the test paths recorded in ${recordPath} before removing that record.`,
 				)
 			activeChecks.push(record)
 		}
@@ -180,7 +180,7 @@ export async function withTestFileState<T>(
 						)
 					) {
 						throw new Error(
-							`Another break-check run is using ${file}. Concurrent checks must use disjoint test paths.`,
+							`Another breakage run is using ${file}. Concurrent checks must use disjoint test paths.`,
 						)
 					}
 				}

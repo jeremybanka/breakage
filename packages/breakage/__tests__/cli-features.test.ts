@@ -14,7 +14,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test"
 
 let directory: string
 beforeEach(() => {
-	directory = mkdtempSync(resolve(tmpdir(), `break-check-cli-`))
+	directory = mkdtempSync(resolve(tmpdir(), `breakage-cli-`))
 })
 afterEach(() => {
 	rmSync(directory, { recursive: true, force: true })
@@ -23,7 +23,7 @@ afterEach(() => {
 function runCli(command: string, args: string[]) {
 	const result = spawnSync(
 		`node`,
-		[resolve(import.meta.dirname, `../bin/${command}.bin.js`), ...args],
+		[resolve(import.meta.dirname, `../dist/${command}.x.js`), ...args],
 		{
 			cwd: directory,
 			encoding: `utf8`,
@@ -38,13 +38,13 @@ function runCli(command: string, args: string[]) {
 
 describe(`CLI features`, () => {
 	it(`generates all shell integrations without validating configuration`, () => {
-		writeFileSync(resolve(directory, `break-check.config.json`), `invalid json`)
+		writeFileSync(resolve(directory, `breakage.config.json`), `invalid json`)
 		for (const target of [`bash`, `zsh`, `fish`, `nushell`, `carapace`]) {
-			const result = runCli(`break-check`, [`completion`, target])
-			expect(result.stdout).toContain(`break-check`)
+			const result = runCli(`breakage`, [`completion`, target])
+			expect(result.stdout).toContain(`breakage`)
 			expect(result.stderr).toBe(``)
 		}
-		expect(readdirSync(directory)).toEqual([`break-check.config.json`])
+		expect(readdirSync(directory)).toEqual([`breakage.config.json`])
 	})
 	it.each([
 		`--test-command`,
@@ -53,7 +53,7 @@ describe(`CLI features`, () => {
 		`--certify-command`,
 		`--base-dir`,
 	])(`offers %s before validating required options`, (option) => {
-		const result = runCli(`break-check`, [`__complete`, option])
+		const result = runCli(`breakage`, [`__complete`, option])
 		expect(result.stdout).toContain(option)
 		expect(result.stderr).toBe(``)
 	})
@@ -61,14 +61,13 @@ describe(`CLI features`, () => {
 		mkdirSync(resolve(directory, `sample-dir`))
 		writeFileSync(resolve(directory, `sample.json`), `{}`)
 		expect(
-			runCli(`break-check`, [`_carapace`, `export`, `break-check`, `sam`])
-				.stdout,
+			runCli(`breakage`, [`_carapace`, `export`, `breakage`, `sam`]).stdout,
 		).toContain(`sample.json`)
 		for (const words of [[`--base-dir=sam`], [`schema`, `--out-dir=sam`]]) {
-			const result = runCli(`break-check`, [
+			const result = runCli(`breakage`, [
 				`_carapace`,
 				`export`,
-				`break-check`,
+				`breakage`,
 				...words,
 			])
 			expect(result.stdout).toContain(`sample-dir/`)
@@ -76,13 +75,13 @@ describe(`CLI features`, () => {
 		}
 	})
 	it(`accepts the output alias and warns about ignored options before schema generation`, () => {
-		const result = runCli(`break-check`, [
+		const result = runCli(`breakage`, [
 			`schema`,
 			`--out-dir=${directory}`,
 			`--test-command=true`,
 			`--typo`,
 		])
-		expect(existsSync(resolve(directory, `break-check.main.schema.json`))).toBe(
+		expect(existsSync(resolve(directory, `breakage.main.schema.json`))).toBe(
 			true,
 		)
 		expect(result.stderr).toContain(`Option "--test-command" is not valid`)

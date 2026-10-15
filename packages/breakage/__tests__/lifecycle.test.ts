@@ -17,24 +17,22 @@ import { setTimeout } from "node:timers/promises"
 import { afterEach, beforeEach, expect, it, spyOn } from "bun:test"
 import { simpleGit } from "simple-git"
 
-import { breakCheck } from "../src/break-check"
-import { withTestFileState } from "../src/test-file-state"
+import { breakage } from "../src/breakage.ts"
+import { withTestFileState } from "../src/test-file-state.ts"
 
 let temporaryDirectory: string
 let repository: string
 
 beforeEach(async () => {
-	temporaryDirectory = await mkdtemp(
-		path.join(tmpdir(), `break-check-lifecycle-`),
-	)
+	temporaryDirectory = await mkdtemp(path.join(tmpdir(), `breakage-lifecycle-`))
 	repository = path.join(temporaryDirectory, `repository`)
 	await mkdir(path.join(repository, `old`), { recursive: true })
 	await writeFile(path.join(repository, `old/public.test.js`), `released`)
 	await writeFile(path.join(repository, `README.md`), `fixture`)
 	await simpleGit(repository)
 		.init()
-		.addConfig(`user.name`, `Break Check Test`)
-		.addConfig(`user.email`, `break-check@example.invalid`)
+		.addConfig(`user.name`, `Breakage Test`)
+		.addConfig(`user.email`, `breakage@example.invalid`)
 		.add(`.`)
 		.commit(`Release`)
 		.addTag(`example@1.0.0`)
@@ -63,11 +61,13 @@ for (const removed of [false, true]) {
 			`unrelated`,
 		)
 		expect(String(failure)).toContain(`Cannot replace tests through`)
-		const stateDirectory = path.join(repository, `.git/break-check`)
+		const stateDirectory = path.join(repository, `.git/breakage`)
 		const entries = await readdir(stateDirectory)
 		expect(entries).toHaveLength(1)
 		expect(
-			JSON.parse(await readFile(path.join(stateDirectory, entries[0]), `utf8`)),
+			JSON.parse(
+				await readFile(path.join(stateDirectory, entries[0]!), `utf8`),
+			),
 		).toMatchObject({ recoveryRequired: true, paths: [`old/public.test.js`] })
 	})
 }
@@ -107,7 +107,7 @@ it.each([1, 2])(
 			baseDir: repository,
 			unsafe: { allowUnsafePack: true },
 		}).addConfig(`remote.origin.uploadpack`, uploadPack)
-		const other = breakCheck({
+		const other = breakage({
 			baseDirname: repository,
 			tagPattern: `example@`,
 			testPattern: `missing/*`,
@@ -186,8 +186,9 @@ it(`preserves the last valid recovery record when its replacement is only partia
 	const restore = await withTestFileState(git, repository, (state) =>
 		state.replaceTests(`example@1.0.0`, [`old/public.test.js`]),
 	)
-	const directory = path.join(repository, `.git/break-check`)
+	const directory = path.join(repository, `.git/breakage`)
 	const [recordName] = await readdir(directory)
+	if (!recordName) throw new Error(`Missing recovery record`)
 	const recordPath = path.join(directory, recordName)
 	const originalRecord = await readFile(recordPath, `utf8`)
 	const originalWrite = filesystem.writeFile
@@ -224,7 +225,7 @@ for (const contents of [
 	JSON.stringify({ pid: process.pid, paths: [`.`], head: `a`.repeat(40) }),
 ]) {
 	it(`identifies a corrupt recovery record: ${contents}`, async () => {
-		const directory = path.join(repository, `.git/break-check`)
+		const directory = path.join(repository, `.git/breakage`)
 		await mkdir(directory)
 		const recordPath = path.join(directory, `broken.json`)
 		await writeFile(recordPath, contents)

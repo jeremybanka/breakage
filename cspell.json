@@ -5,16 +5,34 @@
 		"pnpm-lock.yaml"
 	],
 	"words": [
+		"ASKPASS",
+		"Fium",
+		"Wayforge",
+		"arktype",
 		"automerge",
+		"breakage",
+		"comline",
 		"esbuild",
+		"flightdeck",
+		"jeremybanka",
 		"libexec",
 		"malva",
 		"oxlint",
-		"breakage",
+		"pathspecs",
+		"revparse",
+		"tagger",
+		"takua",
+		"treetrunks",
 		"tsgolint",
+		"undici",
+		"uploadpack",
 		"vite",
 		"viteplus",
 		"vitest",
-		"voidzero"
+		"voidzero",
+		"worktrees"
+	],
+	"ignoreRegExpList": [
+		"/\\\\[nrt]/g"
 	]
 }

@@ -1,5 +1,5 @@
 {
-	"name": "breakage",
+	"name": "@breakage/workspace",
 	"private": true,
 	"license": "MPL-2.0",
 	"type": "module",
@@ -16,8 +16,8 @@
 		"release:publish": "pnpm build && changeset publish",
 		"release:version": "changeset version",
 		"staged": "vp staged",
-		"test": "vp test --passWithNoTests",
-		"test:watch": "vp test --watch --passWithNoTests",
+		"test": "vp run -r test",
+		"test:watch": "vp run -r test:watch",
 		"workflows:update": "node scripts/update-workflows.node.ts"
 	},
 	"devDependencies": {

@@ -6,7 +6,7 @@ function compareInteger(a: string, b: string): number {
 
 function compareRelease(a: Release, b: Release): number {
 	for (let index = 0; index < 3; index++) {
-		const difference = compareInteger(a.core[index], b.core[index])
+		const difference = compareInteger(a.core[index]!, b.core[index]!)
 		if (difference) return difference
 	}
 	if (!a.prerelease.length || !b.prerelease.length) {
@@ -17,8 +17,8 @@ function compareRelease(a: Release, b: Release): number {
 		index < Math.min(a.prerelease.length, b.prerelease.length);
 		index++
 	) {
-		const left = a.prerelease[index]
-		const right = b.prerelease[index]
+		const left = a.prerelease[index]!
+		const right = b.prerelease[index]!
 		const leftNumeric = /^\d+$/.test(left)
 		const rightNumeric = /^\d+$/.test(right)
 		const difference =

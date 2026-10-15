@@ -6,11 +6,11 @@ import { simpleGit } from "simple-git"
 import type { Chronicle } from "takua"
 import logger from "takua"
 
-import { withDirectoryLock } from "./directory-lock"
-import { latestReleaseTag as selectLatestReleaseTag } from "./release-tag"
-import { withTestFileState } from "./test-file-state"
+import { withDirectoryLock } from "./directory-lock.ts"
+import { latestReleaseTag as selectLatestReleaseTag } from "./release-tag.ts"
+import { withTestFileState } from "./test-file-state.ts"
 
-export type BreakCheckOptions = {
+export type BreakageOptions = {
 	tagPattern?: string | undefined
 	testPattern: string
 	testCommand: string
@@ -19,7 +19,7 @@ export type BreakCheckOptions = {
 	verbose?: boolean | undefined
 }
 
-export type BreakCheckOutcome =
+export type BreakageOutcome =
 	| { gitWasClean: false }
 	| {
 			gitWasClean: true
@@ -52,14 +52,14 @@ export type BreakCheckOutcome =
 			certificationStderr: string
 	  }
 
-export async function breakCheck({
+export async function breakage({
 	tagPattern,
 	testPattern,
 	testCommand,
 	certifyCommand,
 	baseDirname = process.cwd(),
 	verbose = false,
-}: BreakCheckOptions): Promise<BreakCheckOutcome & { summary: string }> {
+}: BreakageOptions): Promise<BreakageOutcome & { summary: string }> {
 	let mark: Chronicle[`mark`] | undefined
 	let logMarks: Chronicle[`logMarks`] | undefined
 	if (verbose) {
@@ -67,7 +67,7 @@ export async function breakCheck({
 		mark = chronicle.mark
 		logMarks = chronicle.logMarks
 	}
-	mark?.(`breakCheck`)
+	mark?.(`breakage`)
 	const git = simpleGit(baseDirname)
 	mark?.(`spawn git`)
 	const isGitRepo = await git.checkIsRepo()
@@ -78,7 +78,9 @@ export async function breakCheck({
 			gitWasClean: false,
 		}
 	}
-	if (!(await withTestFileState(git, baseDirname, (state) => state.isClean()))) {
+	if (
+		!(await withTestFileState(git, baseDirname, (state) => state.isClean()))
+	) {
 		return {
 			summary: `The git repository must be clean to run this command.`,
 			gitWasClean: false,
@@ -101,7 +103,7 @@ export async function breakCheck({
 		`--git-common-dir`,
 	])
 	await withDirectoryLock(
-		path.join(commonGitDirectory, `break-check-fetch.lock`),
+		path.join(commonGitDirectory, `breakage-fetch.lock`),
 		() =>
 			git.fetch([
 				`origin`,
@@ -174,30 +176,34 @@ export async function breakCheck({
 
 	try {
 		const noBreakingChangesDetected = await new Promise<
-			BreakCheckOutcome & { summary: string }
+			BreakageOutcome & { summary: string }
 		>((resolve, reject) => {
-			const result = exec(testCommand, { cwd: baseDirname }, (_, __, stderr) => {
-				if (result.exitCode === 0) {
-					resolve({
-						summary: `No breaking changes were detected.`,
-						gitWasClean: true,
-						lastReleaseFound: true,
-						lastReleaseTag: latestReleaseTag,
-						testsWereFound: true,
-						testsFound: productionTestFiles,
-						breakingChangesFound: false,
-					})
-				} else {
-					reject(stderr)
-				}
-			})
+			const result = exec(
+				testCommand,
+				{ cwd: baseDirname },
+				(_, __, stderr) => {
+					if (result.exitCode === 0) {
+						resolve({
+							summary: `No breaking changes were detected.`,
+							gitWasClean: true,
+							lastReleaseFound: true,
+							lastReleaseTag: latestReleaseTag,
+							testsWereFound: true,
+							testsFound: productionTestFiles,
+							breakingChangesFound: false,
+						})
+					} else {
+						reject(stderr)
+					}
+				},
+			)
 		})
 		mark?.(`passed tests`)
 		return noBreakingChangesDetected
 	} catch (thrown) {
 		mark?.(`failed tests`)
 		const breakingChangesCertified = await new Promise<
-			BreakCheckOutcome & { summary: string }
+			BreakageOutcome & { summary: string }
 		>((resolve) => {
 			const result = exec(
 				certifyCommand,

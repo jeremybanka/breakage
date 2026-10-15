@@ -19,6 +19,10 @@
 	},
 	"json.schemas": [
 		{
+			"fileMatch": ["**/breakage.config.json"],
+			"url": "./packages/breakage/dist/breakage.main.schema.json"
+		},
+		{
 			"fileMatch": ["**/.changeset/config.json"],
 			"url": "./node_modules/@changesets/config/schema.json"
 		}

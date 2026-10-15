@@ -1,10 +1,13 @@
 {
-	"name": "break-check",
+	"name": "breakage",
 	"version": "0.8.1",
+	"description": "Run yesterday’s tests against tomorrow’s release.",
+	"homepage": "https://github.com/jeremybanka/breakage#readme",
+	"bugs": "https://github.com/jeremybanka/breakage/issues",
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/jeremybanka/wayforge.git",
-		"directory": "packages/break-check"
+		"url": "git+https://github.com/jeremybanka/breakage.git",
+		"directory": "packages/breakage"
 	},
 	"license": "MPL-2.0",
 	"author": {
@@ -12,40 +15,34 @@
 		"email": "hello@jeremybanka.com"
 	},
 	"type": "module",
-	"main": "dist/break-check.js",
-	"types": "dist/break-check.d.ts",
+	"main": "dist/breakage.js",
+	"types": "dist/breakage.d.ts",
 	"bin": {
-		"break-check": "./bin/break-check.bin.js"
+		"breakage": "./dist/breakage.x.js"
 	},
 	"files": [
-		"bin",
 		"dist",
-		"src",
-		"break-check.schema.json"
+		"src"
 	],
 	"scripts": {
 		"build": "tsdown && pnpm run schema",
-		"check": "pnpm run check:eslint && pnpm run check:tsc && pnpm run check:oxlint",
-		"check:eslint": "eslint -- .",
-		"check:oxlint": "oxlint --type-aware -c ../../.oxlintrc.jsonc .",
+		"check": "pnpm run check:tsc",
 		"check:tsc": "tsc --noEmit",
 		"postversion": "dprint fmt package.json",
-		"schema": "bun src/break-check.x.ts --outdir=dist -- schema",
-		"test": "bun test -- **/*.test.ts",
-		"test:watch": "bun test --watch -- **/*.test.ts",
-		"watch:types": "tsc --watch --noEmit"
+		"schema": "bun src/breakage.x.ts --outdir=dist -- schema",
+		"pretest": "pnpm run build",
+		"test": "bun test -- ./__tests__",
+		"test:watch": "bun test --watch -- ./__tests__"
 	},
 	"dependencies": {
 		"arktype": "2.2.7",
-		"comline": "workspace:*",
+		"comline": "0.9.0",
 		"minimatch": "10.2.6",
 		"simple-git": "4.0.2",
-		"takua": "workspace:*"
+		"takua": "0.2.3"
 	},
 	"devDependencies": {
 		"@types/bun": "npm:bun-types@1.4.2",
-		"concurrently": "10.0.5",
-		"eslint": "10.12.0",
 		"tsdown": "0.23.0",
 		"typescript": "7.0.2"
 	},

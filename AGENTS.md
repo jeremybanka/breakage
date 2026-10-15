@@ -10,3 +10,15 @@
 ## Vite Plus upgrades
 
 Use the target release's official `vp migrate --no-interactive` for Vite Plus upgrades. Preserve the old lockfile until migration runs, and let the migrator own toolchain version alignment and supported source/configuration changes. Review its manual migration findings and run the repository's formatter and checks; do not maintain a separate dependency synchronization implementation.
+
+## Dependency release age
+
+Packages authored by jeremybanka are exempt from minimum release age requirements at every version, including transitive dependencies. Keep their names aligned between `minimumReleaseAgeExclude` in `pnpm-workspace.yaml` and the corresponding npm rule in `renovate.json`. Update both lists when adding a first-party package.
+
+## Markdown
+
+Keep each paragraph and list item on one source line; do not manually wrap prose at a fixed width.
+
+## First publication
+
+The first publication under the `breakage` name deliberately retains version 0.8.1 from break-check. Its migration notes live directly in the 0.8.1 changelog entry; do not add a version-bumping changeset for the repository move and rename. Subsequent changes follow the usual Changesets policy above.

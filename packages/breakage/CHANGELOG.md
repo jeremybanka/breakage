@@ -1,6 +1,12 @@
-# break-check
+# breakage
+
+Breakage continues break-check's version sequence. Historical source and `break-check@` release tags are included in this repository; see the [history guide](../../docs/history/README.md) for provenance and commit mappings. Historical changelog commit IDs refer to the original [Wayforge](https://github.com/jeremybanka/wayforge) commits.
 
 ## 0.8.1
+
+### First release as Breakage
+
+Continue break-check as breakage in its own repository, retaining version 0.8.1 for the first release under the new name. Install and run `breakage`, rename the default configuration to `breakage.config.json`, regenerate schemas and shell completions with the new CLI name, and use the `breakage` function with `BreakageOptions` and `BreakageOutcome` for programmatic checks. Configuration keys and check outcomes are unchanged.
 
 ### Patch Changes
 
