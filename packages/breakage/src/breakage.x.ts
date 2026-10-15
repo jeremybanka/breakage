@@ -19,12 +19,13 @@ import {
 import logger from "takua"
 
 import type { BreakageOptions } from "./breakage.ts"
-import { breakage } from "./breakage.ts"
+import { breakage, breakagePrelude } from "./breakage.ts"
 
 const BREAKAGE_MANUAL = options(
 	`Check for breaking changes in a package.`,
 	type({
 		"tagPattern?": `string`,
+		"baselineFile?": `string`,
 		testPattern: `string`,
 		testCommand: `string`,
 		certifyCommand: `string`,
@@ -39,6 +40,13 @@ const BREAKAGE_MANUAL = options(
 			required: false,
 			description: `RegExp which, if found matched to a git tag, will be considered a release tag for your library.`,
 			example: `--tagPattern="my-library"`,
+		},
+		baselineFile: {
+			aliases: [`baseline-file`],
+			completion: { repeatable: false, fileSystem: `files` },
+			required: false,
+			description: `Use the exact locally fetched commit from a prelude snapshot instead of discovering remote tags.`,
+			example: `--baseline-file=.breakage/baseline.json`,
 		},
 		testPattern: {
 			aliases: [`test-pattern`, `pattern`],
@@ -83,6 +91,41 @@ const BREAKAGE_MANUAL = options(
 	},
 ) satisfies OptionsGroup<BreakageOptions>
 
+const PRELUDE_MANUAL = options(
+	`Resolve and fetch the release baseline for a cacheable compatibility check.`,
+	type({
+		"tagPattern?": `string`,
+		"baseDirname?": `string`,
+		"out?": `string`,
+		"testPattern?": `string`,
+		"testCommand?": `string`,
+		"certifyCommand?": `string`,
+		"baselineFile?": `string`,
+		"verbose?": `boolean`,
+	}),
+	{
+		...BREAKAGE_MANUAL.optionConfigs,
+		testPattern: {
+			...BREAKAGE_MANUAL.optionConfigs.testPattern,
+			required: false,
+		},
+		testCommand: {
+			...BREAKAGE_MANUAL.optionConfigs.testCommand,
+			required: false,
+		},
+		certifyCommand: {
+			...BREAKAGE_MANUAL.optionConfigs.certifyCommand,
+			required: false,
+		},
+		out: {
+			completion: { repeatable: false, fileSystem: `files` },
+			required: false,
+			description: `Gitignored snapshot path relative to the base directory (default: .breakage/baseline.json).`,
+			example: `--out=.breakage/baseline.json`,
+		},
+	},
+)
+
 const SCHEMA_MANUAL = options(
 	`Create a copy of the schema for configuring breakage.`,
 	type({ "outdir?": `string` }),
@@ -101,20 +144,31 @@ const SCHEMA_MANUAL = options(
 const parse = cli(
 	{
 		cliName: `breakage`,
-		routes: optional({ help: null, schema: null, $configPath: null }),
+		routes: optional({
+			help: null,
+			schema: null,
+			prelude: optional({ $configPath: null }),
+			$configPath: null,
+		}),
 		routeOptions: {
 			"": BREAKAGE_MANUAL,
 			$configPath: BREAKAGE_MANUAL,
 			help: noOptions(`Show usage.`),
 			schema: SCHEMA_MANUAL,
+			prelude: PRELUDE_MANUAL,
+			"prelude/$configPath": PRELUDE_MANUAL,
 		},
-		positionalCompletions: { $configPath: { fileSystem: `files` } },
+		positionalCompletions: {
+			$configPath: { fileSystem: `files` },
+			"prelude/$configPath": { fileSystem: `files` },
+		},
 		discoverConfigPath: (args: readonly string[]) => {
 			if (args[0] === `help` || args[0] === `schema`) {
 				return
 			}
 			const configPath =
-				args[0] ?? path.join(process.cwd(), `breakage.config.json`)
+				(args[0] === `prelude` ? args[1] : args[0]) ??
+				path.join(process.cwd(), `breakage.config.json`)
 			return configPath
 		},
 	},
@@ -142,6 +196,15 @@ if (completion !== undefined) {
 				process.stdout.write(`📝 Wrote json.schema.`)
 			}
 			break
+		case `prelude`:
+		case `prelude/$configPath`: {
+			const baseline = await breakagePrelude({
+				...inputs.opts,
+				out: inputs.opts.out ?? `.breakage/baseline.json`,
+			})
+			process.stdout.write(`Pinned ${baseline.ref} at ${baseline.commit}.\n`)
+			break
+		}
 		case ``:
 		case `$configPath`: {
 			const { returnValue } = await encapsulate(() => breakage(inputs.opts), {
