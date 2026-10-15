@@ -1,0 +1,43 @@
+{
+	"name": "breakage",
+	"private": true,
+	"license": "MPL-2.0",
+	"type": "module",
+	"scripts": {
+		"build": "vp run -r build",
+		"change": "changeset",
+		"check": "pnpm run \"/^check:.*/\"",
+		"check:fmt": "dprint check",
+		"check:vp": "vp check --no-fmt",
+		"check:spelling": "cspell .",
+		"dev": "vp run -r dev",
+		"fmt": "dprint fmt",
+		"prepare": "vp config --hooks --no-agent",
+		"release:publish": "pnpm build && changeset publish",
+		"release:version": "changeset version",
+		"staged": "vp staged",
+		"test": "vp test --passWithNoTests",
+		"test:watch": "vp test --watch --passWithNoTests",
+		"workflows:update": "node scripts/update-workflows.node.ts"
+	},
+	"devDependencies": {
+		"@changesets/cli": "3.0.3",
+		"@changesets/config": "4.0.1",
+		"@dprint/json": "0.25.2",
+		"@dprint/markdown": "0.26.0",
+		"@dprint/oxc": "0.44.0",
+		"@dprint/toml": "0.9.0",
+		"@types/node": "26.6.4",
+		"cspell": "10.3.6",
+		"dprint": "0.60.1",
+		"dprint-plugin-malva": "0.16.0",
+		"dprint-plugin-yaml": "0.6.0",
+		"typescript": "7.0.2",
+		"vite-plus": "catalog:"
+	},
+	"packageManager": "pnpm@12.9.1",
+	"engines": {
+		"node": "26.10.0",
+		"pnpm": "12.9.1"
+	}
+}

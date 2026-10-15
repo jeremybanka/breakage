@@ -1,0 +1,15 @@
+node_modules/
+dist/
+coverage/
+artifacts/
+.astro/
+.mise/
+.pnpm-home/
+.pnpm-store/
+.wrangler/
+.xdg-data/
+.mise.local.toml
+.env
+.env.*
+!.env.example
+*.log

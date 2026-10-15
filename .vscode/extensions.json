@@ -1,0 +1,19 @@
+{
+	"recommendations": [
+		"bierner.color-info",
+		"christian-kohler.npm-intellisense",
+		"christian-kohler.path-intellisense",
+		"dbaeumer.vscode-eslint",
+		"dprint.dprint",
+		"github.vscode-github-actions",
+		"kuscamara.remove-unused-imports",
+		"oxc.oxc-vscode",
+		"redhat.vscode-yaml",
+		"ryanluker.vscode-coverage-gutters",
+		"streetsidesoftware.code-spell-checker",
+		"tamasfe.even-better-toml",
+		"tyriar.sort-lines",
+		"vunguyentuan.vscode-css-variables",
+		"yoavbls.pretty-ts-errors"
+	]
+}

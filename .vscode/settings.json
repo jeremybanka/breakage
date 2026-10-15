@@ -1,0 +1,37 @@
+{
+	// FILE FORMATTING ////////////////////////////////////////////////////////////
+	"editor.formatOnSave": true,
+	"editor.defaultFormatter": "dprint.dprint",
+	"dprint.path": "node_modules/.bin/dprint",
+	"dprint.verbose": true,
+	"editor.codeActionsOnSave": { "source.fixAll.oxc": "explicit" },
+	"js/ts.tsdk.path": "node_modules/typescript/lib",
+	"coverage-gutters.coverageBaseDir": "**/coverage/",
+	"files.associations": {
+		"api-extractor.json": "jsonc",
+		"tsconfig.json": "jsonc",
+		".env.*": "properties",
+		"*.css": "css"
+	},
+	"json.schemaDownload.trustedDomains": {
+		"https://dprint.dev": true,
+		"https://docs.renovatebot.com/": true
+	},
+	"json.schemas": [
+		{
+			"fileMatch": ["**/.changeset/config.json"],
+			"url": "./node_modules/@changesets/config/schema.json"
+		}
+	],
+	// EDITOR DISPLAY AND BEHAVIOR ////////////////////////////////////////////////
+	"editor.wordSeparators": "./\\()\"'-:,.;<>~!@#%^&*|+=[]{}`~?",
+	"workbench.editor.customLabels.patterns": {
+		"**/src/index.ts": "${dirname(1)}/${dirname}/index.ts",
+		"**/src/index.tsx": "${dirname(1)}/${dirname}/index.tsx",
+		"**/index.ts": "${dirname}/index.ts",
+		"**/index.tsx": "${dirname}/index.tsx",
+		"**/app/**/page.tsx": "${dirname}/page.tsx",
+		"**/app/**/page.mdx": "${dirname}/page.tsx",
+		"**/app/**/layout.tsx": "${dirname}/layout.tsx"
+	}
+}
