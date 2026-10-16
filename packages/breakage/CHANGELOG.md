@@ -2,6 +2,12 @@
 
 Breakage continues break-check's version sequence. Historical source and `break-check@` release tags are included in this repository; see the [history guide](../../docs/history/README.md) for provenance and commit mappings. Historical changelog commit IDs refer to the original [Wayforge](https://github.com/jeremybanka/wayforge) commits.
 
+## 0.8.3
+
+### Patch Changes
+
+- 4e63127: Move the break-check migration advice to the end of the README so project fit and usage appear first.
+
 ## 0.8.2
 
 ### Patch Changes
