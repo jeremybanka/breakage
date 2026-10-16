@@ -4,14 +4,6 @@ Run yesterday’s tests against tomorrow’s release.
 
 Command line tooling to detect breaking changes before you ship them.
 
-## migrating from break-check
-
-Breakage continues [break-check](https://github.com/jeremybanka/wayforge/tree/break-check%400.8.1/packages/break-check) in its own repository. Install `breakage`, replace the `break-check` command with `breakage`, and rename `break-check.config.json` to `breakage.config.json`. Configuration keys and check outcomes are unchanged. Regenerate schemas with `breakage schema`; generated files now use the `breakage` prefix. Reinstall shell completions with `breakage completion install <shell>`.
-
-For programmatic use, import `breakage`, `BreakageOptions`, and `BreakageOutcome` from `breakage` in place of `breakCheck`, `BreakCheckOptions`, and `BreakCheckOutcome` from `break-check`.
-
-Finish active break-check runs and recover any interrupted runs before switching. Breakage stores new recovery records under `breakage/` in the worktree's Git directory and its fetch lock at `breakage-fetch.lock` in the common Git directory.
-
 ## can i use breakage?
 
 breakage is a tool for projects where
@@ -233,3 +225,11 @@ These aliases work alongside the original option names. Configuration file keys 
 | `--outdir` (schema command) | `--out-dir`                    |
 
 After successful parsing, breakage warns on stderr about unknown options and options that do not apply to the selected command. Warnings appear before check output is captured and do not change the command's exit status.
+
+## migrating from break-check
+
+Breakage continues [break-check](https://github.com/jeremybanka/wayforge/tree/break-check%400.8.1/packages/break-check) in its own repository. Install `breakage`, replace the `break-check` command with `breakage`, and rename `break-check.config.json` to `breakage.config.json`. Configuration keys and check outcomes are unchanged. Regenerate schemas with `breakage schema`; generated files now use the `breakage` prefix. Reinstall shell completions with `breakage completion install <shell>`.
+
+For programmatic use, import `breakage`, `BreakageOptions`, and `BreakageOutcome` from `breakage` in place of `breakCheck`, `BreakCheckOptions`, and `BreakCheckOutcome` from `break-check`.
+
+Finish active break-check runs and recover any interrupted runs before switching. Breakage stores new recovery records under `breakage/` in the worktree's Git directory and its fetch lock at `breakage-fetch.lock` in the common Git directory.
