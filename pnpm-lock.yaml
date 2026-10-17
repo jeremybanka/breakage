@@ -234,6 +234,9 @@ importers:
       minimatch:
         specifier: 10.2.6
         version: 10.2.6
+      semver:
+        specifier: 7.8.5
+        version: 7.8.5
       simple-git:
         specifier: 4.0.2
         version: 4.0.2
@@ -244,6 +247,9 @@ importers:
       '@types/bun':
         specifier: npm:bun-types@1.4.3
         version: bun-types@1.4.3
+      '@types/semver':
+        specifier: ^7.8.0
+        version: 7.8.0
       typescript:
         specifier: 7.0.2
         version: 7.0.2
@@ -1075,6 +1081,9 @@ packages:
 
   '@types/node@26.6.5':
     resolution: {integrity: sha512-uMzsv9stDdofIZBx4UGh4Z9ZgXnGC9seRDscilBcTHAeOFk67MZg/k9bWVfO+bk4qZmG+l52hRnLwUiH2LnJTg==}
+
+  '@types/semver@7.8.0':
+    resolution: {integrity: sha512-1mAINjtQCXXeLkJ9ehXkwOcBpqtLxiVtKhpUf83DdRNdQKV0iXZpaHYqRr7nj+wvxuJzoAmAwXI+sCNMv1CzLQ==}
 
   '@typescript/typescript-aix-ppc64@7.0.2':
     resolution: {integrity: sha512-MTKKkWB7p/0E9xi1d1tHtZ5PiLkGEMIq88pK2CubZjOsLtYTLqhgIgi6zepFa+9GHZ6h05NMCkQxGKiPXMxXtQ==}
@@ -2655,6 +2664,8 @@ snapshots:
   '@types/node@26.6.5':
     dependencies:
       undici-types: 8.9.0
+
+  '@types/semver@7.8.0': {}
 
   '@typescript/typescript-aix-ppc64@7.0.2':
     optional: true

@@ -8,15 +8,24 @@ import logger from "takua"
 
 import { readBaseline } from "./baseline.ts"
 import { withDirectoryLock } from "./directory-lock.ts"
+import { checkPeerMatrix } from "./peer-matrix.ts"
+import type { PeerMatrixOutcome } from "./peer-matrix.ts"
 import { latestReleaseTag as selectLatestReleaseTag } from "./release-tag.ts"
 import { withTestFileState } from "./test-file-state.ts"
 
 export type { BreakageBaseline, BreakagePreludeOptions } from "./baseline.ts"
 export { breakagePrelude } from "./baseline.ts"
+export type {
+	PeerCase,
+	PeerConfig,
+	PeerCaseResult,
+	PeerMatrixOutcome,
+} from "./peer-matrix.ts"
 
 export type BreakageOptions = {
 	tagPattern?: string | undefined
 	baselineFile?: string | undefined
+	peerConfig?: string | undefined
 	testPattern: string
 	testCommand: string
 	certifyCommand: string
@@ -25,6 +34,7 @@ export type BreakageOptions = {
 }
 
 export type BreakageOutcome =
+	| PeerMatrixOutcome
 	| { gitWasClean: false }
 	| {
 			gitWasClean: true
@@ -60,6 +70,7 @@ export type BreakageOutcome =
 export async function breakage({
 	tagPattern,
 	baselineFile,
+	peerConfig,
 	testPattern,
 	testCommand,
 	certifyCommand,
@@ -192,6 +203,16 @@ export async function breakage({
 	const { restore } = prepared
 
 	try {
+		if (peerConfig !== undefined) {
+			return await checkPeerMatrix({
+				baseDirname,
+				releaseCommit,
+				releaseTag: latestReleaseTag,
+				testFiles: productionTestFiles,
+				testCommand,
+				peerConfig,
+			})
+		}
 		const noBreakingChangesDetected = await new Promise<
 			BreakageOutcome & { summary: string }
 		>((resolve, reject) => {
@@ -218,6 +239,7 @@ export async function breakage({
 		mark?.(`passed tests`)
 		return noBreakingChangesDetected
 	} catch (thrown) {
+		if (peerConfig !== undefined) throw thrown
 		mark?.(`failed tests`)
 		const breakingChangesCertified = await new Promise<
 			BreakageOutcome & { summary: string }

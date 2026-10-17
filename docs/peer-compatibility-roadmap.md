@@ -10,9 +10,9 @@ Extend breakage's released consumer contracts across the peer environments a pac
 
 ## 2 Run explicitly selected peer cases
 
-- [ ] Introduce an opt-in matrix of exact peer versions and project-provided setup and test commands. Keep released assertions fixed across cases.
-- [ ] Report the contract baseline, candidate package, exact peer versions, and outcome for each case; distinguish setup failures from contract failures.
-- [ ] Done when one failing case fails the check and the report identifies the affected combination.
+- [x] Introduce an opt-in matrix of exact peer versions and project-provided setup and test commands. Keep released assertions fixed across cases.
+- [x] Report the contract baseline, candidate package, exact peer versions, and outcome for each case; distinguish setup failures from contract failures.
+- [x] Done when one failing case fails the check and the report identifies the affected combination.
 
 ## 3 Preserve peer support promises
 

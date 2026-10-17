@@ -26,6 +26,7 @@ const BREAKAGE_MANUAL = options(
 	type({
 		"tagPattern?": `string`,
 		"baselineFile?": `string`,
+		"peerConfig?": `string`,
 		testPattern: `string`,
 		testCommand: `string`,
 		certifyCommand: `string`,
@@ -33,6 +34,13 @@ const BREAKAGE_MANUAL = options(
 		"verbose?": `boolean`,
 	}),
 	{
+		peerConfig: {
+			aliases: [`peer-config`],
+			completion: { repeatable: false, fileSystem: `files` },
+			required: false,
+			description: `Run released contracts across the cases in a peer configuration file.`,
+			example: `--peer-config=breakage.peers.json`,
+		},
 		tagPattern: {
 			aliases: [`tag-pattern`],
 			completion: { repeatable: false },
@@ -101,6 +109,7 @@ const PRELUDE_MANUAL = options(
 		"testCommand?": `string`,
 		"certifyCommand?": `string`,
 		"baselineFile?": `string`,
+		"peerConfig?": `string`,
 		"verbose?": `boolean`,
 	}),
 	{
@@ -211,6 +220,18 @@ if (completion !== undefined) {
 				console: true,
 				stdout: true,
 			})
+			if (`peerCheck` in returnValue) {
+				process.stdout.write(`${JSON.stringify(returnValue, null, 2)}\n`)
+				process.exit(
+					returnValue.success
+						? 0
+						: returnValue.peerResults.some(
+									(result) => result.status === `setup-failed`,
+							  )
+							? 2
+							: 1,
+				)
+			}
 			if (`testResult` in returnValue && returnValue.breakingChangesFound) {
 				process.stdout.write(returnValue.testResult)
 			}

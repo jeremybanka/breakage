@@ -58,6 +58,24 @@ In both examples, a failed test command remains uncertified and makes the CLI ex
 
 Release tags may use `1.2.3`, `v1.2.3`, `package@1.2.3`, or `@scope/package@1.2.3`, including valid prerelease and build identifiers. The newest matching version is selected by semantic-version precedence; tags without a supported version are ignored.
 
+## peer compatibility
+
+Pass `--peer-config=breakage.peers.json` to run the released public contracts across named peer environments:
+
+```json
+{
+	"cases": [
+		{ "name": "host-2", "peers": { "host": "2.4.0" } },
+		{ "name": "host-3", "peers": { "host": "3.1.0" } }
+	],
+	"setupCommand": "node scripts/setup-peers.ts"
+}
+```
+
+Each case runs in a disposable clone of the candidate commit with the released tests restored. The optional setup command prepares that clone, then the ordinary `testCommand` runs its contracts. Commands receive `BREAKAGE_CASE`, `BREAKAGE_PEERS` (a JSON object of exact versions), `BREAKAGE_CANDIDATE_COMMIT`, and `BREAKAGE_CONTRACT_COMMIT`. Include the setup script and observation helpers in `testPattern` when their behavior defines the preserved contract. A project setup command is responsible for installing and verifying the selected peer versions.
+
+Peer checks return a structured report with a result for every case, the candidate commit, and the contract commit. The CLI prints that report as JSON and exits with 0 for success, 1 for contract failures, or 2 for setup failures. A failing supported peer case cannot be excused by the ordinary certification command.
+
 ## caching compatibility checks
 
 The ordinary `breakage` command discovers the newest release on `origin` each time it runs. Do not cache that whole command: a new release or a moved tag can change its baseline without changing any tracked checkout files.
