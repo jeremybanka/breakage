@@ -127,7 +127,9 @@ it.each([1, 2])(
 			await Promise.race([
 				restoration,
 				setTimeout(5000, undefined, { ref: false }).then(() => {
-					throw new Error(`Test restoration is blocked by a remote operation`)
+					throw new Error(
+						`Timed out restoring tests while the remote was blocked`,
+					)
 				}),
 			])
 			expect(
