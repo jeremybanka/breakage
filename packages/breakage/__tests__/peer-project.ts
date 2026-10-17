@@ -4,7 +4,7 @@ import path from "node:path"
 
 import { simpleGit } from "simple-git"
 
-import type { BreakageOptions } from "../src/breakage.ts"
+import type { PeerBreakageOptions } from "../src/breakage.ts"
 import type { PeerConfig } from "../src/peer-matrix.ts"
 
 export async function peerProject(
@@ -39,7 +39,7 @@ export async function peerProject(
 	const remote = path.join(directory, `remote.git`)
 	await git.clone(repository, remote, [`--bare`])
 	await git.addRemote(`origin`, remote)
-	const options: BreakageOptions = {
+	const options: PeerBreakageOptions = {
 		baseDirname: repository,
 		tagPattern: `plugin@`,
 		testPattern: `public/**/*`,

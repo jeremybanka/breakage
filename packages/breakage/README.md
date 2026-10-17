@@ -84,7 +84,25 @@ Use `testDependencies` for exact runner or helper versions, and `sources` to sup
 
 Set `"resolve": true` to discover versions from the declared ranges and append them to any explicit `cases`. Breakage selects the lowest published and newest satisfying stable release per range segment and major, treating each pre-1.0 minor as a separate compatibility line. Identical combinations are deduplicated. When `sources` provides releases of a peer, those entries are its complete local version catalog; otherwise discovery queries the configured npm registry through pnpm. An unresolved range fails preparation. Results describe the versions tested, not every release admitted by a range.
 
-Use the ordinary `prelude` with `--peer-config` to pin this selection. Its snapshot also records the candidate commit and configuration. With `install` enabled, preparation packs the existing candidate output and resolves a pnpm lockfile for each case without running lifecycle scripts or tests. Local archives are stored by content hash beside the snapshot in `<snapshot>.peers/`; ignore the entire `.breakage/` directory. The pinned check verifies archive integrity and the pnpm version, installs with frozen lockfiles, and performs no version discovery. Registry tarball downloads may still be needed. Changed candidates or configurations, missing archives, and invalid snapshots require a fresh prelude. A new selected peer release changes the snapshot and its cache key. Project-provided setup commands remain responsible for reproducible installation when `install` is disabled.
+Use the ordinary `prelude` with `--peer-config` to pin this selection. Its snapshot also records the candidate commit and configuration. With `install` enabled, preparation packs the existing candidate output and resolves a pnpm lockfile for each case without running lifecycle scripts or tests. Local archives are stored by content hash beside the snapshot in `<snapshot>.peers/`; ignore the entire `.breakage/` directory. The pinned check verifies archive integrity and the pnpm version, installs with a frozen lockfile per case, and performs no version discovery. Registry tarball downloads may still be needed. Changed candidates or configurations, missing archives, and invalid snapshots require a fresh prelude. A new selected peer release changes the snapshot and its cache key. Project-provided setup commands remain responsible for reproducible installation when `install` is disabled.
+
+Automatic selection forms combinations across all declared peers and includes absence for optional peers. Set `maxCases` (default 32) to bound the work; exceeding it fails instead of silently dropping combinations. For a smaller matrix, omit `resolve` and supply explicit `cases`. Use `null` for an absent optional peer; omitted optional entries are normalized to `null`. Missing required peers and undeclared peers are configuration errors. With the built-in installer, incompatible peer requirements fail setup with pnpm's diagnostics, and absence is verified from the candidate's dependency graph.
+
+Prereleases are excluded by default, including explicit selections; opt in with `"prereleases": "include"`. Automatic selection rejects ranges without an upper bound unless `"unbounded": "published"` explicitly chooses samples from currently published releases. This makes no claim about future releases. Workspace ranges such as `workspace:^` are interpreted using the workspace package version at each respective commit. Making an optional peer required, or adding a new required peer, also requires certification because previously valid environments lacked it.
+
+```json
+{
+	"install": true,
+	"maxCases": 8,
+	"cases": [
+		{ "name": "host-2-minimal", "peers": { "host": "2.4.0", "adapter": null } },
+		{
+			"name": "host-3-adapter",
+			"peers": { "host": "3.1.0", "adapter": "1.0.0" }
+		}
+	]
+}
+```
 
 ## caching compatibility checks
 
@@ -247,6 +265,7 @@ If a process is forcibly interrupted or restoration fails, breakage retains reco
 | `--testCommand`    | `-t`      | Yes      | Command running the restored public contracts.    |
 | `--certifyCommand` | `-c`      | Yes      | Command certifying intentional breaking changes.  |
 | `--baseDirname`    | `-d`      |          | Working directory for Git and commands.           |
+| `--peerConfig`     |           |          | JSON file selecting peer environments.            |
 | `--baselineFile`   |           |          | Prelude snapshot pinning the release commit.      |
 | `--verbose`        | `-v`      |          | Print timing information for the check.           |
 
@@ -269,6 +288,7 @@ These aliases work alongside the original option names. Configuration file keys 
 | `--testCommand`             | `--test-command`               |
 | `--certifyCommand`          | `--certify-command`            |
 | `--baseDirname`             | `--base-dir`, `--base-dirname` |
+| `--peerConfig`              | `--peer-config`                |
 | `--baselineFile`            | `--baseline-file`              |
 | `--outdir` (schema command) | `--out-dir`                    |
 

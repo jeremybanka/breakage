@@ -1,4 +1,6 @@
 import { execFile } from "node:child_process"
+import { existsSync } from "node:fs"
+import { createRequire } from "node:module"
 import {
 	copyFile,
 	mkdir,
@@ -9,8 +11,8 @@ import {
 } from "node:fs/promises"
 import path from "node:path"
 
-import { object } from "./peer-matrix.ts"
-import type { PeerCase, PeerConfig } from "./peer-matrix.ts"
+import { object } from "./peer-config.ts"
+import type { PeerCase, PeerConfig } from "./peer-config.ts"
 
 export async function runFile(
 	file: string,
@@ -69,6 +71,10 @@ export async function preparePeerInstall(
 	}
 	let index = 0
 	for (const [name, version] of Object.entries(entry.peers)) {
+		if (version === null) {
+			delete dependencies[name]
+			continue
+		}
 		const sourceFile = config.sources?.[`${name}@${version}`]
 		if (sourceFile) {
 			const filename = `peer-${index++}.tgz`
@@ -126,6 +132,21 @@ export async function verifyPeerEnvironment(
 		candidateModules = parent
 	}
 	for (const [name, version] of Object.entries(entry.peers)) {
+		if (version === null) {
+			const locations =
+				createRequire(
+					path.join(installedCandidate, `package.json`),
+				).resolve.paths(name) ?? []
+			if (
+				[path.join(directory, `node_modules`), ...locations].some((location) =>
+					existsSync(path.join(location, name, `package.json`)),
+				)
+			)
+				throw new Error(
+					`Optional peer ${name} must be absent in case ${entry.name}.`,
+				)
+			continue
+		}
 		for (const modules of [
 			path.join(directory, `node_modules`),
 			candidateModules,

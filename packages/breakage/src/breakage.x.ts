@@ -97,7 +97,7 @@ const BREAKAGE_MANUAL = options(
 			parse: parseBooleanOption,
 		},
 	},
-) satisfies OptionsGroup<BreakageOptions>
+) satisfies OptionsGroup<BreakageOptions & { peerConfig?: string | undefined }>
 
 const PRELUDE_MANUAL = options(
 	`Resolve and fetch the release baseline for a cacheable compatibility check.`,
@@ -216,10 +216,16 @@ if (completion !== undefined) {
 		}
 		case ``:
 		case `$configPath`: {
-			const { returnValue } = await encapsulate(() => breakage(inputs.opts), {
-				console: true,
-				stdout: true,
-			})
+			const { returnValue } = await encapsulate(
+				() =>
+					inputs.opts.peerConfig === undefined
+						? breakage(inputs.opts)
+						: breakage({ ...inputs.opts, peerConfig: inputs.opts.peerConfig }),
+				{
+					console: true,
+					stdout: true,
+				},
+			)
 			if (`peerCheck` in returnValue) {
 				process.stdout.write(`${JSON.stringify(returnValue, null, 2)}\n`)
 				process.exit(

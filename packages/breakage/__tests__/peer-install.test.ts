@@ -69,7 +69,7 @@ it(`installs exact peer artifacts and the packed candidate without using workspa
 			JSON.stringify({ name: `host`, version: `9.0.0` }),
 		)
 		const out = `.breakage/baseline.json`
-		await breakagePrelude({ ...project.options, out })
+		const baseline = await breakagePrelude({ ...project.options, out })
 		const snapshot = await readFile(path.join(project.repository, out), `utf8`)
 		await breakagePrelude({ ...project.options, out })
 		expect(await readFile(path.join(project.repository, out), `utf8`)).toBe(
@@ -94,6 +94,19 @@ it(`installs exact peer artifacts and the packed candidate without using workspa
 			).version,
 		).toBe(`9.0.0`)
 		expect((await project.git.status()).isClean()).toBe(true)
+		const artifact = baseline.peers?.installations?.old?.artifacts[0]
+		if (!artifact) throw new Error(`Missing pinned artifact`)
+		await writeFile(
+			path.resolve(project.repository, artifact.file),
+			`corrupt archive`,
+		)
+		const corrupted = await breakage({ ...project.options, baselineFile: out })
+		expect(corrupted).toMatchObject({
+			success: false,
+			peerResults: [{ status: `setup-failed` }, { status: `setup-failed` }],
+		})
+		if (!(`peerResults` in corrupted)) throw new Error(`Missing report`)
+		expect(corrupted.peerResults[0]!.stderr).toContain(`integrity mismatch`)
 	} finally {
 		await project.cleanup()
 	}

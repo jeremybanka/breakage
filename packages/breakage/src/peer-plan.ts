@@ -28,10 +28,11 @@ import {
 	preparePeerInstall,
 	runFile,
 } from "./peer-install.ts"
-import { object, readPeerConfig } from "./peer-matrix.ts"
-import type { PeerCase, PeerConfig } from "./peer-matrix.ts"
+import { object, readPeerConfig } from "./peer-config.ts"
+import type { PeerCase, PeerConfig } from "./peer-config.ts"
 import { readPeerSupport } from "./peer-support.ts"
 import type { PeerSupport } from "./peer-support.ts"
+import { supports } from "./peer-support.ts"
 
 export type PeerInstallation = {
 	candidate: string
@@ -55,17 +56,18 @@ export function digest(value: string | Uint8Array): string {
 export function selectPeerVersions(
 	range: string,
 	published: string[],
+	includePrerelease = false,
 ): string[] {
 	const selected = new Set<string>()
-	for (const comparators of new Range(range).set) {
+	for (const comparators of new Range(range, { includePrerelease }).set) {
 		const segment =
 			comparators.map((comparator) => comparator.value).join(` `) || `*`
 		const versions = published
 			.filter(
 				(version) =>
 					valid(version) === version &&
-					!prerelease(version) &&
-					satisfies(version, segment),
+					(includePrerelease || !prerelease(version)) &&
+					satisfies(version, segment, { includePrerelease }),
 			)
 			.sort(compare)
 		if (!versions.length)
@@ -92,38 +94,76 @@ export async function resolvePeerCases(
 	cwd: string,
 ): Promise<PeerCase[]> {
 	const cases = [...(config.cases ?? [])]
+	const maxCases = config.maxCases ?? 32
 	if (config.resolve) {
 		const names = Object.keys(support.ranges).sort()
-		if (names.length !== 1)
-			throw new Error(
-				`Automatic selection currently requires exactly one declared peer.`,
+		if (!names.length)
+			throw new Error(`Automatic selection needs declared peers.`)
+		let combinations: Record<string, string | null>[] = [{}]
+		for (const name of names) {
+			const range = support.ranges[name]!
+			const bounded = new Range(range).set.every((segment) =>
+				segment.some(
+					(comparator) =>
+						comparator.value && [``, `<`, `<=`].includes(comparator.operator),
+				),
 			)
-		const name = names[0]!
-		const local = Object.keys(config.sources ?? {})
-			.filter((key) => key.startsWith(`${name}@`))
-			.map((key) => key.slice(name.length + 1))
-		const published: unknown = local.length
-			? local
-			: JSON.parse(
-					await runFile(`pnpm`, [`view`, name, `versions`, `--json`], cwd),
+			if (!bounded && config.unbounded !== `published`)
+				throw new Error(
+					`Unbounded peer range for ${name} requires unbounded: published or explicit cases.`,
 				)
-		if (
-			!Array.isArray(published) ||
-			published.some((version) => typeof version !== `string`)
+			const local = Object.keys(config.sources ?? {})
+				.filter((key) => key.startsWith(`${name}@`))
+				.map((key) => key.slice(name.length + 1))
+			const published: unknown = local.length
+				? local
+				: JSON.parse(
+						await runFile(`pnpm`, [`view`, name, `versions`, `--json`], cwd),
+					)
+			if (
+				!Array.isArray(published) ||
+				published.some((version) => typeof version !== `string`)
+			)
+				throw new Error(`Invalid published version list for ${name}.`)
+			const versions: (string | null)[] = selectPeerVersions(
+				range,
+				published as string[],
+				config.prereleases === `include`,
+			)
+			if (support.optional.includes(name)) versions.push(null)
+			if (combinations.length * versions.length > maxCases)
+				throw new Error(
+					`Peer matrix exceeds maxCases (${maxCases}). Select explicit combinations or raise the limit.`,
+				)
+			combinations = combinations.flatMap((peers) =>
+				versions.map((version) => ({ ...peers, [name]: version })),
+			)
+		}
+		cases.push(
+			...combinations.map((peers) => ({
+				name: Object.entries(peers)
+					.map(([name, version]) => `${name}@${version ?? `absent`}`)
+					.join(` + `),
+				peers,
+			})),
 		)
-			throw new Error(`Invalid published version list for ${name}.`)
-		for (const version of selectPeerVersions(
-			support.ranges[name]!,
-			published as string[],
-		))
-			cases.push({ name: `${name}@${version}`, peers: { [name]: version } })
 	}
 	const unique = new Map<string, PeerCase>()
 	for (const entry of cases) {
+		for (const name of Object.keys(entry.peers))
+			if (!Object.hasOwn(support.ranges, name))
+				throw new Error(`Case ${entry.name} selects undeclared peer ${name}.`)
+		const peers = { ...entry.peers }
+		for (const name of support.optional)
+			if (peers[name] === undefined) peers[name] = null
+		if (!supports(support, peers, config.prereleases === `include`))
+			throw new Error(
+				`Case ${entry.name} omits a required peer or selects a version outside the proposed ranges.`,
+			)
 		const key = JSON.stringify(
-			Object.entries(entry.peers).sort(([a], [b]) => a.localeCompare(b)),
+			Object.entries(peers).sort(([a], [b]) => a.localeCompare(b)),
 		)
-		if (!unique.has(key)) unique.set(key, entry)
+		if (!unique.has(key)) unique.set(key, { ...entry, peers })
 	}
 	const result = [...unique.values()]
 	if (
@@ -132,6 +172,10 @@ export async function resolvePeerCases(
 	)
 		throw new Error(
 			`Resolved peer cases must have unique names and cannot be empty.`,
+		)
+	if (result.length > maxCases)
+		throw new Error(
+			`Peer matrix exceeds maxCases (${maxCases}). Select explicit combinations or raise the limit.`,
 		)
 	return result
 }
@@ -143,6 +187,10 @@ export async function preparePeerPlan(
 ): Promise<PeerPlan> {
 	const config = await readPeerConfig(path.resolve(baseDirname, peerConfig))
 	const git = simpleGit(baseDirname)
+	if (!(await git.status()).isClean())
+		throw new Error(
+			`The git repository must be clean to prepare peer environments.`,
+		)
 	const candidateCommit = await git.revparse([`HEAD`])
 	const support = await readPeerSupport(
 		git,
@@ -234,7 +282,8 @@ export function isPeerPlan(value: unknown): value is PeerPlan {
 				!object(entry.peers) ||
 				Object.values(entry.peers).some(
 					(version) =>
-						typeof version !== `string` || valid(version) !== version,
+						version !== null &&
+						(typeof version !== `string` || valid(version) !== version),
 				),
 		)
 	)

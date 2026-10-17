@@ -1,9 +1,11 @@
+import { readPeerConfig } from "./peer-config.ts"
+import type { PeerCase } from "./peer-config.ts"
+export type { PeerCase, PeerConfig } from "./peer-config.ts"
 import { exec } from "node:child_process"
-import { mkdtemp, readFile, rm } from "node:fs/promises"
+import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
 
-import { valid } from "semver"
 import { simpleGit } from "simple-git"
 
 import {
@@ -18,16 +20,6 @@ import type { PeerSupportChange } from "./peer-support.ts"
 import { digest, resolvePeerCases, restorePeerInstall } from "./peer-plan.ts"
 import type { PeerPlan } from "./peer-plan.ts"
 
-export type PeerCase = { name: string; peers: Record<string, string> }
-export type PeerConfig = {
-	cases?: PeerCase[]
-	resolve?: boolean
-	setupCommand?: string
-	manifest?: string
-	install?: boolean
-	testDependencies?: Record<string, string>
-	sources?: Record<string, string>
-}
 export type PeerCaseResult = PeerCase & {
 	status: `passed` | `setup-failed` | `contract-failed`
 	stdout: string
@@ -61,68 +53,6 @@ export type PeerContext = {
 	peerConfig: string
 	certifyCommand: string
 	peerPlan?: PeerPlan | undefined
-}
-
-export function object(value: unknown): value is Record<string, unknown> {
-	return value !== null && typeof value === `object` && !Array.isArray(value)
-}
-
-export async function readPeerConfig(filename: string): Promise<PeerConfig> {
-	const value: unknown = JSON.parse(await readFile(filename, `utf8`))
-	if (
-		!object(value) ||
-		(value.cases !== undefined && !Array.isArray(value.cases)) ||
-		(!value.resolve &&
-			(!Array.isArray(value.cases) || value.cases.length === 0))
-	) {
-		throw new Error(`Peer configuration must contain a nonempty cases array.`)
-	}
-	const names = new Set<string>()
-	for (const entry of (value.cases ?? []) as unknown[]) {
-		if (
-			!object(entry) ||
-			typeof entry.name !== `string` ||
-			!entry.name.trim() ||
-			names.has(entry.name) ||
-			!object(entry.peers)
-		) {
-			throw new Error(`Each peer case needs a unique name and a peers object.`)
-		}
-		names.add(entry.name)
-		for (const [name, version] of Object.entries(entry.peers)) {
-			if (!name || typeof version !== `string` || valid(version) !== version)
-				throw new Error(
-					`Peer ${name} in ${entry.name} must select an exact version.`,
-				)
-		}
-	}
-	if (
-		value.setupCommand !== undefined &&
-		typeof value.setupCommand !== `string`
-	)
-		throw new Error(`setupCommand must be a string.`)
-	if (value.manifest !== undefined && typeof value.manifest !== `string`)
-		throw new Error(`manifest must be a string.`)
-	if (value.install !== undefined && typeof value.install !== `boolean`)
-		throw new Error(`install must be a boolean.`)
-	if (value.resolve !== undefined && typeof value.resolve !== `boolean`)
-		throw new Error(`resolve must be a boolean.`)
-	for (const key of [`testDependencies`, `sources`] as const) {
-		if (
-			value[key] !== undefined &&
-			(!object(value[key]) ||
-				Object.values(value[key]).some((entry) => typeof entry !== `string`))
-		)
-			throw new Error(`${key} must map names to strings.`)
-	}
-	if (
-		object(value.testDependencies) &&
-		Object.values(value.testDependencies).some(
-			(version) => typeof version !== `string` || valid(version) !== version,
-		)
-	)
-		throw new Error(`testDependencies must use exact versions.`)
-	return value as PeerConfig
 }
 
 export async function command(
@@ -187,7 +117,9 @@ export async function checkPeerMatrix(
 		context.peerPlan?.cases ??
 		(await resolvePeerCases(config, proposedSupport, context.baseDirname))
 	for (const entry of cases) {
-		if (!supports(proposedSupport, entry.peers)) {
+		if (
+			!supports(proposedSupport, entry.peers, config.prereleases === `include`)
+		) {
 			peerResults.push({
 				...entry,
 				status: `setup-failed`,
@@ -196,7 +128,11 @@ export async function checkPeerMatrix(
 			})
 			continue
 		}
-		const contract = supports(releasedSupport, entry.peers)
+		const contract = supports(
+			releasedSupport,
+			entry.peers,
+			config.prereleases === `include`,
+		)
 			? `released`
 			: `current`
 		const temporary = await mkdtemp(path.join(tmpdir(), `breakage-peer-`))
@@ -205,6 +141,13 @@ export async function checkPeerMatrix(
 			await simpleGit().clone(root, checkout, [`--no-local`, `--quiet`])
 			const clone = simpleGit(checkout)
 			await clone.checkout(candidateCommit)
+			// A prelude fetch by SHA need not leave a local ref for clone to copy.
+			await clone.fetch([
+				root,
+				context.releaseCommit,
+				`--no-tags`,
+				`--no-write-fetch-head`,
+			])
 			if (contract === `released`)
 				await clone.raw([
 					`restore`,

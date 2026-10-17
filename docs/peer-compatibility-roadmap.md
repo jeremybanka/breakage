@@ -34,8 +34,8 @@ Extend breakage's released consumer contracts across the peer environments a pac
 
 ## 6 Support multiple peers deliberately
 
-- [ ] Add explicitly selected combinations, validate their dependency constraints, and enforce a configurable matrix size limit.
-- [ ] Include absence cases for optional peers and define explicit selection policies for prereleases and unbounded ranges.
-- [ ] Done when incompatible combinations produce useful diagnostics and matrix limits require an explicit selection instead of silently reducing coverage.
+- [x] Add explicitly selected combinations, validate their dependency constraints, and enforce a configurable matrix size limit.
+- [x] Include absence cases for optional peers and define explicit selection policies for prereleases and unbounded ranges.
+- [x] Done when incompatible combinations produce useful diagnostics and matrix limits require an explicit selection instead of silently reducing coverage.
 
-Keep the first useful release focused on explicit cases. Automatic range discovery follows once contract preservation, environment isolation, and failure reporting work reliably.
+See the [peer compatibility documentation](../packages/breakage/README.md#peer-compatibility) for configuration, selection policies, and reproducible checks.

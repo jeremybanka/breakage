@@ -27,7 +27,6 @@ export type {
 export type BreakageOptions = {
 	tagPattern?: string | undefined
 	baselineFile?: string | undefined
-	peerConfig?: string | undefined
 	testPattern: string
 	testCommand: string
 	certifyCommand: string
@@ -35,8 +34,9 @@ export type BreakageOptions = {
 	verbose?: boolean | undefined
 }
 
+export type PeerBreakageOptions = BreakageOptions & { peerConfig: string }
+
 export type BreakageOutcome =
-	| PeerMatrixOutcome
 	| { gitWasClean: false }
 	| {
 			gitWasClean: true
@@ -69,6 +69,12 @@ export type BreakageOutcome =
 			certificationStderr: string
 	  }
 
+export function breakage(
+	options: PeerBreakageOptions,
+): Promise<(BreakageOutcome | PeerMatrixOutcome) & { summary: string }>
+export function breakage(
+	options: BreakageOptions,
+): Promise<BreakageOutcome & { summary: string }>
 export async function breakage({
 	tagPattern,
 	baselineFile,
@@ -78,7 +84,9 @@ export async function breakage({
 	certifyCommand,
 	baseDirname = process.cwd(),
 	verbose = false,
-}: BreakageOptions): Promise<BreakageOutcome & { summary: string }> {
+}: BreakageOptions & { peerConfig?: string }): Promise<
+	(BreakageOutcome | PeerMatrixOutcome) & { summary: string }
+> {
 	let mark: Chronicle[`mark`] | undefined
 	let logMarks: Chronicle[`logMarks`] | undefined
 	if (verbose) {
@@ -181,6 +189,31 @@ export async function breakage({
 		minimatch(file, testPattern),
 	)
 	mark?.(`filtered to public test files`)
+	if (peerConfig !== undefined) {
+		if (!(await git.status()).isClean())
+			return {
+				gitWasClean: false,
+				summary: `The git repository must be clean to run this command.`,
+			}
+		if (!productionTestFiles.length)
+			return {
+				gitWasClean: true,
+				lastReleaseFound: true,
+				lastReleaseTag: latestReleaseTag,
+				testsWereFound: false,
+				summary: `No tests were found matching the pattern "${testPattern}".`,
+			}
+		return checkPeerMatrix({
+			baseDirname,
+			releaseCommit,
+			releaseTag: latestReleaseTag,
+			testFiles: productionTestFiles,
+			testCommand,
+			peerConfig,
+			certifyCommand,
+			peerPlan,
+		})
+	}
 
 	const prepared = await withTestFileState(git, baseDirname, async (state) => {
 		if (!(await state.isClean())) {
@@ -207,18 +240,6 @@ export async function breakage({
 	const { restore } = prepared
 
 	try {
-		if (peerConfig !== undefined) {
-			return await checkPeerMatrix({
-				baseDirname,
-				releaseCommit,
-				releaseTag: latestReleaseTag,
-				testFiles: productionTestFiles,
-				testCommand,
-				peerConfig,
-				certifyCommand,
-				peerPlan,
-			})
-		}
 		const noBreakingChangesDetected = await new Promise<
 			BreakageOutcome & { summary: string }
 		>((resolve, reject) => {
@@ -245,7 +266,6 @@ export async function breakage({
 		mark?.(`passed tests`)
 		return noBreakingChangesDetected
 	} catch (thrown) {
-		if (peerConfig !== undefined) throw thrown
 		mark?.(`failed tests`)
 		const breakingChangesCertified = await new Promise<
 			BreakageOutcome & { summary: string }

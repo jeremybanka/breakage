@@ -3,6 +3,7 @@ import { readFile, rename } from "node:fs/promises"
 import path from "node:path"
 
 import { expect, it } from "bun:test"
+import { simpleGit } from "simple-git"
 
 import { breakage, breakagePrelude } from "../src/breakage.ts"
 import { selectPeerVersions } from "../src/peer-plan.ts"
@@ -26,6 +27,41 @@ it(`samples lower and upper published versions per range segment and compatibili
 	expect(() => selectPeerVersions(`^5.0.0`, [`4.0.0`])).toThrow(
 		`No published stable peer versions`,
 	)
+})
+
+it(`replays a fetched release commit that has no local tag`, async () => {
+	const project = await peerProject({
+		cases: [{ name: `host`, peers: { host: `1.0.0` } }],
+	})
+	try {
+		const producer = path.join(project.directory, `producer`)
+		await project.git.clone(
+			path.join(project.directory, `remote.git`),
+			producer,
+		)
+		const producerGit = simpleGit(producer)
+		await producerGit
+			.addConfig(`user.name`, `Test`)
+			.addConfig(`user.email`, `test@example.invalid`)
+		await Bun.write(
+			path.join(producer, `public/contract.ts`),
+			`throw new Error("fresh released contract");`,
+		)
+		await producerGit.add(`.`).commit(`New release`).addTag(`plugin@1.1.0`)
+		await producerGit.push(`origin`, `--tags`)
+		const out = `.breakage/baseline.json`
+		await breakagePrelude({ ...project.options, out })
+		expect(await project.git.tag()).not.toContain(`plugin@1.1.0`)
+		const result = await breakage({ ...project.options, baselineFile: out })
+		expect(result).toMatchObject({
+			success: false,
+			peerResults: [{ status: `contract-failed` }],
+		})
+		if (!(`peerResults` in result)) throw new Error(`Missing report`)
+		expect(result.peerResults[0]!.stderr).toContain(`fresh released contract`)
+	} finally {
+		await project.cleanup()
+	}
 })
 
 it(`pins discovered versions deterministically and replays without registry or origin discovery`, async () => {
@@ -70,7 +106,7 @@ it(`pins discovered versions deterministically and replays without registry or o
 		expect(await readFile(path.join(project.repository, out), `utf8`)).not.toBe(
 			bytes,
 		)
-		server.stop(true)
+		await server.stop(true)
 		await rename(
 			path.join(project.directory, `remote.git`),
 			path.join(project.directory, `offline.git`),
@@ -92,7 +128,7 @@ it(`pins discovered versions deterministically and replays without registry or o
 			/another configuration or candidate commit/,
 		)
 	} finally {
-		server.stop(true)
+		await server.stop(true)
 		await project.cleanup()
 	}
 }, 30000)
