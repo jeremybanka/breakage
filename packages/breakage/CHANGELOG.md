@@ -2,6 +2,12 @@
 
 Breakage continues break-check's version sequence. Historical source and `break-check@` release tags are included in this repository; see the [history guide](../../docs/history/README.md) for provenance and commit mappings. Historical changelog commit IDs refer to the original [Wayforge](https://github.com/jeremybanka/wayforge) commits.
 
+## 0.8.4
+
+### Patch Changes
+
+- f6c1c91: Publish public consumer contracts for the API, CLI, baseline replay, and restoration guarantees, and check released contracts against current source with a pinned released supervisor and an explicit initial-baseline bootstrap.
+
 ## 0.8.3
 
 ### Patch Changes
