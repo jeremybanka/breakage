@@ -28,9 +28,9 @@ Extend breakage's released consumer contracts across the peer environments a pac
 
 ## 5 Resolve ranges into pinned cases
 
-- [ ] Extend the uncached prelude to select the lowest published and newest satisfying stable versions in each supported range segment and major; deduplicate cases and allow explicit additions.
-- [ ] Record exact versions and reproducible dependency resolution inputs in a deterministic snapshot used by checks and cache keys. Fail unresolved ranges rather than skip them.
-- [ ] Done when `^2.4.0 || ^3.1.0` covers both lower bounds and both latest supported majors, and a newly selected release invalidates the cached comparison. Report tested versions as samples of the declared range.
+- [x] Extend the uncached prelude to select the lowest published and newest satisfying stable versions in each supported range segment and major; deduplicate cases and allow explicit additions.
+- [x] Record exact versions and reproducible dependency resolution inputs in a deterministic snapshot used by checks and cache keys. Fail unresolved ranges rather than skip them.
+- [x] Done when `^2.4.0 || ^3.1.0` covers both lower bounds and both latest supported majors, and a newly selected release invalidates the cached comparison. Report tested versions as samples of the declared range.
 
 ## 6 Support multiple peers deliberately
 

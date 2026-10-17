@@ -7,10 +7,13 @@ import { simpleGit } from "simple-git"
 
 import { withDirectoryLock } from "./directory-lock.ts"
 import { latestReleaseTag } from "./release-tag.ts"
+import { isPeerPlan, preparePeerPlan } from "./peer-plan.ts"
+import type { PeerPlan } from "./peer-plan.ts"
 
 export type BaselineOptions = {
 	tagPattern?: string | undefined
 	baseDirname?: string
+	peerConfig?: string | undefined
 }
 
 export type BreakagePreludeOptions = BaselineOptions & { out: string }
@@ -21,6 +24,7 @@ export type BreakageBaseline = {
 	packageDirectory: string
 	ref: string
 	commit: string
+	peers?: PeerPlan
 }
 
 const objectId = /^[a-f0-9]{40}(?:[a-f0-9]{24})?$/
@@ -35,7 +39,8 @@ function isBaseline(value: unknown): value is BreakageBaseline {
 		typeof record.ref === `string` &&
 		record.ref.startsWith(`refs/tags/`) &&
 		typeof record.commit === `string` &&
-		objectId.test(record.commit)
+		objectId.test(record.commit) &&
+		(record.peers === undefined || isPeerPlan(record.peers))
 	)
 }
 
@@ -44,6 +49,7 @@ export async function breakagePrelude({
 	out,
 	tagPattern,
 	baseDirname = process.cwd(),
+	peerConfig,
 }: BreakagePreludeOptions): Promise<BreakageBaseline> {
 	const filename = path.resolve(baseDirname, out)
 	const temporaryPath = `${filename}.${randomUUID()}.tmp`
@@ -92,6 +98,21 @@ export async function breakagePrelude({
 			ref,
 			commit,
 		}
+		if (peerConfig !== undefined) {
+			if (
+				!(
+					await git.raw([`check-ignore`, `--`, `${filename}.peers/probe`])
+				).trim()
+			)
+				throw new Error(
+					`Peer artifact directory must be gitignored: ${filename}.peers.`,
+				)
+			baseline.peers = await preparePeerPlan(
+				baseDirname,
+				peerConfig,
+				`${filename}.peers`,
+			)
+		}
 		await mkdir(path.dirname(filename), { recursive: true })
 		await writeFile(temporaryPath, `${JSON.stringify(baseline, null, 2)}\n`, {
 			flag: `wx`,
@@ -110,11 +131,13 @@ export async function breakagePrelude({
 export async function readBaseline(
 	git: SimpleGit,
 	filename: string,
-	{ tagPattern }: BaselineOptions,
+	{ tagPattern, peerConfig }: BaselineOptions,
 ): Promise<BreakageBaseline> {
 	try {
 		const baseline: unknown = JSON.parse(await readFile(filename, `utf8`))
 		if (!isBaseline(baseline)) throw new Error(`Invalid baseline fields.`)
+		if ((peerConfig !== undefined) !== (baseline.peers !== undefined))
+			throw new Error(`Baseline peer configuration does not match this check.`)
 		if (
 			baseline.tagPattern !== (tagPattern ?? null) ||
 			baseline.packageDirectory !== (await git.revparse([`--show-prefix`]))

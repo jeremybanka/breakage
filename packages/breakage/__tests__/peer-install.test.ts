@@ -3,7 +3,7 @@ import path from "node:path"
 
 import { expect, it } from "bun:test"
 
-import { breakage } from "../src/breakage.ts"
+import { breakage, breakagePrelude } from "../src/breakage.ts"
 import { runFile } from "../src/peer-install.ts"
 import { peerProject } from "./peer-project.ts"
 
@@ -68,7 +68,14 @@ it(`installs exact peer artifacts and the packed candidate without using workspa
 			`node_modules/host/package.json`,
 			JSON.stringify({ name: `host`, version: `9.0.0` }),
 		)
-		const result = await breakage(project.options)
+		const out = `.breakage/baseline.json`
+		await breakagePrelude({ ...project.options, out })
+		const snapshot = await readFile(path.join(project.repository, out), `utf8`)
+		await breakagePrelude({ ...project.options, out })
+		expect(await readFile(path.join(project.repository, out), `utf8`)).toBe(
+			snapshot,
+		)
+		const result = await breakage({ ...project.options, baselineFile: out })
 		expect(result).toMatchObject({
 			success: false,
 			peerResults: [{ status: `passed` }, { status: `contract-failed` }],

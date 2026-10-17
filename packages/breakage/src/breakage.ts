@@ -10,11 +10,13 @@ import { readBaseline } from "./baseline.ts"
 import { withDirectoryLock } from "./directory-lock.ts"
 import { checkPeerMatrix } from "./peer-matrix.ts"
 import type { PeerMatrixOutcome } from "./peer-matrix.ts"
+import type { PeerPlan } from "./peer-plan.ts"
 import { latestReleaseTag as selectLatestReleaseTag } from "./release-tag.ts"
 import { withTestFileState } from "./test-file-state.ts"
 
 export type { BreakageBaseline, BreakagePreludeOptions } from "./baseline.ts"
 export { breakagePrelude } from "./baseline.ts"
+export type { PeerPlan, PeerInstallation } from "./peer-plan.ts"
 export type {
 	PeerCase,
 	PeerConfig,
@@ -105,14 +107,16 @@ export async function breakage({
 	}
 	let latestReleaseTag: string | undefined
 	let releaseCommit: string
+	let peerPlan: PeerPlan | undefined
 	if (baselineFile !== undefined) {
 		const baseline = await readBaseline(
 			git,
 			path.resolve(baseDirname, baselineFile),
-			{ tagPattern },
+			{ tagPattern, peerConfig },
 		)
 		latestReleaseTag = baseline.ref
 		releaseCommit = baseline.commit
+		peerPlan = baseline.peers
 		mark?.(`read pinned release baseline`)
 	} else {
 		const tagsRemote = await git.listRemote([`--tags`, `origin`])
@@ -212,6 +216,7 @@ export async function breakage({
 				testCommand,
 				peerConfig,
 				certifyCommand,
+				peerPlan,
 			})
 		}
 		const noBreakingChangesDetected = await new Promise<

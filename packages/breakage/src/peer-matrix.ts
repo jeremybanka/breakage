@@ -9,15 +9,19 @@ import { simpleGit } from "simple-git"
 import {
 	installPeerEnvironment,
 	preparePeerInstall,
+	runFile,
 	verifyPeerEnvironment,
 } from "./peer-install.ts"
 
 import { droppedSupport, readPeerSupport, supports } from "./peer-support.ts"
 import type { PeerSupportChange } from "./peer-support.ts"
+import { digest, resolvePeerCases, restorePeerInstall } from "./peer-plan.ts"
+import type { PeerPlan } from "./peer-plan.ts"
 
 export type PeerCase = { name: string; peers: Record<string, string> }
 export type PeerConfig = {
-	cases: PeerCase[]
+	cases?: PeerCase[]
+	resolve?: boolean
 	setupCommand?: string
 	manifest?: string
 	install?: boolean
@@ -56,6 +60,7 @@ export type PeerContext = {
 	testCommand: string
 	peerConfig: string
 	certifyCommand: string
+	peerPlan?: PeerPlan | undefined
 }
 
 export function object(value: unknown): value is Record<string, unknown> {
@@ -66,13 +71,14 @@ export async function readPeerConfig(filename: string): Promise<PeerConfig> {
 	const value: unknown = JSON.parse(await readFile(filename, `utf8`))
 	if (
 		!object(value) ||
-		!Array.isArray(value.cases) ||
-		value.cases.length === 0
+		(value.cases !== undefined && !Array.isArray(value.cases)) ||
+		(!value.resolve &&
+			(!Array.isArray(value.cases) || value.cases.length === 0))
 	) {
 		throw new Error(`Peer configuration must contain a nonempty cases array.`)
 	}
 	const names = new Set<string>()
-	for (const entry of value.cases) {
+	for (const entry of (value.cases ?? []) as unknown[]) {
 		if (
 			!object(entry) ||
 			typeof entry.name !== `string` ||
@@ -99,6 +105,8 @@ export async function readPeerConfig(filename: string): Promise<PeerConfig> {
 		throw new Error(`manifest must be a string.`)
 	if (value.install !== undefined && typeof value.install !== `boolean`)
 		throw new Error(`install must be a boolean.`)
+	if (value.resolve !== undefined && typeof value.resolve !== `boolean`)
+		throw new Error(`resolve must be a boolean.`)
 	for (const key of [`testDependencies`, `sources`] as const) {
 		if (
 			value[key] !== undefined &&
@@ -147,6 +155,22 @@ export async function checkPeerMatrix(
 	const root = await git.revparse([`--show-toplevel`])
 	const prefix = await git.revparse([`--show-prefix`])
 	const candidateCommit = await git.revparse([`HEAD`])
+	if (
+		context.peerPlan?.packageManager &&
+		context.peerPlan.packageManager !==
+			(await runFile(`pnpm`, [`--version`], context.baseDirname))
+	)
+		throw new Error(
+			`Peer snapshot uses a different pnpm version. Run breakage prelude again.`,
+		)
+	if (
+		context.peerPlan &&
+		(context.peerPlan.configHash !== digest(JSON.stringify(config)) ||
+			context.peerPlan.candidateCommit !== candidateCommit)
+	)
+		throw new Error(
+			`Peer snapshot belongs to another configuration or candidate commit. Run breakage prelude again.`,
+		)
 	const manifest = config.manifest ?? `package.json`
 	const releasedSupport = await readPeerSupport(
 		git,
@@ -159,7 +183,10 @@ export async function checkPeerMatrix(
 		? await command(context.certifyCommand, context.baseDirname)
 		: { success: true, stdout: ``, stderr: `` }
 	const peerResults: PeerCaseResult[] = []
-	for (const entry of config.cases) {
+	const cases =
+		context.peerPlan?.cases ??
+		(await resolvePeerCases(config, proposedSupport, context.baseDirname))
+	for (const entry of cases) {
 		if (!supports(proposedSupport, entry.peers)) {
 			peerResults.push({
 				...entry,
@@ -189,13 +216,22 @@ export async function checkPeerMatrix(
 			const cwd = path.join(checkout, prefix)
 			let candidate: string | undefined
 			if (config.install) {
-				candidate = await preparePeerInstall(
-					config,
-					entry,
-					context.baseDirname,
-					cwd,
-				)
-				await installPeerEnvironment(cwd)
+				const installation = context.peerPlan?.installations?.[entry.name]
+				if (context.peerPlan && !installation)
+					throw new Error(
+						`Missing pinned peer installation. Run breakage prelude again.`,
+					)
+				if (installation) {
+					await restorePeerInstall(installation, context.baseDirname, cwd)
+					candidate = installation.candidate
+				} else
+					candidate = await preparePeerInstall(
+						config,
+						entry,
+						context.baseDirname,
+						cwd,
+					)
+				await installPeerEnvironment(cwd, installation !== undefined)
 				await verifyPeerEnvironment(cwd, candidate, entry)
 			}
 			const env = {
