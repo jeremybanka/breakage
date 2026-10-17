@@ -6,6 +6,12 @@ import path from "node:path"
 import { valid } from "semver"
 import { simpleGit } from "simple-git"
 
+import {
+	installPeerEnvironment,
+	preparePeerInstall,
+	verifyPeerEnvironment,
+} from "./peer-install.ts"
+
 import { droppedSupport, readPeerSupport, supports } from "./peer-support.ts"
 import type { PeerSupportChange } from "./peer-support.ts"
 
@@ -14,6 +20,9 @@ export type PeerConfig = {
 	cases: PeerCase[]
 	setupCommand?: string
 	manifest?: string
+	install?: boolean
+	testDependencies?: Record<string, string>
+	sources?: Record<string, string>
 }
 export type PeerCaseResult = PeerCase & {
 	status: `passed` | `setup-failed` | `contract-failed`
@@ -88,6 +97,23 @@ export async function readPeerConfig(filename: string): Promise<PeerConfig> {
 		throw new Error(`setupCommand must be a string.`)
 	if (value.manifest !== undefined && typeof value.manifest !== `string`)
 		throw new Error(`manifest must be a string.`)
+	if (value.install !== undefined && typeof value.install !== `boolean`)
+		throw new Error(`install must be a boolean.`)
+	for (const key of [`testDependencies`, `sources`] as const) {
+		if (
+			value[key] !== undefined &&
+			(!object(value[key]) ||
+				Object.values(value[key]).some((entry) => typeof entry !== `string`))
+		)
+			throw new Error(`${key} must map names to strings.`)
+	}
+	if (
+		object(value.testDependencies) &&
+		Object.values(value.testDependencies).some(
+			(version) => typeof version !== `string` || valid(version) !== version,
+		)
+	)
+		throw new Error(`testDependencies must use exact versions.`)
 	return value as PeerConfig
 }
 
@@ -161,6 +187,17 @@ export async function checkPeerMatrix(
 					...context.testFiles.map((file) => `${prefix}${file}`),
 				])
 			const cwd = path.join(checkout, prefix)
+			let candidate: string | undefined
+			if (config.install) {
+				candidate = await preparePeerInstall(
+					config,
+					entry,
+					context.baseDirname,
+					cwd,
+				)
+				await installPeerEnvironment(cwd)
+				await verifyPeerEnvironment(cwd, candidate, entry)
+			}
 			const env = {
 				...process.env,
 				BREAKAGE_CASE: entry.name,
@@ -182,7 +219,9 @@ export async function checkPeerMatrix(
 					continue
 				}
 			}
+			if (candidate) await verifyPeerEnvironment(cwd, candidate, entry)
 			const result = await command(context.testCommand, cwd, env)
+			if (candidate) await verifyPeerEnvironment(cwd, candidate, entry)
 			peerResults.push({
 				...entry,
 				contract,

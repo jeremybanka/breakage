@@ -22,9 +22,9 @@ Extend breakage's released consumer contracts across the peer environments a pac
 
 ## 4 Install isolated peer environments
 
-- [ ] Add isolated setup for exact external peer releases and historical releases of workspace peers, starting with this repository's package manager.
-- [ ] Ensure the candidate uses the selected peer instance and historical cases cannot resolve to the current workspace package. Preserve the developer's installation and clean up temporary environments.
-- [ ] Done when the same integration contract passes against one exact peer release and detects a representative regression against another, with verified resolution.
+- [x] Add isolated setup for exact external peer releases and historical releases of workspace peers, starting with this repository's package manager.
+- [x] Ensure the candidate uses the selected peer instance and historical cases cannot resolve to the current workspace package. Preserve the developer's installation and clean up temporary environments.
+- [x] Done when the same integration contract passes against one exact peer release and detects a representative regression against another, with verified resolution.
 
 ## 5 Resolve ranges into pinned cases
 

@@ -1,0 +1,142 @@
+import { execFile } from "node:child_process"
+import {
+	copyFile,
+	mkdir,
+	readFile,
+	realpath,
+	rm,
+	writeFile,
+} from "node:fs/promises"
+import path from "node:path"
+
+import { object } from "./peer-matrix.ts"
+import type { PeerCase, PeerConfig } from "./peer-matrix.ts"
+
+export async function runFile(
+	file: string,
+	args: string[],
+	cwd: string,
+): Promise<string> {
+	return new Promise((resolve, reject) => {
+		execFile(
+			file,
+			args,
+			{
+				cwd,
+				env: { ...process.env, npm_config_ignore_scripts: `true` },
+				maxBuffer: 16 * 1024 * 1024,
+			},
+			(error, stdout, stderr) => {
+				if (error)
+					reject(
+						new Error(
+							`${file} ${args[0]} failed: ${stderr || stdout || error.message}`,
+						),
+					)
+				else resolve(stdout.trim())
+			},
+		)
+	})
+}
+
+export async function preparePeerInstall(
+	config: PeerConfig,
+	entry: PeerCase,
+	source: string,
+	target: string,
+): Promise<string> {
+	const manifestPath = path.resolve(source, config.manifest ?? `package.json`)
+	const candidate: unknown = JSON.parse(await readFile(manifestPath, `utf8`))
+	if (!object(candidate) || typeof candidate.name !== `string`)
+		throw new Error(`The candidate manifest needs a package name.`)
+	if (entry.peers[candidate.name] !== undefined)
+		throw new Error(`The candidate cannot also be its own peer.`)
+	const artifacts = path.join(target, `.breakage-artifacts`)
+	await mkdir(artifacts, { recursive: true })
+	await runFile(
+		`pnpm`,
+		[
+			`--config.ignore-scripts=true`,
+			`pack`,
+			`--out`,
+			path.join(artifacts, `candidate.tgz`),
+		],
+		path.dirname(manifestPath),
+	)
+	const dependencies: Record<string, string> = {
+		...config.testDependencies,
+		[candidate.name]: `file:./.breakage-artifacts/candidate.tgz`,
+	}
+	let index = 0
+	for (const [name, version] of Object.entries(entry.peers)) {
+		const sourceFile = config.sources?.[`${name}@${version}`]
+		if (sourceFile) {
+			const filename = `peer-${index++}.tgz`
+			await copyFile(
+				path.resolve(source, sourceFile),
+				path.join(artifacts, filename),
+			)
+			dependencies[name] = `file:./.breakage-artifacts/${filename}`
+		} else dependencies[name] = version
+	}
+	await writeFile(
+		path.join(target, `package.json`),
+		`${JSON.stringify({ name: `breakage-peer-environment`, private: true, type: candidate.type ?? `module`, scripts: candidate.scripts ?? {}, dependencies }, null, 2)}\n`,
+	)
+	// The cloned workspace's lockfile describes a different dependency graph.
+	await rm(path.join(target, `pnpm-lock.yaml`), { force: true })
+	return candidate.name
+}
+
+export async function installPeerEnvironment(
+	directory: string,
+	frozen = false,
+	lockOnly = false,
+): Promise<void> {
+	await runFile(
+		`pnpm`,
+		[
+			`--ignore-workspace`,
+			`install`,
+			`--ignore-scripts`,
+			`--strict-peer-dependencies`,
+			`--config.auto-install-peers=false`,
+			`--config.link-workspace-packages=false`,
+			`--config.resolve-peers-from-workspace-root=false`,
+			frozen ? `--frozen-lockfile` : `--no-frozen-lockfile`,
+			...(lockOnly ? [`--lockfile-only`] : []),
+		],
+		directory,
+	)
+}
+
+export async function verifyPeerEnvironment(
+	directory: string,
+	candidate: string,
+	entry: PeerCase,
+): Promise<void> {
+	const installedCandidate = await realpath(
+		path.join(directory, `node_modules`, candidate),
+	)
+	let candidateModules = path.dirname(installedCandidate)
+	while (path.basename(candidateModules) !== `node_modules`) {
+		const parent = path.dirname(candidateModules)
+		if (parent === candidateModules)
+			throw new Error(`Could not locate candidate dependency graph.`)
+		candidateModules = parent
+	}
+	for (const [name, version] of Object.entries(entry.peers)) {
+		for (const modules of [
+			path.join(directory, `node_modules`),
+			candidateModules,
+		]) {
+			const actual: unknown = JSON.parse(
+				await readFile(path.join(modules, name, `package.json`), `utf8`),
+			)
+			if (!object(actual) || actual.name !== name || actual.version !== version)
+				throw new Error(
+					`Peer ${name} did not resolve to the selected version ${version}.`,
+				)
+		}
+	}
+}

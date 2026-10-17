@@ -78,6 +78,10 @@ Peer checks return a structured report with a result for every case, the candida
 
 The peer configuration's `manifest` defaults to `package.json`, relative to the check's working directory. Breakage reads its peer ranges from both the released commit and the candidate commit. Narrowing or removing a released range requires `certifyCommand` to acknowledge the dropped support, even when the removed versions no longer appear in the matrix. Retained combinations use released contracts; newly supported combinations use current contracts. The report records that choice per case. Explicit cases outside the proposed ranges fail setup.
 
+Set `"install": true` to use the built-in pnpm installer. Build the candidate separately when its published entries require compilation. Breakage packs the package at `manifest`, installs that archive with each case's exact peers in a disposable clone, and verifies the versions visible to both the test environment and the candidate. Packing and installation disable lifecycle scripts. The clone's test manifest retains the candidate's scripts and module type while using a different name so consumer imports resolve to the installed archive. Write these contracts through consumer imports without source aliases. The original lockfile and installation are preserved.
+
+Use `testDependencies` for exact runner or helper versions, and `sources` to supply local release archives, for example `"sources": { "host@2.4.0": "fixtures/host-2.4.0.tgz" }`. Archive paths are relative to the original working directory. This also supports historical workspace peers without linking their current source. Archive package names and versions must match their case selections. Project setup commands run after installation; resolution is checked again before and after the test command.
+
 ## caching compatibility checks
 
 The ordinary `breakage` command discovers the newest release on `origin` each time it runs. Do not cache that whole command: a new release or a moved tag can change its baseline without changing any tracked checkout files.
