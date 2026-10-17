@@ -1,7 +1,6 @@
-import { readFile } from "node:fs/promises"
 import { valid } from "semver"
 
-export type PeerCase = {
+export type PeerEnvironment = {
 	name: string
 	peers: Record<string, string | null>
 	embassy?: string
@@ -15,14 +14,13 @@ export type Embassy = {
 }
 export type PeerSuite = Embassy & { name: string; peers: string[] }
 export type PeerConfig = {
-	cases?: PeerCase[]
 	embassies?: Record<string, Embassy>
 	setupCommand?: string
 	manifest?: string
 	install?: boolean
 	testDependencies?: Record<string, string>
 	sources?: Record<string, string>
-	maxCases?: number
+	maxEnvironments?: number
 	workspace?: Record<
 		string,
 		{ directory: string; tagPattern?: string; setupCommand?: string }
@@ -32,24 +30,20 @@ export function object(value: unknown): value is Record<string, unknown> {
 	return value !== null && typeof value === `object` && !Array.isArray(value)
 }
 
-export async function readPeerConfig(filename: string): Promise<PeerConfig> {
-	const value: unknown = JSON.parse(await readFile(filename, `utf8`))
-	if (
-		!object(value) ||
-		(value.cases !== undefined && !Array.isArray(value.cases))
-	)
+export function validatePeerConfig(value: unknown): PeerConfig {
+	if (!object(value)) throw new Error(`Peer options must be an object.`)
+	if (value.cases !== undefined)
 		throw new Error(
-			`Peer configuration must be an object; cases must be an array.`,
+			`Remove cases: embassy environments are inferred from peerDependencies and exact <peer>_v<label> development aliases.`,
 		)
 	const supported = new Set([
-		`cases`,
 		`embassies`,
 		`setupCommand`,
 		`manifest`,
 		`install`,
 		`testDependencies`,
 		`sources`,
-		`maxCases`,
+		`maxEnvironments`,
 		`workspace`,
 	])
 	for (const key of Object.keys(value))
@@ -95,29 +89,6 @@ export async function readPeerConfig(filename: string): Promise<PeerConfig> {
 				)
 		}
 	}
-	const names = new Set<string>()
-	for (const entry of (value.cases ?? []) as unknown[]) {
-		if (
-			!object(entry) ||
-			typeof entry.name !== `string` ||
-			!entry.name.trim() ||
-			names.has(entry.name) ||
-			!object(entry.peers)
-		) {
-			throw new Error(`Each peer case needs a unique name and a peers object.`)
-		}
-		names.add(entry.name)
-		for (const [name, version] of Object.entries(entry.peers)) {
-			if (
-				!/^(@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/.test(name) ||
-				(version !== null &&
-					(typeof version !== `string` || valid(version) !== version))
-			)
-				throw new Error(
-					`Peer ${name} in ${entry.name} must select an exact version.`,
-				)
-		}
-	}
 	if (
 		value.setupCommand !== undefined &&
 		typeof value.setupCommand !== `string`
@@ -128,12 +99,12 @@ export async function readPeerConfig(filename: string): Promise<PeerConfig> {
 	if (value.install !== undefined && typeof value.install !== `boolean`)
 		throw new Error(`install must be a boolean.`)
 	if (
-		value.maxCases !== undefined &&
-		(typeof value.maxCases !== `number` ||
-			!Number.isSafeInteger(value.maxCases) ||
-			value.maxCases < 1)
+		value.maxEnvironments !== undefined &&
+		(typeof value.maxEnvironments !== `number` ||
+			!Number.isSafeInteger(value.maxEnvironments) ||
+			value.maxEnvironments < 1)
 	)
-		throw new Error(`maxCases must be a positive integer.`)
+		throw new Error(`maxEnvironments must be a positive integer.`)
 	for (const key of [`testDependencies`, `sources`] as const) {
 		if (
 			value[key] !== undefined &&
@@ -152,32 +123,18 @@ export async function readPeerConfig(filename: string): Promise<PeerConfig> {
 	return { install: true, ...value } as PeerConfig
 }
 
-export function peerSuites(
-	config: PeerConfig,
-	names: string[],
-	fallback?: {
-		testPattern?: string | undefined
-		testCommand?: string | undefined
-	},
-): PeerSuite[] {
-	const suites: PeerSuite[] = config.embassies
-		? Object.entries(config.embassies).map(([name, embassy]) => ({
-				...embassy,
-				name,
-				peers: embassy.peers ?? [name],
-			}))
-		: [
-				{
-					name: `peers`,
-					peers: names,
-					testPattern: fallback?.testPattern ?? ``,
-					testCommand: fallback?.testCommand ?? ``,
-				},
-			]
+export function peerSuites(config: PeerConfig, names: string[]): PeerSuite[] {
+	if (!config.embassies)
+		throw new Error(
+			`Configure embassy test selections in breakage.config.json.`,
+		)
+	const suites: PeerSuite[] = Object.entries(config.embassies).map(
+		([name, embassy]) => ({ ...embassy, name, peers: embassy.peers ?? [name] }),
+	)
 	for (const suite of suites) {
 		if (!suite.testPattern || !suite.testCommand)
 			throw new Error(
-				`Embassy ${suite.name} needs testPattern and testCommand in the peer configuration or command options.`,
+				`Embassy ${suite.name} needs testPattern and testCommand in the embassy configuration.`,
 			)
 		if (
 			!suite.peers.length ||

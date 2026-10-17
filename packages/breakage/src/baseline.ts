@@ -1,3 +1,4 @@
+import type { Embassy, PeerConfig } from "./peer-config.ts"
 import { randomUUID } from "node:crypto"
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises"
 import path from "node:path"
@@ -13,7 +14,9 @@ import type { PeerPlan } from "./peer-plan.ts"
 export type BaselineOptions = {
 	tagPattern?: string | undefined
 	baseDirname?: string
-	peerConfig?: string | undefined
+	embassies?: Record<string, Embassy> | undefined
+	peerOptions?: Omit<PeerConfig, `embassies`> | undefined
+	certifyCommand?: string | undefined
 	testPattern?: string | undefined
 	testCommand?: string | undefined
 }
@@ -42,9 +45,7 @@ function isBaseline(value: unknown): value is BreakageBaseline {
 		typeof record.ref === `string` &&
 		(record.kind === `peers`
 			? record.ref === `HEAD` && record.peers !== undefined
-			: record.kind === undefined &&
-				record.ref.startsWith(`refs/tags/`) &&
-				record.peers === undefined) &&
+			: record.kind === undefined && record.ref.startsWith(`refs/tags/`)) &&
 		typeof record.commit === `string` &&
 		objectId.test(record.commit) &&
 		(record.peers === undefined || isPeerPlan(record.peers))
@@ -56,7 +57,9 @@ export async function breakagePrelude({
 	out,
 	tagPattern,
 	baseDirname = process.cwd(),
-	peerConfig,
+	embassies,
+	peerOptions,
+	certifyCommand,
 	testPattern,
 	testCommand,
 }: BreakagePreludeOptions): Promise<BreakageBaseline> {
@@ -70,7 +73,16 @@ export async function breakagePrelude({
 			throw new Error(`Baseline output must be gitignored: ${filename}.`)
 		}
 		canInvalidate = true
-		if (peerConfig !== undefined) {
+		let peers: PeerPlan | undefined
+		const publicRequested =
+			testPattern !== undefined ||
+			testCommand !== undefined ||
+			certifyCommand !== undefined
+		if (embassies !== undefined) {
+			if (publicRequested && (!testPattern || !testCommand || !certifyCommand))
+				throw new Error(
+					`Public compatibility check required arguments were not provided: testPattern, testCommand, and certifyCommand.`,
+				)
 			if (
 				!(
 					await git.raw([`check-ignore`, `--`, `${filename}.peers/probe`])
@@ -79,28 +91,34 @@ export async function breakagePrelude({
 				throw new Error(
 					`Peer artifact directory must be gitignored: ${filename}.peers.`,
 				)
-			const peers = await preparePeerPlan(
+			peers = await preparePeerPlan(
 				baseDirname,
-				peerConfig,
+				{ ...peerOptions, embassies },
 				`${filename}.peers`,
-				{ testPattern, testCommand },
 			)
-			const baseline: BreakageBaseline = {
-				version: 1,
-				kind: `peers`,
-				tagPattern: tagPattern ?? null,
-				packageDirectory: await git.revparse([`--show-prefix`]),
-				ref: `HEAD`,
-				commit: peers.candidateCommit,
-				peers,
+			if (!publicRequested) {
+				const baseline: BreakageBaseline = {
+					version: 1,
+					kind: `peers`,
+					tagPattern: tagPattern ?? null,
+					packageDirectory: await git.revparse([`--show-prefix`]),
+					ref: `HEAD`,
+					commit: peers.candidateCommit,
+					peers,
+				}
+				await mkdir(path.dirname(filename), { recursive: true })
+				await writeFile(
+					temporaryPath,
+					`${JSON.stringify(baseline, null, 2)}\n`,
+					{
+						flag: `wx`,
+					},
+				)
+				await rename(temporaryPath, filename)
+				return baseline
 			}
-			await mkdir(path.dirname(filename), { recursive: true })
-			await writeFile(temporaryPath, `${JSON.stringify(baseline, null, 2)}\n`, {
-				flag: `wx`,
-			})
-			await rename(temporaryPath, filename)
-			return baseline
 		}
+
 		const remoteTags = await git.listRemote([`--tags`, `origin`])
 		const ref = latestReleaseTag(remoteTags, tagPattern)
 		if (!ref) {
@@ -137,6 +155,7 @@ export async function breakagePrelude({
 			packageDirectory: await git.revparse([`--show-prefix`]),
 			ref,
 			commit,
+			...(peers ? { peers } : {}),
 		}
 		await mkdir(path.dirname(filename), { recursive: true })
 		await writeFile(temporaryPath, `${JSON.stringify(baseline, null, 2)}\n`, {
@@ -156,13 +175,27 @@ export async function breakagePrelude({
 export async function readBaseline(
 	git: SimpleGit,
 	filename: string,
-	{ tagPattern, peerConfig }: BaselineOptions,
+	{
+		tagPattern,
+		embassies,
+		testPattern,
+		testCommand,
+		certifyCommand,
+	}: BaselineOptions,
 ): Promise<BreakageBaseline> {
 	try {
 		const baseline: unknown = JSON.parse(await readFile(filename, `utf8`))
 		if (!isBaseline(baseline)) throw new Error(`Invalid baseline fields.`)
-		if ((peerConfig !== undefined) !== (baseline.peers !== undefined))
+		if ((embassies !== undefined) !== (baseline.peers !== undefined))
 			throw new Error(`Baseline peer configuration does not match this check.`)
+		if (
+			embassies &&
+			(baseline.kind === `peers`) ===
+				(testPattern !== undefined ||
+					testCommand !== undefined ||
+					certifyCommand !== undefined)
+		)
+			throw new Error(`Baseline public selection does not match this check.`)
 		if (
 			baseline.tagPattern !== (tagPattern ?? null) ||
 			baseline.packageDirectory !== (await git.revparse([`--show-prefix`]))

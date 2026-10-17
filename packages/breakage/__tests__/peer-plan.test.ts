@@ -16,7 +16,7 @@ it(`pins only manifest representatives without registry discovery or a public re
 		await project.git.add(`.`).commit(`Disable registry`)
 		const out = `.breakage/peer-baseline.json`
 		const first = await breakagePrelude({ ...project.options, out })
-		expect(first.peers?.cases.map((entry) => entry.peers.host)).toEqual([
+		expect(first.peers?.environments.map((entry) => entry.peers.host)).toEqual([
 			`1.0.0`,
 			`1.1.0`,
 		])
@@ -31,8 +31,14 @@ it(`pins only manifest representatives without registry discovery or a public re
 			peerResults: [{ status: `passed` }, { status: `contract-failed` }],
 		})
 		await rejects(
-			breakage({ ...project.options, baselineFile: out, testCommand: `true` }),
-			/another embassy selection/,
+			breakage({
+				...project.options,
+				baselineFile: out,
+				embassies: {
+					host: { testPattern: `public/**/*`, testCommand: `true` },
+				},
+			}),
+			/another configuration or candidate commit/,
 		)
 		await project.write(
 			`package.json`,
@@ -51,7 +57,7 @@ it(`pins only manifest representatives without registry discovery or a public re
 			/another configuration or candidate commit/,
 		)
 		const next = await breakagePrelude({ ...project.options, out })
-		expect(next.peers?.cases.map((entry) => entry.peers.host)).toEqual([
+		expect(next.peers?.environments.map((entry) => entry.peers.host)).toEqual([
 			`1.0.0`,
 			`2.0.1`,
 		])

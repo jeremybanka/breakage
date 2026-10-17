@@ -14,7 +14,7 @@ import { simpleGit } from "simple-git"
 
 import { object } from "./peer-config.ts"
 import { packWorkspacePeer } from "./peer-workspace.ts"
-import type { PeerCase, PeerConfig } from "./peer-config.ts"
+import type { PeerEnvironment, PeerConfig } from "./peer-config.ts"
 
 export async function runFile(
 	file: string,
@@ -60,7 +60,7 @@ export async function copyRegistryConfig(
 
 export async function preparePeerInstall(
 	config: PeerConfig,
-	entry: PeerCase,
+	entry: PeerEnvironment,
 	source: string,
 	target: string,
 ): Promise<string> {
@@ -161,7 +161,7 @@ export async function installPeerEnvironment(
 export async function verifyPeerEnvironment(
 	directory: string,
 	candidate: string,
-	entry: PeerCase,
+	entry: PeerEnvironment,
 ): Promise<void> {
 	const installedCandidate = await realpath(
 		path.join(directory, `node_modules`, candidate),
@@ -185,7 +185,7 @@ export async function verifyPeerEnvironment(
 				)
 			)
 				throw new Error(
-					`Optional peer ${name} must be absent in case ${entry.name}.`,
+					`Optional peer ${name} must be absent in environment ${entry.name}.`,
 				)
 			continue
 		}
@@ -194,7 +194,7 @@ export async function verifyPeerEnvironment(
 			(await realpath(path.join(candidateModules, name)))
 		)
 			throw new Error(
-				`Peer ${name} resolves to different package instances in the tests and candidate for case ${entry.name}.`,
+				`Peer ${name} resolves to different package instances in the tests and candidate for environment ${entry.name}.`,
 			)
 		for (const modules of [
 			path.join(directory, `node_modules`),

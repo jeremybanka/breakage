@@ -28,7 +28,7 @@ it(`uses current embassy assertions for every pin while overlapping public tests
 		})
 		if (!(`peerResults` in result)) throw new Error(`Missing report`)
 		expect(result.peerResults[0]!.stderr).toContain(`current embassy promise`)
-		const { peerConfig: _, ...publicOptions } = project.options
+		const { embassies: _, peerOptions: __, ...publicOptions } = project.options
 		const publicResult = await breakage({
 			...publicOptions,
 			testPattern: `public/**/*`,
@@ -72,7 +72,7 @@ it(`runs embassy configuration without public options, release tags, or origin`,
 		expect(
 			await breakage({
 				baseDirname: project.repository,
-				peerConfig: `peers.json`,
+				...project.options,
 			}),
 		).toMatchObject({
 			success: true,
@@ -107,7 +107,12 @@ it(`fails before execution on uncovered mappings or empty current test selection
 	const project = await peerProject({})
 	try {
 		await rejects(
-			breakage({ ...project.options, testPattern: `missing/**/*` }),
+			breakage({
+				...project.options,
+				embassies: {
+					host: { testPattern: `missing/**/*`, testCommand: `true` },
+				},
+			}),
 			/selected no current tests/,
 		)
 		await project.write(

@@ -18,15 +18,42 @@ import {
 } from "comline"
 import logger from "takua"
 
-import type { BreakageOptions } from "./breakage.ts"
+import type { BreakageOptions, PeerBreakageOptions } from "./breakage.ts"
 import { breakage, breakagePrelude } from "./breakage.ts"
+
+const embassySchema = type({
+	"[string]": {
+		testPattern: `string`,
+		testCommand: `string`,
+		"peers?": `string[]`,
+		"+": `reject`,
+	},
+})
+const peerOptionsSchema = type({
+	"setupCommand?": `string`,
+	"manifest?": `string`,
+	"install?": `boolean`,
+	"testDependencies?": { "[string]": `string` },
+	"sources?": { "[string]": `string` },
+	"maxEnvironments?": `number`,
+	"workspace?": {
+		"[string]": {
+			directory: `string`,
+			"tagPattern?": `string`,
+			"setupCommand?": `string`,
+			"+": `reject`,
+		},
+	},
+	"+": `reject`,
+})
 
 const BREAKAGE_MANUAL = options(
 	`Check for breaking changes in a package.`,
 	type({
 		"tagPattern?": `string`,
 		"baselineFile?": `string`,
-		"peerConfig?": `string`,
+		"embassies?": embassySchema,
+		"peerOptions?": peerOptionsSchema,
 		"testPattern?": `string`,
 		"testCommand?": `string`,
 		"certifyCommand?": `string`,
@@ -34,12 +61,17 @@ const BREAKAGE_MANUAL = options(
 		"verbose?": `boolean`,
 	}),
 	{
-		peerConfig: {
-			aliases: [`peer-config`],
-			completion: { repeatable: false, fileSystem: `files` },
+		embassies: {
 			required: false,
-			description: `Run current embassy suites against validated, exactly pinned peer aliases.`,
-			example: `--peer-config=breakage.peers.json`,
+			parse: (value: string) => embassySchema.assert(JSON.parse(value)),
+			description: `Current test suites for relationships with declared peers; configure these in breakage.config.json.`,
+			example: `"embassies": { "react": { "testPattern": "tests/react/**", "testCommand": "bun test tests/react" } }`,
+		},
+		peerOptions: {
+			required: false,
+			parse: (value: string) => peerOptionsSchema.assert(JSON.parse(value)),
+			description: `Shared embassy installation settings in breakage.config.json. Environments are inferred from package.json.`,
+			example: `"peerOptions": { "maxEnvironments": 64 }`,
 		},
 		tagPattern: {
 			aliases: [`tag-pattern`],
@@ -98,7 +130,7 @@ const BREAKAGE_MANUAL = options(
 		},
 	},
 ) satisfies OptionsGroup<
-	Partial<BreakageOptions> & { peerConfig?: string | undefined }
+	Partial<BreakageOptions> & Partial<PeerBreakageOptions>
 >
 
 const PRELUDE_MANUAL = options(
@@ -111,7 +143,8 @@ const PRELUDE_MANUAL = options(
 		"testCommand?": `string`,
 		"certifyCommand?": `string`,
 		"baselineFile?": `string`,
-		"peerConfig?": `string`,
+		"embassies?": embassySchema,
+		"peerOptions?": peerOptionsSchema,
 		"verbose?": `boolean`,
 	}),
 	{
@@ -232,10 +265,10 @@ if (completion !== undefined) {
 		case `$configPath`: {
 			const { returnValue } = await encapsulate(
 				() => {
-					if (inputs.opts.peerConfig !== undefined)
+					if (inputs.opts.embassies !== undefined)
 						return breakage({
 							...inputs.opts,
-							peerConfig: inputs.opts.peerConfig,
+							embassies: inputs.opts.embassies,
 						})
 					const { testPattern, testCommand, certifyCommand } = inputs.opts
 					if (!testPattern || !testCommand || !certifyCommand)
@@ -259,7 +292,10 @@ if (completion !== undefined) {
 				process.exit(
 					returnValue.success
 						? 0
-						: returnValue.peerResults.some(
+						: (`publicResult` in returnValue &&
+									returnValue.publicResult &&
+									!(`breakingChangesFound` in returnValue.publicResult)) ||
+							  returnValue.peerResults.some(
 									(result) => result.status === `setup-failed`,
 							  )
 							? 2

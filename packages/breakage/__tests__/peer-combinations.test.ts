@@ -6,7 +6,7 @@ import { expect, it } from "bun:test"
 
 import { breakage } from "../src/breakage.ts"
 import { runFile } from "../src/peer-install.ts"
-import { resolvePeerCases } from "../src/peer-plan.ts"
+import { resolvePeerEnvironments } from "../src/peer-plan.ts"
 import { readPeerSupport } from "../src/peer-support.ts"
 import { peerProject } from "./peer-project.ts"
 
@@ -21,30 +21,14 @@ it(`expands pinned peers with optional absence, scoped embassies, and no silent 
 			adapter_v2_1: `npm:adapter@2.1.0`,
 		},
 	}
-	const cases = await resolvePeerCases({}, support, process.cwd())
+	const cases = await resolvePeerEnvironments({}, support, process.cwd())
 	expect(cases).toHaveLength(6)
 	expect(cases.filter((entry) => entry.peers.adapter === null)).toHaveLength(2)
 	await rejects(
-		resolvePeerCases({ maxCases: 5 }, support, process.cwd()),
-		/exceeds maxCases/,
+		resolvePeerEnvironments({ maxEnvironments: 5 }, support, process.cwd()),
+		/exceeds maxEnvironments/,
 	)
-	await rejects(
-		resolvePeerCases(
-			{ cases: [{ name: `minimal`, peers: { host: `1.0.0` } }] },
-			support,
-			process.cwd(),
-		),
-		/no case for adapter@2.0.0/,
-	)
-	await rejects(
-		resolvePeerCases(
-			{ cases: [{ name: `missing-host`, peers: { adapter: `2.0.0` } }] },
-			support,
-			process.cwd(),
-		),
-		/omits a required peer/,
-	)
-	const scoped = await resolvePeerCases({}, support, process.cwd(), [
+	const scoped = await resolvePeerEnvironments({}, support, process.cwd(), [
 		{
 			name: `host`,
 			peers: [`host`],
@@ -67,7 +51,7 @@ it(`expands pinned peers with optional absence, scoped embassies, and no silent 
 })
 
 it(`accepts unbounded and prerelease groups when explicitly covered by exact pins`, async () => {
-	const cases = await resolvePeerCases(
+	const cases = await resolvePeerEnvironments(
 		{},
 		{
 			ranges: { host: `>=1 || ^2.0.0-beta.1` },
@@ -86,9 +70,7 @@ it(`accepts unbounded and prerelease groups when explicitly covered by exact pin
 })
 
 it(`resolves workspace range shorthand independently at each commit`, async () => {
-	const project = await peerProject({
-		cases: [{ name: `one`, peers: { host: `1.0.0` } }],
-	})
+	const project = await peerProject({})
 	try {
 		await project.write(
 			`package.json`,
@@ -139,7 +121,7 @@ it(`runs an optional peer absence case without leaking the developer's installed
 		const archive = path.join(project.directory, `host.tgz`)
 		await runFile(`pnpm`, [`pack`, `--out`, archive], hostDirectory)
 		await project.write(
-			`peers.json`,
+			`breakage.config.json`,
 			JSON.stringify({ install: true, sources: { "host@1.0.0": archive } }),
 		)
 
@@ -180,13 +162,10 @@ it(`runs an optional peer absence case without leaking the developer's installed
 	}
 }, 30000)
 
-it(`reports mutually incompatible peer packages as setup failures`, async () => {
+it(`rejects pins with no compatible environment before running embassy tests`, async () => {
 	const project = await peerProject(
 		{
 			install: true,
-			cases: [
-				{ name: `incompatible`, peers: { host: `1.0.0`, adapter: `2.0.0` } },
-			],
 		},
 		`throw new Error("The contract must not run after an invalid installation");`,
 	)
@@ -232,23 +211,19 @@ it(`reports mutually incompatible peer packages as setup failures`, async () => 
 			}),
 		)
 		await project.write(
-			`peers.json`,
+			`breakage.config.json`,
 			JSON.stringify({
 				install: true,
 				sources,
-				cases: [
-					{ name: `incompatible`, peers: { host: `1.0.0`, adapter: `2.0.0` } },
-				],
 			}),
 		)
 		await project.git.add(`.`).commit(`Declare both integrations`)
-		const result = await breakage(project.options)
-		expect(result).toMatchObject({
-			success: false,
-			peerResults: [{ status: `setup-failed` }],
+		await rejects(breakage(project.options), (error: Error) => {
+			expect(error.message).toContain(`has no compatible environment`)
+			expect(error.message).toContain(`host_v1`)
+			expect(error.message).toContain(`ERR_PNPM_PEER_DEP_ISSUES`)
+			return true
 		})
-		if (!(`peerResults` in result)) throw new Error(`Missing report`)
-		expect(result.peerResults[0]!.stderr).toContain(`PEER_DEP`)
 	} finally {
 		await project.cleanup()
 	}

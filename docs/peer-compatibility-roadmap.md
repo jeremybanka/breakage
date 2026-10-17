@@ -11,7 +11,7 @@ Extend breakage from its public relationship with its own past to named peer emb
 ## 2 Run current embassy suites
 
 - [x] Configure named test selections for peer relationships, allowing overlap with public contracts and other embassies.
-- [x] Run every embassy case against current assertions, including before the package's first release.
+- [x] Run every inferred embassy environment against current assertions, including before the package's first release.
 - [x] Report the candidate, embassy, exact peer versions, and setup or contract failures.
 
 ## 3 Validate declared support groups
@@ -29,13 +29,13 @@ Extend breakage from its public relationship with its own past to named peer emb
 ## 5 Preserve pinned representatives
 
 - [x] Let maintainers and dependency updaters change individual exact pins; never select a newer representative automatically.
-- [x] Record cases, commands, package archives, dependency locks, and installation settings in reproducible prelude snapshots.
+- [x] Record inferred environments, commands, package archives, dependency locks, and installation settings in reproducible prelude snapshots.
 - [x] Reject stale snapshots and corrupted artifacts; replay workspace archives without release discovery.
 
 ## 6 Handle multiple peers and optional dependencies
 
-- [x] Scope each embassy to its participating peers and support explicitly paired combinations.
+- [x] Scope each embassy to its participating peers and infer compatible combinations from pinned dependencies.
 - [x] Include optional absence and enforce coverage of every pin without silently truncating matrices.
-- [x] Report incompatible dependency combinations and enforce a configurable case limit.
+- [x] Report incompatible dependency combinations and enforce a configurable environment limit.
 
 See the [peer compatibility documentation](../packages/breakage/README.md#peer-compatibility) for configuration and reproducible checks.

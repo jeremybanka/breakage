@@ -9,7 +9,7 @@ import { peerProject } from "./peer-project.ts"
 
 it(`installs exact peer artifacts and the packed candidate without using workspace installations`, async () => {
 	const project = await peerProject(
-		{ cases: [{ name: `placeholder`, peers: { host: `1.0.0` } }] },
+		{},
 		`import assert from "node:assert/strict"; import { message } from "fixture-plugin"; assert.equal(message(), "hello", "peer integration output");`,
 	)
 	try {
@@ -56,14 +56,10 @@ it(`installs exact peer artifacts and the packed candidate without using workspa
 			}),
 		)
 		await project.write(
-			`peers.json`,
+			`breakage.config.json`,
 			JSON.stringify({
 				install: true,
 				sources,
-				cases: [
-					{ name: `old`, peers: { host: `1.0.0` } },
-					{ name: `new`, peers: { host: `1.1.0` } },
-				],
 			}),
 		)
 		await project.write(`pnpm-lock.yaml`, `original developer lockfile\n`)
@@ -98,7 +94,8 @@ it(`installs exact peer artifacts and the packed candidate without using workspa
 			).version,
 		).toBe(`9.0.0`)
 		expect((await project.git.status()).isClean()).toBe(true)
-		const artifact = baseline.peers?.installations?.[`peers: old`]?.artifacts[0]
+		const artifact =
+			baseline.peers?.installations?.[`peers: host@1.0.0`]?.artifacts[0]
 		if (!artifact) throw new Error(`Missing pinned artifact`)
 		await writeFile(
 			path.resolve(project.repository, artifact.file),

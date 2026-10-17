@@ -86,10 +86,9 @@ it(`installs pinned registry representatives and ignores newer advertised releas
 		await project.git.add(`.`).commit(`Use pinned registry peers`)
 		const out = `.breakage/registry.json`
 		const snapshot = await breakagePrelude({ ...project.options, out })
-		expect(snapshot.peers!.cases.map((entry) => entry.peers.host)).toEqual([
-			`1.0.0`,
-			`1.1.0`,
-		])
+		expect(
+			snapshot.peers!.environments.map((entry) => entry.peers.host),
+		).toEqual([`1.0.0`, `1.1.0`])
 		expect(
 			await breakage({ ...project.options, baselineFile: out }),
 		).toMatchObject({

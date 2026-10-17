@@ -1,3 +1,4 @@
+import { rejects } from "node:assert/strict"
 import { expect, it } from "bun:test"
 
 import { breakage, breakagePrelude } from "../src/breakage.ts"
@@ -91,14 +92,9 @@ it(`swaps pinned workspace releases and their historical dependencies while keep
 		})
 		expect((await project.git.status()).isClean()).toBe(true)
 		// A fresh plan must not substitute current workspace code for a missing release.
-		const missing = await breakage(project.options)
-		expect(missing).toMatchObject({
-			success: false,
-			peerResults: [{ status: `setup-failed` }, { status: `setup-failed` }],
-		})
-		if (!(`peerResults` in missing)) throw new Error(`Missing report`)
-		expect(missing.peerResults[0]!.stderr).toContain(
-			`needs exactly one matching release tag`,
+		await rejects(
+			breakage(project.options),
+			/needs exactly one matching release tag/,
 		)
 	} finally {
 		await project.cleanup()

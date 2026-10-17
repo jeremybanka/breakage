@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs"
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
@@ -16,6 +17,23 @@ export async function peerProject(
 	await mkdir(repository)
 	const write = async (name: string, contents: string) => {
 		await mkdir(path.dirname(path.join(repository, name)), { recursive: true })
+		if (name === `breakage.config.json`) {
+			const { embassies, ...peerOptions } = JSON.parse(contents) as PeerConfig
+			contents = JSON.stringify({
+				embassies: embassies ?? {
+					peers: {
+						peers: Object.keys(
+							JSON.parse(
+								readFileSync(path.join(repository, `package.json`), `utf8`),
+							).peerDependencies,
+						),
+						testPattern: `public/**/*`,
+						testCommand: `"${process.execPath}" public/contract.ts`,
+					},
+				},
+				peerOptions,
+			})
+		}
 		await writeFile(path.join(repository, name), contents)
 	}
 	await write(`.gitignore`, `.breakage/\nnode_modules/\n`)
@@ -33,7 +51,10 @@ export async function peerProject(
 		}),
 	)
 	await write(`public/contract.ts`, contract)
-	await write(`peers.json`, JSON.stringify({ install: false, ...config }))
+	await write(
+		`breakage.config.json`,
+		JSON.stringify({ install: false, ...config }),
+	)
 	const git = simpleGit(repository)
 	await git
 		.init()
@@ -43,19 +64,19 @@ export async function peerProject(
 	const remote = path.join(directory, `remote.git`)
 	await git.clone(repository, remote, [`--bare`])
 	await git.addRemote(`origin`, remote)
-	const options: PeerBreakageOptions = {
-		baseDirname: repository,
-		tagPattern: `plugin@`,
-		testPattern: `public/**/*`,
-		testCommand: `"${process.execPath}" public/contract.ts`,
-		certifyCommand: `true`,
-		peerConfig: `peers.json`,
-	}
 	return {
 		directory,
 		repository,
 		git,
-		options,
+		get options(): PeerBreakageOptions {
+			return {
+				baseDirname: repository,
+				tagPattern: `plugin@`,
+				...JSON.parse(
+					readFileSync(path.join(repository, `breakage.config.json`), `utf8`),
+				),
+			}
+		},
 		write,
 		cleanup: () => rm(directory, { recursive: true, force: true }),
 	}

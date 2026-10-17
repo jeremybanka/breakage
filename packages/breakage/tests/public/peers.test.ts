@@ -24,16 +24,6 @@ it(`reports peer regressions against current embassy assertions through the API 
 			`public/contract.ts`,
 			`import assert from "node:assert/strict"; assert.equal(JSON.parse(process.env.BREAKAGE_PEERS).host, "1.0.0", "released peer behavior");`,
 		)
-		project.write(
-			`peers.json`,
-			JSON.stringify({
-				install: false,
-				cases: [
-					{ name: `working`, peers: { host: `1.0.0` } },
-					{ name: `regression`, peers: { host: `1.1.0` } },
-				],
-			}),
-		)
 		git(project.repository, `add`, `.`)
 		git(project.repository, `commit`, `-m`, `Release peer contracts`)
 		git(project.repository, `tag`, `peer@1.0.0`)
@@ -43,10 +33,14 @@ it(`reports peer regressions against current embassy assertions through the API 
 			`import assert from "node:assert/strict"; assert.equal(JSON.parse(process.env.BREAKAGE_PEERS).host, "1.0.0", "current embassy promise");`,
 		)
 		const options = {
-			...project.options,
-			tagPattern: `peer@`,
-			peerConfig: `peers.json`,
-			certifyCommand: `true`,
+			baseDirname: project.repository,
+			embassies: {
+				host: {
+					testPattern: `public/**/*`,
+					testCommand: `"${process.execPath}" public/contract.ts`,
+				},
+			},
+			peerOptions: { install: false },
 		}
 		project.write(`breakage.config.json`, JSON.stringify(options))
 		git(project.repository, `add`, `.`)
@@ -58,9 +52,13 @@ it(`reports peer regressions against current embassy assertions through the API 
 			peerCheck: true,
 			success: false,
 			peerResults: [
-				{ name: `peers: working`, peers: { host: `1.0.0` }, status: `passed` },
 				{
-					name: `peers: regression`,
+					name: `host: host@1.0.0`,
+					peers: { host: `1.0.0` },
+					status: `passed`,
+				},
+				{
+					name: `host: host@1.1.0`,
 					peers: { host: `1.1.0` },
 					status: `contract-failed`,
 				},
@@ -106,7 +104,7 @@ it(`prints actionable pin diagnostics and exits 2 before running an embassy`, ()
 		)
 		project.write(`embassy.ts`, `throw new Error("must not run");`)
 		project.write(
-			`peers.json`,
+			`breakage.config.json`,
 			JSON.stringify({
 				embassies: {
 					host: { testPattern: `embassy.ts`, testCommand: `false` },
@@ -118,12 +116,7 @@ it(`prints actionable pin diagnostics and exits 2 before running an embassy`, ()
 		const configured = process.env.BREAKAGE_CLI_ENTRYPOINT
 		if (!configured) throw new Error(`BREAKAGE_CLI_ENTRYPOINT is required`)
 		const cli = Bun.spawnSync(
-			[
-				process.execPath,
-				path.resolve(configured),
-				`--`,
-				`--peer-config=peers.json`,
-			],
+			[process.execPath, path.resolve(configured), `--`],
 			{ cwd: project.repository },
 		)
 		expect(cli.exitCode).toBe(2)

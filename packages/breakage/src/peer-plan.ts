@@ -21,11 +21,10 @@ import {
 	preparePeerInstall,
 	runFile,
 } from "./peer-install.ts"
-import { object, peerSuites, readPeerConfig } from "./peer-config.ts"
-import type { PeerCase, PeerConfig, PeerSuite } from "./peer-config.ts"
+import { object, peerSuites, validatePeerConfig } from "./peer-config.ts"
+import type { PeerEnvironment, PeerConfig, PeerSuite } from "./peer-config.ts"
 import { readPeerSupport } from "./peer-support.ts"
 import type { PeerSupport } from "./peer-support.ts"
-import { supports } from "./peer-support.ts"
 import { resolvePeerPins } from "./peer-pins.ts"
 
 export type PeerInstallation = {
@@ -40,7 +39,8 @@ export type PeerPlan = {
 	suites: PeerSuite[]
 	configHash: string
 	candidateCommit: string
-	cases: PeerCase[]
+	environments: PeerEnvironment[]
+	excluded: { environment: PeerEnvironment; reason: string }[]
 	packageManager?: string
 	installations?: Record<string, PeerInstallation>
 }
@@ -49,18 +49,18 @@ export function digest(value: string | Uint8Array): string {
 	return createHash(`sha256`).update(value).digest(`hex`)
 }
 
-export async function resolvePeerCases(
+export async function resolvePeerEnvironments(
 	config: PeerConfig,
 	support: PeerSupport,
 	_sourcingDirectory: string,
 	suites?: PeerSuite[],
-): Promise<PeerCase[]> {
+): Promise<PeerEnvironment[]> {
 	const pins = resolvePeerPins(support)
-	const maxCases = config.maxCases ?? 32
+	const maxEnvironments = config.maxEnvironments ?? 32
 	const names = Object.keys(support.ranges).sort()
 	if (!names.length)
 		throw new Error(`Embassy checks need declared peerDependencies.`)
-	const results: PeerCase[] = []
+	const results: PeerEnvironment[] = []
 	for (const suite of suites ?? [{ name: `peers`, peers: names }]) {
 		let combinations: Record<string, string | null>[] = [{}]
 		for (const name of names) {
@@ -72,44 +72,29 @@ export async function resolvePeerCases(
 				? versions
 				: versions.slice(0, 1)
 			if (
-				!config.cases &&
-				combinations.length * choices.length + results.length > maxCases
+				combinations.length * choices.length + results.length >
+				maxEnvironments
 			)
 				throw new Error(
-					`Peer matrix exceeds maxCases (${maxCases}) in embassy ${suite.name}. Select explicit combinations or raise the limit; no pins were silently skipped.`,
+					`Peer matrix exceeds maxEnvironments (${maxEnvironments}) in embassy ${suite.name}. Narrow the embassy peer selection or raise the limit; no pins were silently skipped.`,
 				)
-			if (!config.cases)
-				combinations = combinations.flatMap((peers) =>
-					choices.map((version) => ({ ...peers, [name]: version })),
-				)
+			combinations = combinations.flatMap((peers) =>
+				choices.map((version) => ({ ...peers, [name]: version })),
+			)
 		}
-		const cases =
-			config.cases ??
-			combinations.map((peers) => ({
-				name: Object.entries(peers)
-					.map(([name, version]) => `${name}@${version ?? `absent`}`)
-					.join(` + `),
-				peers,
-			}))
+		const environments = combinations.map((peers) => ({
+			name: Object.entries(peers)
+				.map(([name, version]) => `${name}@${version ?? `absent`}`)
+				.join(` + `),
+			peers,
+		}))
 		const seen = new Set<string>()
-		for (const entry of cases) {
+		for (const entry of environments) {
 			const peers = { ...entry.peers }
-			for (const name of support.optional)
-				if (peers[name] === undefined) peers[name] = null
-			if (!supports(support, peers))
-				throw new Error(
-					`Case ${entry.name} omits a required peer or selects a version outside peerDependencies.`,
-				)
 			const aliases: Record<string, string | null> = {}
 			const groups: Record<string, string[]> = {}
 			for (const [name, version] of Object.entries(peers)) {
-				if (!Object.hasOwn(pins, name))
-					throw new Error(`Case ${entry.name} selects undeclared peer ${name}.`)
 				const pin = pins[name]!.find((pin) => pin.version === version)
-				if (version !== null && !pin)
-					throw new Error(
-						`Case ${entry.name} selects ${name}@${version} without a matching pinned ${name}_v<label> development alias.`,
-					)
 				aliases[name] = pin?.alias ?? null
 				groups[name] = pin?.groups ?? []
 			}
@@ -126,42 +111,20 @@ export async function resolvePeerCases(
 				groups,
 			})
 		}
-		// Explicit combinations may constrain coupled peers, but must exercise each
-		// pin and optional absence for the relationship they claim to check.
-		for (const peer of suite.peers) {
-			for (const version of [
-				...new Set(pins[peer]!.map((pin) => pin.version)),
-				...(support.optional.includes(peer) ? [null] : []),
-			]) {
-				if (
-					!results.some(
-						(entry) =>
-							entry.embassy === suite.name && entry.peers[peer] === version,
-					)
-				)
-					throw new Error(
-						`Embassy ${suite.name} has no case for ${peer}@${version ?? `absent`}. Every pinned representative and optional absence must be exercised.`,
-					)
-			}
-		}
 	}
-	if (!results.length || results.length > maxCases)
+	if (!results.length || results.length > maxEnvironments)
 		throw new Error(
-			`Peer matrix must contain 1 to maxCases (${maxCases}) cases.`,
+			`Peer matrix must contain 1 to maxEnvironments (${maxEnvironments}) environments.`,
 		)
 	return results
 }
 
 export async function preparePeerPlan(
 	baseDirname: string,
-	peerConfig: string,
+	peerConfig: PeerConfig,
 	artifactDirectory: string,
-	fallback?: {
-		testPattern?: string | undefined
-		testCommand?: string | undefined
-	},
 ): Promise<PeerPlan> {
-	const config = await readPeerConfig(path.resolve(baseDirname, peerConfig))
+	const config = validatePeerConfig(peerConfig)
 	const git = simpleGit(baseDirname)
 	if (!(await git.status()).isClean())
 		throw new Error(
@@ -173,20 +136,26 @@ export async function preparePeerPlan(
 		candidateCommit,
 		config.manifest ?? `package.json`,
 	)
-	const suites = peerSuites(config, Object.keys(support.ranges), fallback)
-	const cases = await resolvePeerCases(config, support, baseDirname, suites)
+	const suites = peerSuites(config, Object.keys(support.ranges))
+	const environments = await resolvePeerEnvironments(
+		config,
+		support,
+		baseDirname,
+		suites,
+	)
 	const plan: PeerPlan = {
 		version: 2,
 		suites,
 		configHash: digest(JSON.stringify(config)),
 		candidateCommit,
-		cases,
+		environments,
+		excluded: [],
 	}
 	if (config.install) {
 		plan.packageManager = await runFile(`pnpm`, [`--version`], baseDirname)
 		plan.installations = Object.create(null) as Record<string, PeerInstallation>
 		await mkdir(artifactDirectory, { recursive: true })
-		for (const entry of cases) {
+		for (const entry of environments) {
 			const temporary = await mkdtemp(
 				path.join(tmpdir(), `breakage-peer-plan-`),
 			)
@@ -197,7 +166,19 @@ export async function preparePeerPlan(
 					baseDirname,
 					temporary,
 				)
-				await installPeerEnvironment(temporary, false, true)
+				try {
+					await installPeerEnvironment(temporary, false, true)
+				} catch (error) {
+					// Only an explicit dependency conflict can rule out a combination.
+					// Registry, archive, and build failures must remain setup errors.
+					if (
+						!(error instanceof Error) ||
+						!error.message.includes(`ERR_PNPM_PEER_DEP_ISSUES`)
+					)
+						throw error
+					plan.excluded.push({ environment: entry, reason: error.message })
+					continue
+				}
 				const artifacts: PeerInstallation[`artifacts`] = []
 				for (const filename of (
 					await readdir(path.join(temporary, `.breakage-artifacts`))
@@ -241,7 +222,43 @@ export async function preparePeerPlan(
 			}
 		}
 	}
+	plan.environments = environments.filter(
+		(entry) =>
+			!plan.excluded.some(({ environment }) => environment.name === entry.name),
+	)
+	assertPeerCoverage(environments, plan.environments, suites, plan.excluded)
 	return plan
+}
+
+export function assertPeerCoverage(
+	expected: PeerEnvironment[],
+	viable: PeerEnvironment[],
+	suites: PeerSuite[],
+	excluded: PeerPlan[`excluded`],
+): void {
+	const missing = new Set<string>()
+	for (const suite of suites) {
+		for (const entry of expected.filter(
+			(entry) => entry.embassy === suite.name,
+		)) {
+			for (const peer of suite.peers) {
+				if (
+					!viable.some(
+						(other) =>
+							other.embassy === suite.name &&
+							other.peers[peer] === entry.peers[peer],
+					)
+				)
+					missing.add(
+						`Embassy ${suite.name}: ${entry.aliases?.[peer] ?? peer} (${peer}@${entry.peers[peer] ?? `absent`}, groups: ${entry.groups?.[peer]?.join(` || `) || `optional absence`}) has no compatible environment.`,
+					)
+			}
+		}
+	}
+	if (missing.size)
+		throw new Error(
+			`Invalid peer compatibility mapping:\n${[...missing].map((message) => `- ${message}`).join(`\n`)}\nUpdate the pinned aliases or declared support ranges so every representative and optional absence can be exercised.\n${excluded.map(({ environment, reason }) => `${environment.name}: ${reason}`).join(`\n`)}`,
+		)
 }
 
 export function isPeerPlan(value: unknown): value is PeerPlan {
@@ -262,12 +279,20 @@ export function isPeerPlan(value: unknown): value is PeerPlan {
 		!/^[a-f0-9]{64}$/.test(value.configHash) ||
 		typeof value.candidateCommit !== `string` ||
 		!/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(value.candidateCommit) ||
-		!Array.isArray(value.cases) ||
-		!value.cases.length
+		!Array.isArray(value.excluded) ||
+		value.excluded.some(
+			(entry) =>
+				!object(entry) ||
+				!object(entry.environment) ||
+				typeof entry.environment.name !== `string` ||
+				typeof entry.reason !== `string`,
+		) ||
+		!Array.isArray(value.environments) ||
+		!value.environments.length
 	)
 		return false
 	if (
-		value.cases.some(
+		value.environments.some(
 			(entry) =>
 				!object(entry) ||
 				typeof entry.name !== `string` ||
