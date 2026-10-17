@@ -6,13 +6,31 @@ import { simpleGit } from "simple-git"
 import type { Chronicle } from "takua"
 import logger from "takua"
 
+import type { BreakageBaseline } from "./baseline.ts"
+import type { Embassy, PeerConfig } from "./peer-config.ts"
+import { validatePeerConfig } from "./peer-config.ts"
 import { readBaseline } from "./baseline.ts"
 import { withDirectoryLock } from "./directory-lock.ts"
+import { checkPeerMatrix } from "./peer-matrix.ts"
+import type { PeerMatrixOutcome } from "./peer-matrix.ts"
 import { latestReleaseTag as selectLatestReleaseTag } from "./release-tag.ts"
 import { withTestFileState } from "./test-file-state.ts"
 
 export type { BreakageBaseline, BreakagePreludeOptions } from "./baseline.ts"
 export { breakagePrelude } from "./baseline.ts"
+export type {
+	PeerPreparation,
+	PeerPreparationResult,
+	PeerVerification,
+	PeerBinding,
+} from "./peer-preparation.ts"
+export type { PeerPlan, PeerInstallation } from "./peer-plan.ts"
+export type {
+	PeerEnvironment,
+	PeerConfig,
+	PeerEnvironmentResult,
+	PeerMatrixOutcome,
+} from "./peer-matrix.ts"
 
 export type BreakageOptions = {
 	tagPattern?: string | undefined
@@ -22,6 +40,11 @@ export type BreakageOptions = {
 	certifyCommand: string
 	baseDirname?: string
 	verbose?: boolean | undefined
+}
+
+export type PeerBreakageOptions = Partial<BreakageOptions> & {
+	embassies: Record<string, Embassy>
+	peerOptions?: Omit<PeerConfig, `embassies`>
 }
 
 export type BreakageOutcome =
@@ -57,15 +80,81 @@ export type BreakageOutcome =
 			certificationStderr: string
 	  }
 
-export async function breakage({
-	tagPattern,
-	baselineFile,
-	testPattern,
-	testCommand,
-	certifyCommand,
-	baseDirname = process.cwd(),
-	verbose = false,
-}: BreakageOptions): Promise<BreakageOutcome & { summary: string }> {
+export type EmbassyOutcome = PeerMatrixOutcome & {
+	publicResult?: BreakageOutcome & { summary: string }
+}
+
+export function breakage(
+	options: PeerBreakageOptions,
+): Promise<(BreakageOutcome | EmbassyOutcome) & { summary: string }>
+export function breakage(
+	options: BreakageOptions,
+): Promise<BreakageOutcome & { summary: string }>
+export async function breakage(
+	options: Partial<BreakageOptions> & Partial<PeerBreakageOptions>,
+): Promise<(BreakageOutcome | EmbassyOutcome) & { summary: string }> {
+	if (!options.embassies) return checkPublicCompatibility(options)
+	const baseDirname = options.baseDirname ?? process.cwd()
+	const git = simpleGit(baseDirname)
+	if (!(await git.checkIsRepo()) || !(await git.status()).isClean())
+		return {
+			gitWasClean: false,
+			summary: `The git repository must be clean to run this command.`,
+		}
+	const peerConfig = validatePeerConfig({
+		...options.peerOptions,
+		embassies: options.embassies,
+	})
+	const publicRequested =
+		options.testPattern !== undefined ||
+		options.testCommand !== undefined ||
+		options.certifyCommand !== undefined
+	if (
+		publicRequested &&
+		(!options.testPattern || !options.testCommand || !options.certifyCommand)
+	)
+		throw new Error(
+			`Public compatibility check required arguments were not provided: testPattern, testCommand, and certifyCommand.`,
+		)
+	const baseline =
+		options.baselineFile === undefined
+			? undefined
+			: await readBaseline(
+					git,
+					path.resolve(baseDirname, options.baselineFile),
+					options,
+				)
+	const peers = await checkPeerMatrix({
+		baseDirname,
+		peerConfig,
+		peerPlan: baseline?.peers,
+	})
+	if (!publicRequested) return peers
+	const publicResult = await checkPublicCompatibility(options, baseline)
+	const publicSuccess =
+		`breakingChangesFound` in publicResult &&
+		(!publicResult.breakingChangesFound ||
+			publicResult.breakingChangesCertified)
+	return {
+		...peers,
+		publicResult,
+		success: peers.success && publicSuccess,
+		summary: `${publicResult.summary} ${peers.summary}`,
+	}
+}
+
+async function checkPublicCompatibility(
+	{
+		tagPattern,
+		baselineFile,
+		testPattern,
+		testCommand,
+		certifyCommand,
+		baseDirname = process.cwd(),
+		verbose = false,
+	}: Partial<BreakageOptions>,
+	preparedBaseline?: BreakageBaseline,
+): Promise<BreakageOutcome & { summary: string }> {
 	let mark: Chronicle[`mark`] | undefined
 	let logMarks: Chronicle[`logMarks`] | undefined
 	if (verbose) {
@@ -92,14 +181,18 @@ export async function breakage({
 			gitWasClean: false,
 		}
 	}
+	if (!testPattern || !testCommand || !certifyCommand)
+		throw new Error(
+			`Public compatibility checks require testPattern, testCommand, and certifyCommand.`,
+		)
 	let latestReleaseTag: string | undefined
 	let releaseCommit: string
 	if (baselineFile !== undefined) {
-		const baseline = await readBaseline(
-			git,
-			path.resolve(baseDirname, baselineFile),
-			{ tagPattern },
-		)
+		const baseline =
+			preparedBaseline ??
+			(await readBaseline(git, path.resolve(baseDirname, baselineFile), {
+				tagPattern,
+			}))
 		latestReleaseTag = baseline.ref
 		releaseCommit = baseline.commit
 		mark?.(`read pinned release baseline`)

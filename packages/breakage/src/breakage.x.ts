@@ -18,21 +18,63 @@ import {
 } from "comline"
 import logger from "takua"
 
-import type { BreakageOptions } from "./breakage.ts"
+import type { BreakageOptions, PeerBreakageOptions } from "./breakage.ts"
 import { breakage, breakagePrelude } from "./breakage.ts"
+
+const embassySchema = type({
+	"[string]": {
+		testPattern: `string`,
+		testCommand: `string`,
+		"peers?": `string[]`,
+		"+": `reject`,
+	},
+})
+const peerOptionsSchema = type({
+	"setupCommand?": `string`,
+	"manifest?": `string`,
+	"installer?": `"pnpm"`,
+	"prepareCommand?": `string`,
+	"verifyCommand?": `string`,
+	"testDependencies?": { "[string]": `string` },
+	"sources?": { "[string]": `string` },
+	"maxEnvironments?": `number`,
+	"workspace?": {
+		"[string]": {
+			directory: `string`,
+			"tagPattern?": `string`,
+			"setupCommand?": `string`,
+			"+": `reject`,
+		},
+	},
+	"+": `reject`,
+})
 
 const BREAKAGE_MANUAL = options(
 	`Check for breaking changes in a package.`,
 	type({
 		"tagPattern?": `string`,
 		"baselineFile?": `string`,
-		testPattern: `string`,
-		testCommand: `string`,
-		certifyCommand: `string`,
+		"embassies?": embassySchema,
+		"peerOptions?": peerOptionsSchema,
+		"testPattern?": `string`,
+		"testCommand?": `string`,
+		"certifyCommand?": `string`,
 		"baseDirname?": `string`,
 		"verbose?": `boolean`,
 	}),
 	{
+		embassies: {
+			required: false,
+			parse: (value: string) => embassySchema.assert(JSON.parse(value)),
+			description: `Current test suites for relationships with declared peers; configure these in breakage.config.json.`,
+			example: `"embassies": { "react": { "testPattern": "tests/react/**", "testCommand": "bun test tests/react" } }`,
+		},
+		peerOptions: {
+			required: false,
+			parse: (value: string) => peerOptionsSchema.assert(JSON.parse(value)),
+			description: `Shared embassy preparation settings in breakage.config.json. Environments are inferred from package.json.`,
+			example: `"peerOptions": { "maxEnvironments": 64 }`,
+		},
 		tagPattern: {
 			aliases: [`tag-pattern`],
 			completion: { repeatable: false },
@@ -52,7 +94,7 @@ const BREAKAGE_MANUAL = options(
 			aliases: [`test-pattern`, `pattern`],
 			completion: { repeatable: false },
 			flag: `p`,
-			required: true,
+			required: false,
 			description: `The pattern to match test files that test the public API of the library.`,
 			example: `--pattern="*__public.test.ts"`,
 		},
@@ -60,7 +102,7 @@ const BREAKAGE_MANUAL = options(
 			aliases: [`test-command`],
 			completion: { repeatable: false },
 			flag: `t`,
-			required: true,
+			required: false,
 			description: `Complete bash command that runs the tests for the library's public API.`,
 			example: `--testCommand="npm run test"`,
 		},
@@ -68,7 +110,7 @@ const BREAKAGE_MANUAL = options(
 			aliases: [`certify-command`],
 			completion: { repeatable: false },
 			flag: `c`,
-			required: true,
+			required: false,
 			description: `Complete bash command that determines whether a major version bump for your package is indicated in the workspace. Exit code 0 indicates that a major version bump is indicated, and exit code 1 indicates that no major version bump is indicated.`,
 			example: `--certifyCommand=\tsx scripts/certify-major-version-bump.node`,
 		},
@@ -89,7 +131,9 @@ const BREAKAGE_MANUAL = options(
 			parse: parseBooleanOption,
 		},
 	},
-) satisfies OptionsGroup<BreakageOptions>
+) satisfies OptionsGroup<
+	Partial<BreakageOptions> & Partial<PeerBreakageOptions>
+>
 
 const PRELUDE_MANUAL = options(
 	`Resolve and fetch the release baseline for a cacheable compatibility check.`,
@@ -101,6 +145,8 @@ const PRELUDE_MANUAL = options(
 		"testCommand?": `string`,
 		"certifyCommand?": `string`,
 		"baselineFile?": `string`,
+		"embassies?": embassySchema,
+		"peerOptions?": peerOptionsSchema,
 		"verbose?": `boolean`,
 	}),
 	{
@@ -178,6 +224,18 @@ const parse = cli(
 	},
 )
 
+function failSetup(error: unknown): never {
+	const messages: string[] = []
+	const seen = new Set<unknown>()
+	while (error !== undefined && !seen.has(error)) {
+		seen.add(error)
+		messages.push(error instanceof Error ? error.message : inspect(error))
+		error = error instanceof Error ? error.cause : undefined
+	}
+	process.stderr.write(`${messages.join(`\n`)}\n`)
+	process.exit(2)
+}
+
 const completion = await completionResponse(parse.definition, process.argv)
 if (completion !== undefined) {
 	process.stdout.write(completion)
@@ -201,16 +259,51 @@ if (completion !== undefined) {
 			const baseline = await breakagePrelude({
 				...inputs.opts,
 				out: inputs.opts.out ?? `.breakage/baseline.json`,
-			})
+			}).catch(failSetup)
 			process.stdout.write(`Pinned ${baseline.ref} at ${baseline.commit}.\n`)
 			break
 		}
 		case ``:
 		case `$configPath`: {
-			const { returnValue } = await encapsulate(() => breakage(inputs.opts), {
-				console: true,
-				stdout: true,
-			})
+			const { returnValue } = await encapsulate(
+				() => {
+					if (inputs.opts.embassies !== undefined)
+						return breakage({
+							...inputs.opts,
+							embassies: inputs.opts.embassies,
+						})
+					const { testPattern, testCommand, certifyCommand } = inputs.opts
+					if (!testPattern || !testCommand || !certifyCommand)
+						throw new Error(
+							`Public compatibility check required arguments were not provided: testPattern, testCommand, and certifyCommand.`,
+						)
+					return breakage({
+						...inputs.opts,
+						testPattern,
+						testCommand,
+						certifyCommand,
+					})
+				},
+				{
+					console: true,
+					stdout: true,
+				},
+			).catch(failSetup)
+			if (`peerCheck` in returnValue) {
+				process.stdout.write(`${JSON.stringify(returnValue, null, 2)}\n`)
+				process.exit(
+					returnValue.success
+						? 0
+						: (`publicResult` in returnValue &&
+									returnValue.publicResult &&
+									!(`breakingChangesFound` in returnValue.publicResult)) ||
+							  returnValue.peerResults.some(
+									(result) => result.status === `setup-failed`,
+							  )
+							? 2
+							: 1,
+				)
+			}
 			if (`testResult` in returnValue && returnValue.breakingChangesFound) {
 				process.stdout.write(returnValue.testResult)
 			}

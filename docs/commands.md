@@ -30,3 +30,5 @@ The `breakage` package builds with tsdown and generates its configuration schema
 `workflows:update` reads GitHub tags using Git and requires network access. Pass `--dry-run` to preview updates: `pnpm workflows:update --dry-run`.
 
 Vite Plus upgrades must use the target release's official `vp migrate --no-interactive`; preserve the existing lockfile until that command runs.
+
+Peer embassy checks use `breakage` with `embassies` in the same `breakage.config.json` as public checks to run current relationship contracts against exactly pinned `<peer>_v<label>` development aliases. Unlike public compatibility checks, they need no released test baseline. Select repository-defined `peerOptions.prepareCommand` or the optional `peerOptions.installer: "pnpm"`; both isolate checks in detached Git worktrees. The [peer guide](../packages/breakage/README.md#peer-compatibility) explains support groups, preparation inputs, registry and Git workspace sources, and prelude snapshots. Integration tests include a Bun installation and build with pnpm absent from `PATH`.
