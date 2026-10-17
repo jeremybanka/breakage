@@ -1,7 +1,7 @@
+import { createPeerWorktree } from "./peer-worktree.ts"
 import { createHash } from "node:crypto"
 import { existsSync } from "node:fs"
-import { mkdtemp, readFile, rm } from "node:fs/promises"
-import { tmpdir } from "node:os"
+import { readFile } from "node:fs/promises"
 import path from "node:path"
 
 import { satisfies } from "semver"
@@ -133,12 +133,9 @@ export async function packWorkspacePeer(
 			`Workspace peer ${peer}@${version} needs exactly one matching release tag with that package version at ${file}; found ${releases.length}. Fetch its release tag or configure workspace[${JSON.stringify(peer)}].tagPattern.`,
 		)
 	const { commit } = releases[0]!
-	const temporary = await mkdtemp(
-		path.join(tmpdir(), `breakage-workspace-peer-`),
-	)
+	const worktree = await createPeerWorktree(root, commit)
+	const temporary = worktree.directory
 	try {
-		await simpleGit().clone(root, temporary, [`--no-local`, `--quiet`])
-		await simpleGit(temporary).checkout(commit)
 		if (configured?.setupCommand)
 			await runFile(`sh`, [`-c`, configured.setupCommand], temporary)
 		const historical = await packages(temporary)
@@ -197,6 +194,6 @@ export async function packWorkspacePeer(
 		}
 		return { filename: await pack(file), overrides }
 	} finally {
-		await rm(temporary, { recursive: true, force: true })
+		await worktree.cleanup()
 	}
 }
