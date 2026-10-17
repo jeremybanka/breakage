@@ -10,34 +10,32 @@ import { resolvePeerCases } from "../src/peer-plan.ts"
 import { readPeerSupport } from "../src/peer-support.ts"
 import { peerProject } from "./peer-project.ts"
 
-it(`expands multiple peers with optional absence and refuses to truncate the matrix`, async () => {
-	const config = {
-		resolve: true,
-		sources: {
-			"host@1.0.0": `host-1.tgz`,
-			"host@1.1.0": `host-2.tgz`,
-			"adapter@2.0.0": `adapter-1.tgz`,
-			"adapter@2.1.0": `adapter-2.tgz`,
+it(`expands pinned peers with optional absence, scoped embassies, and no silent truncation`, async () => {
+	const support = {
+		ranges: { host: `^1`, adapter: `^2` },
+		optional: [`adapter`],
+		devDependencies: {
+			host_v1: `npm:host@1.0.0`,
+			host_v1_1: `npm:host@1.1.0`,
+			adapter_v2: `npm:adapter@2.0.0`,
+			adapter_v2_1: `npm:adapter@2.1.0`,
 		},
 	}
-	const support = {
-		ranges: { host: `^1.0.0`, adapter: `^2.0.0` },
-		optional: [`adapter`],
-	}
-	const cases = await resolvePeerCases(config, support, process.cwd())
+	const cases = await resolvePeerCases({}, support, process.cwd())
 	expect(cases).toHaveLength(6)
 	expect(cases.filter((entry) => entry.peers.adapter === null)).toHaveLength(2)
 	await rejects(
-		resolvePeerCases({ ...config, maxCases: 5 }, support, process.cwd()),
+		resolvePeerCases({ maxCases: 5 }, support, process.cwd()),
 		/exceeds maxCases/,
 	)
-	expect(
-		await resolvePeerCases(
+	await rejects(
+		resolvePeerCases(
 			{ cases: [{ name: `minimal`, peers: { host: `1.0.0` } }] },
 			support,
 			process.cwd(),
 		),
-	).toEqual([{ name: `minimal`, peers: { host: `1.0.0`, adapter: null } }])
+		/no case for adapter@2.0.0/,
+	)
 	await rejects(
 		resolvePeerCases(
 			{ cases: [{ name: `missing-host`, peers: { adapter: `2.0.0` } }] },
@@ -46,26 +44,44 @@ it(`expands multiple peers with optional absence and refuses to truncate the mat
 		),
 		/omits a required peer/,
 	)
+	const scoped = await resolvePeerCases({}, support, process.cwd(), [
+		{
+			name: `host`,
+			peers: [`host`],
+			testPattern: `host.ts`,
+			testCommand: `true`,
+		},
+		{
+			name: `adapter`,
+			peers: [`adapter`],
+			testPattern: `adapter.ts`,
+			testCommand: `true`,
+		},
+	])
+	expect(scoped).toHaveLength(5)
+	expect(
+		scoped
+			.filter((entry) => entry.embassy === `host`)
+			.map((entry) => entry.peers.adapter),
+	).toEqual([`2.0.0`, `2.0.0`])
 })
 
-it(`requires deliberate policies for prereleases and unbounded automatic selection`, async () => {
-	const config = {
-		resolve: true,
-		sources: { "host@1.0.0": `one.tgz`, "host@2.0.0-beta.1": `beta.tgz` },
-	}
-	const support = { ranges: { host: `>=1.0.0` }, optional: [] }
-	await rejects(
-		resolvePeerCases(config, support, process.cwd()),
-		/Unbounded peer range/,
-	)
+it(`accepts unbounded and prerelease groups when explicitly covered by exact pins`, async () => {
 	const cases = await resolvePeerCases(
-		{ ...config, unbounded: `published`, prereleases: `include` },
-		support,
+		{},
+		{
+			ranges: { host: `>=1 || ^2.0.0-beta.1` },
+			optional: [],
+			devDependencies: {
+				host_v19_future: `npm:host@20.0.1`,
+				host_v1_beta: `npm:host@2.0.0-beta.2`,
+			},
+		},
 		process.cwd(),
 	)
 	expect(cases.map((entry) => entry.peers.host)).toEqual([
-		`1.0.0`,
-		`2.0.0-beta.1`,
+		`20.0.1`,
+		`2.0.0-beta.2`,
 	])
 })
 
@@ -106,10 +122,27 @@ it(`resolves workspace range shorthand independently at each commit`, async () =
 
 it(`runs an optional peer absence case without leaking the developer's installed peer`, async () => {
 	const project = await peerProject(
-		{ install: true, cases: [{ name: `absent`, peers: { host: null } }] },
-		`import assert from "node:assert/strict"; import { message } from "fixture-plugin"; assert.equal(await message(), "fallback");`,
+		{ install: true },
+		`import assert from "node:assert/strict"; import { message } from "fixture-plugin"; assert.equal(await message(), JSON.parse(process.env.BREAKAGE_PEERS).host === null ? "fallback" : "hello");`,
 	)
 	try {
+		const hostDirectory = path.join(project.directory, `optional-host`)
+		await mkdir(hostDirectory)
+		await writeFile(
+			path.join(hostDirectory, `package.json`),
+			JSON.stringify({ name: `host`, version: `1.0.0`, main: `index.ts` }),
+		)
+		await writeFile(
+			path.join(hostDirectory, `index.ts`),
+			`export const greeting = "hello";`,
+		)
+		const archive = path.join(project.directory, `host.tgz`)
+		await runFile(`pnpm`, [`pack`, `--out`, archive], hostDirectory)
+		await project.write(
+			`peers.json`,
+			JSON.stringify({ install: true, sources: { "host@1.0.0": archive } }),
+		)
+
 		await project.write(
 			`package.json`,
 			JSON.stringify({
@@ -119,6 +152,7 @@ it(`runs an optional peer absence case without leaking the developer's installed
 				exports: `./index.ts`,
 				peerDependencies: { host: `^1.0.0` },
 				peerDependenciesMeta: { host: { optional: true } },
+				devDependencies: { host_v1: `npm:host@1.0.0` },
 			}),
 		)
 		await project.write(
@@ -137,6 +171,7 @@ it(`runs an optional peer absence case without leaking the developer's installed
 		expect(await breakage(project.options)).toMatchObject({
 			success: true,
 			peerResults: [
+				{ peers: { host: `1.0.0` }, contract: `current`, status: `passed` },
 				{ peers: { host: null }, contract: `current`, status: `passed` },
 			],
 		})
@@ -190,6 +225,10 @@ it(`reports mutually incompatible peer packages as setup failures`, async () => 
 				version: `2.0.0`,
 				main: `index.ts`,
 				peerDependencies: { host: `^1.0.0`, adapter: `^2.0.0` },
+				devDependencies: {
+					host_v1: `npm:host@1.0.0`,
+					adapter_v2: `npm:adapter@2.0.0`,
+				},
 			}),
 		)
 		await project.write(

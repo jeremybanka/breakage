@@ -1,41 +1,41 @@
 # Peer compatibility roadmap
 
-Extend breakage's released consumer contracts across the peer environments a package promises to support. Deliver these milestones in order; each has an observable completion criterion.
+Extend breakage from its public relationship with its own past to named peer embassy contracts. A test can belong to several relationships: public checks use released assertions, while embassy checks use current assertions and swap the peer. Completed milestones follow the final execution model below.
 
 ## 1 Prove workspace compatibility checks
 
-- [x] Add a disposable workspace example with a plugin and a host, using project commands through the existing `testCommand` hook.
-- [x] Exercise current plugin with current host, current plugin with released host, and released plugin with current host where the release plan promises support.
-- [x] Done when a coordinated change passes current workspace tests but fails the appropriate mixed combination for the intended compatibility regression.
+- [x] Demonstrate a coordinated workspace change that passes current tests but fails a supported mixed-version combination.
+- [x] Materialize exact workspace peer releases from Git without changing the candidate package or current embassy suite.
+- [x] Include historical workspace runtime dependencies and reject missing releases rather than leaking current peer code.
 
-## 2 Run explicitly selected peer cases
+## 2 Run current embassy suites
 
-- [x] Introduce an opt-in matrix of exact peer versions and project-provided setup and test commands. Keep released assertions fixed across cases.
-- [x] Report the contract baseline, candidate package, exact peer versions, and outcome for each case; distinguish setup failures from contract failures.
-- [x] Done when one failing case fails the check and the report identifies the affected combination.
+- [x] Configure named test selections for peer relationships, allowing overlap with public contracts and other embassies.
+- [x] Run every embassy case against current assertions, including before the package's first release.
+- [x] Report the candidate, embassy, exact peer versions, and setup or contract failures.
 
-## 3 Preserve peer support promises
+## 3 Validate declared support groups
 
-- [x] Preserve released peer ranges alongside released assertions. Compare them with the proposed release's ranges so editing both tests and metadata cannot silently erase support.
-- [x] Route dropped support through intentional-break certification. Require retained support to pass; validate newly added support with current integration contracts.
-- [x] Done when narrowing a range requires certification and a version bump cannot excuse a failing combination still claimed as supported.
+- [x] Treat each explicit semver alternative as a meaningful group, preserving irregular, overlapping, prerelease, and open-ended ranges.
+- [x] Require exact `<peer>_v<label>` development aliases whose targets match the peer and cover every declared group.
+- [x] Explain uncovered groups, wrong targets, unpinned versions, and out-of-range pins with actionable manifest diagnostics.
 
 ## 4 Install isolated peer environments
 
-- [x] Add isolated setup for exact external peer releases and historical releases of workspace peers, starting with this repository's package manager.
-- [x] Ensure the candidate uses the selected peer instance and historical cases cannot resolve to the current workspace package. Preserve the developer's installation and clean up temporary environments.
-- [x] Done when the same integration contract passes against one exact peer release and detects a representative regression against another, with verified resolution.
+- [x] Install exact registry releases on demand or pack pinned workspace releases from Git using pnpm.
+- [x] Verify canonical peer resolution from both the candidate and the test environment, preserving the developer's installation.
+- [x] Support explicit release archives, runner dependencies, and setup commands.
 
-## 5 Resolve ranges into pinned cases
+## 5 Preserve pinned representatives
 
-- [x] Extend the uncached prelude to select the lowest published and newest satisfying stable versions in each supported range segment and major; deduplicate cases and allow explicit additions.
-- [x] Record exact versions and reproducible dependency resolution inputs in a deterministic snapshot used by checks and cache keys. Fail unresolved ranges rather than skip them.
-- [x] Done when `^2.4.0 || ^3.1.0` covers both lower bounds and both latest supported majors, and a newly selected release invalidates the cached comparison. Report tested versions as samples of the declared range.
+- [x] Let maintainers and dependency updaters change individual exact pins; never select a newer representative automatically.
+- [x] Record cases, commands, package archives, dependency locks, and installation settings in reproducible prelude snapshots.
+- [x] Reject stale snapshots and corrupted artifacts; replay workspace archives without release discovery.
 
-## 6 Support multiple peers deliberately
+## 6 Handle multiple peers and optional dependencies
 
-- [x] Add explicitly selected combinations, validate their dependency constraints, and enforce a configurable matrix size limit.
-- [x] Include absence cases for optional peers and define explicit selection policies for prereleases and unbounded ranges.
-- [x] Done when incompatible combinations produce useful diagnostics and matrix limits require an explicit selection instead of silently reducing coverage.
+- [x] Scope each embassy to its participating peers and support explicitly paired combinations.
+- [x] Include optional absence and enforce coverage of every pin without silently truncating matrices.
+- [x] Report incompatible dependency combinations and enforce a configurable case limit.
 
-See the [peer compatibility documentation](../packages/breakage/README.md#peer-compatibility) for configuration, selection policies, and reproducible checks.
+See the [peer compatibility documentation](../packages/breakage/README.md#peer-compatibility) for configuration and reproducible checks.

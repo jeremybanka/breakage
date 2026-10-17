@@ -7,53 +7,91 @@ import { expect, it } from "bun:test"
 import { breakage } from "../src/breakage.ts"
 import { peerProject } from "./peer-project.ts"
 
-it(`runs named exact cases with released assertions and reports the failed combination`, async () => {
-	const project = await peerProject({
-		cases: [
-			{ name: `old`, peers: { host: `1.0.0` } },
-			{ name: `new`, peers: { host: `1.1.0` } },
-		],
-	})
+it(`uses current embassy assertions for every pin while overlapping public tests retain their historical contract`, async () => {
+	const project = await peerProject(
+		{},
+		`throw new Error("historical public promise");`,
+	)
 	try {
 		await project.write(
 			`public/contract.ts`,
-			`// Current assertions would pass every case.\n`,
+			`import assert from "node:assert/strict"; assert.equal(JSON.parse(process.env.BREAKAGE_PEERS).host, "1.1.0", "current embassy promise");`,
 		)
-		await project.git.add(`.`).commit(`Weaken current assertions`)
+		await project.git.add(`.`).commit(`Evolve the embassy`)
 		const result = await breakage(project.options)
 		expect(result).toMatchObject({
-			peerCheck: true,
 			success: false,
 			peerResults: [
-				{ name: `old`, status: `passed` },
-				{ name: `new`, status: `contract-failed` },
+				{ contract: `current`, status: `contract-failed` },
+				{ contract: `current`, status: `passed` },
 			],
 		})
-		if (!(`peerResults` in result)) throw new Error(`Missing peer report`)
-		expect(result.peerResults[1]!.stderr).toContain(`released peer contract`)
+		if (!(`peerResults` in result)) throw new Error(`Missing report`)
+		expect(result.peerResults[0]!.stderr).toContain(`current embassy promise`)
+		const { peerConfig: _, ...publicOptions } = project.options
+		const publicResult = await breakage({
+			...publicOptions,
+			testPattern: `public/**/*`,
+			testCommand: `"${process.execPath}" public/contract.ts`,
+			certifyCommand: `false`,
+		})
+		expect(publicResult).toMatchObject({
+			breakingChangesFound: true,
+			breakingChangesCertified: false,
+		})
+		if (!(`testResult` in publicResult))
+			throw new Error(`Missing public report`)
+		expect(publicResult.testResult).toContain(`historical public promise`)
 		expect(
 			await readFile(
 				path.join(project.repository, `public/contract.ts`),
 				`utf8`,
 			),
-		).toContain(`Current assertions`)
+		).toContain(`current embassy promise`)
 		expect((await project.git.status()).isClean()).toBe(true)
 	} finally {
 		await project.cleanup()
 	}
 })
 
-it(`distinguishes setup failures and continues through all cases`, async () => {
+it(`runs embassy configuration without public options, release tags, or origin`, async () => {
+	const project = await peerProject(
+		{
+			embassies: {
+				host: {
+					testPattern: `public/**/*`,
+					testCommand: `"${process.execPath}" public/contract.ts`,
+				},
+			},
+		},
+		`// Current embassy succeeds.\n`,
+	)
+	try {
+		await project.git.removeRemote(`origin`)
+		await project.git.tag([`-d`, `plugin@1.0.0`])
+		expect(
+			await breakage({
+				baseDirname: project.repository,
+				peerConfig: `peers.json`,
+			}),
+		).toMatchObject({
+			success: true,
+			peerResults: [
+				{ embassy: `host`, contract: `current` },
+				{ embassy: `host`, contract: `current` },
+			],
+		})
+	} finally {
+		await project.cleanup()
+	}
+})
+
+it(`distinguishes setup failures and continues through every pin`, async () => {
 	const project = await peerProject({
 		setupCommand: `echo setup-broke >&2; exit 3`,
-		cases: [
-			{ name: `one`, peers: { host: `1.0.0` } },
-			{ name: `two`, peers: { host: `1.1.0` } },
-		],
 	})
 	try {
-		const result = await breakage(project.options)
-		expect(result).toMatchObject({
+		expect(await breakage(project.options)).toMatchObject({
 			success: false,
 			peerResults: [
 				{ status: `setup-failed`, stderr: `setup-broke\n` },
@@ -65,12 +103,25 @@ it(`distinguishes setup failures and continues through all cases`, async () => {
 	}
 })
 
-it(`rejects ranges in explicit cases and restores the original checkout`, async () => {
-	const project = await peerProject({
-		cases: [{ name: `range`, peers: { host: `^1` } }],
-	})
+it(`fails before execution on uncovered mappings or empty current test selections`, async () => {
+	const project = await peerProject({})
 	try {
-		await rejects(breakage(project.options), /exact version/)
+		await rejects(
+			breakage({ ...project.options, testPattern: `missing/**/*` }),
+			/selected no current tests/,
+		)
+		await project.write(
+			`package.json`,
+			JSON.stringify({
+				peerDependencies: { host: `^1 || ^2` },
+				devDependencies: { host_v1: `npm:host@1.0.0` },
+			}),
+		)
+		await project.git.add(`.`).commit(`Uncovered range`)
+		await rejects(
+			breakage(project.options),
+			/no pinned development alias satisfying group "\^2"/,
+		)
 		expect((await project.git.status()).isClean()).toBe(true)
 	} finally {
 		await project.cleanup()

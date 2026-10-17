@@ -40,8 +40,8 @@ it(`preserves overlapping groups, scoped names, zero versions, and explicit prer
 		ranges: { "@scope/host": `0.2.1 - 0.3.4 || >=0.3.0 <0.4 || ^1.0.0-beta.1` },
 		optional: [],
 		devDependencies: {
-			"@scope/host_vzero": `npm:@scope/host@0.3.4`,
-			"@scope/host_vbeta": `npm:@scope/host@1.0.0-beta.2`,
+			"@scope/host_v0_zero": `npm:@scope/host@0.3.4`,
+			"@scope/host_v1_beta": `npm:@scope/host@1.0.0-beta.2`,
 		},
 	})
 	expect(pins[`@scope/host`]![0]!.groups).toEqual([

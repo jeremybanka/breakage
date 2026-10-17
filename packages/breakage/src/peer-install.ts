@@ -10,8 +10,10 @@ import {
 	writeFile,
 } from "node:fs/promises"
 import path from "node:path"
+import { simpleGit } from "simple-git"
 
 import { object } from "./peer-config.ts"
+import { packWorkspacePeer } from "./peer-workspace.ts"
 import type { PeerCase, PeerConfig } from "./peer-config.ts"
 
 export async function runFile(
@@ -41,12 +43,28 @@ export async function runFile(
 	})
 }
 
+export async function copyRegistryConfig(
+	source: string,
+	target: string,
+): Promise<void> {
+	const root = await simpleGit(source).revparse([`--show-toplevel`])
+	const files = [
+		...new Set([path.join(root, `.npmrc`), path.join(source, `.npmrc`)]),
+	]
+	const contents: string[] = []
+	for (const file of files)
+		if (existsSync(file)) contents.push(await readFile(file, `utf8`))
+	if (contents.length)
+		await writeFile(path.join(target, `.npmrc`), contents.join(`\n`))
+}
+
 export async function preparePeerInstall(
 	config: PeerConfig,
 	entry: PeerCase,
 	source: string,
 	target: string,
 ): Promise<string> {
+	await copyRegistryConfig(source, target)
 	const manifestPath = path.resolve(source, config.manifest ?? `package.json`)
 	const candidate: unknown = JSON.parse(await readFile(manifestPath, `utf8`))
 	if (!object(candidate) || typeof candidate.name !== `string`)
@@ -69,6 +87,7 @@ export async function preparePeerInstall(
 		...config.testDependencies,
 		[candidate.name]: `file:./.breakage-artifacts/candidate.tgz`,
 	}
+	const overrides: Record<string, string> = {}
 	let index = 0
 	for (const [name, version] of Object.entries(entry.peers)) {
 		if (version === null) {
@@ -83,11 +102,35 @@ export async function preparePeerInstall(
 				path.join(artifacts, filename),
 			)
 			dependencies[name] = `file:./.breakage-artifacts/${filename}`
-		} else dependencies[name] = version
+		} else {
+			const workspace = await packWorkspacePeer(
+				config,
+				source,
+				name,
+				version,
+				artifacts,
+			)
+			if (workspace) {
+				dependencies[name] = `file:./.breakage-artifacts/${workspace.filename}`
+				for (const [selector, replacement] of Object.entries(
+					workspace.overrides,
+				)) {
+					if (overrides[selector] && overrides[selector] !== replacement)
+						throw new Error(
+							`Workspace peers require conflicting historical artifacts for ${selector}.`,
+						)
+					overrides[selector] = replacement
+				}
+			} else dependencies[name] = version
+		}
 	}
 	await writeFile(
 		path.join(target, `package.json`),
 		`${JSON.stringify({ name: `breakage-peer-environment`, private: true, type: candidate.type ?? `module`, scripts: candidate.scripts ?? {}, dependencies }, null, 2)}\n`,
+	)
+	await writeFile(
+		path.join(target, `pnpm-workspace.yaml`),
+		`${JSON.stringify({ packages: [], overrides }, null, 2)}\n`,
 	)
 	// The cloned workspace's lockfile describes a different dependency graph.
 	await rm(path.join(target, `pnpm-lock.yaml`), { force: true })
@@ -102,7 +145,6 @@ export async function installPeerEnvironment(
 	await runFile(
 		`pnpm`,
 		[
-			`--ignore-workspace`,
 			`install`,
 			`--ignore-scripts`,
 			`--strict-peer-dependencies`,
@@ -147,6 +189,13 @@ export async function verifyPeerEnvironment(
 				)
 			continue
 		}
+		if (
+			(await realpath(path.join(directory, `node_modules`, name))) !==
+			(await realpath(path.join(candidateModules, name)))
+		)
+			throw new Error(
+				`Peer ${name} resolves to different package instances in the tests and candidate for case ${entry.name}.`,
+			)
 		for (const modules of [
 			path.join(directory, `node_modules`),
 			candidateModules,

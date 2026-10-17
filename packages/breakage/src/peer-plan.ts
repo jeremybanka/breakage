@@ -12,36 +12,32 @@ import {
 import { tmpdir } from "node:os"
 import path from "node:path"
 
-import {
-	compare,
-	major,
-	minor,
-	prerelease,
-	Range,
-	satisfies,
-	valid,
-} from "semver"
+import { valid } from "semver"
 import { simpleGit } from "simple-git"
 
 import {
+	copyRegistryConfig,
 	installPeerEnvironment,
 	preparePeerInstall,
 	runFile,
 } from "./peer-install.ts"
-import { object, readPeerConfig } from "./peer-config.ts"
-import type { PeerCase, PeerConfig } from "./peer-config.ts"
+import { object, peerSuites, readPeerConfig } from "./peer-config.ts"
+import type { PeerCase, PeerConfig, PeerSuite } from "./peer-config.ts"
 import { readPeerSupport } from "./peer-support.ts"
 import type { PeerSupport } from "./peer-support.ts"
 import { supports } from "./peer-support.ts"
+import { resolvePeerPins } from "./peer-pins.ts"
 
 export type PeerInstallation = {
 	candidate: string
 	manifest: string
 	lockfile: string
+	workspaceConfig: string
 	artifacts: { filename: string; file: string; integrity: string }[]
 }
 export type PeerPlan = {
-	version: 1
+	version: 2
+	suites: PeerSuite[]
 	configHash: string
 	candidateCommit: string
 	cases: PeerCase[]
@@ -53,137 +49,117 @@ export function digest(value: string | Uint8Array): string {
 	return createHash(`sha256`).update(value).digest(`hex`)
 }
 
-export function selectPeerVersions(
-	range: string,
-	published: string[],
-	includePrerelease = false,
-): string[] {
-	const selected = new Set<string>()
-	for (const comparators of new Range(range, { includePrerelease }).set) {
-		const segment =
-			comparators.map((comparator) => comparator.value).join(` `) || `*`
-		const versions = published
-			.filter(
-				(version) =>
-					valid(version) === version &&
-					(includePrerelease || !prerelease(version)) &&
-					satisfies(version, segment, { includePrerelease }),
-			)
-			.sort(compare)
-		if (!versions.length)
-			throw new Error(`No published stable peer versions satisfy ${segment}.`)
-		const lines = new Map<string, string[]>()
-		for (const version of versions) {
-			const line =
-				major(version) === 0 ? `0.${minor(version)}` : String(major(version))
-			const values = lines.get(line) ?? []
-			values.push(version)
-			lines.set(line, values)
-		}
-		for (const versions of lines.values()) {
-			selected.add(versions[0]!)
-			selected.add(versions[versions.length - 1]!)
-		}
-	}
-	return [...selected].sort(compare)
-}
-
 export async function resolvePeerCases(
 	config: PeerConfig,
 	support: PeerSupport,
-	cwd: string,
+	_sourcingDirectory: string,
+	suites?: PeerSuite[],
 ): Promise<PeerCase[]> {
-	const cases = [...(config.cases ?? [])]
+	const pins = resolvePeerPins(support)
 	const maxCases = config.maxCases ?? 32
-	if (config.resolve) {
-		const names = Object.keys(support.ranges).sort()
-		if (!names.length)
-			throw new Error(`Automatic selection needs declared peers.`)
+	const names = Object.keys(support.ranges).sort()
+	if (!names.length)
+		throw new Error(`Embassy checks need declared peerDependencies.`)
+	const results: PeerCase[] = []
+	for (const suite of suites ?? [{ name: `peers`, peers: names }]) {
 		let combinations: Record<string, string | null>[] = [{}]
 		for (const name of names) {
-			const range = support.ranges[name]!
-			const bounded = new Range(range).set.every((segment) =>
-				segment.some(
-					(comparator) =>
-						comparator.value && [``, `<`, `<=`].includes(comparator.operator),
-				),
-			)
-			if (!bounded && config.unbounded !== `published`)
-				throw new Error(
-					`Unbounded peer range for ${name} requires unbounded: published or explicit cases.`,
-				)
-			const local = Object.keys(config.sources ?? {})
-				.filter((key) => key.startsWith(`${name}@`))
-				.map((key) => key.slice(name.length + 1))
-			const published: unknown = local.length
-				? local
-				: JSON.parse(
-						await runFile(`pnpm`, [`view`, name, `versions`, `--json`], cwd),
-					)
-			if (
-				!Array.isArray(published) ||
-				published.some((version) => typeof version !== `string`)
-			)
-				throw new Error(`Invalid published version list for ${name}.`)
-			const versions: (string | null)[] = selectPeerVersions(
-				range,
-				published as string[],
-				config.prereleases === `include`,
-			)
+			const versions: (string | null)[] = [
+				...new Set(pins[name]!.map((pin) => pin.version)),
+			]
 			if (support.optional.includes(name)) versions.push(null)
-			if (combinations.length * versions.length > maxCases)
-				throw new Error(
-					`Peer matrix exceeds maxCases (${maxCases}). Select explicit combinations or raise the limit.`,
-				)
-			combinations = combinations.flatMap((peers) =>
-				versions.map((version) => ({ ...peers, [name]: version })),
+			const choices = suite.peers.includes(name)
+				? versions
+				: versions.slice(0, 1)
+			if (
+				!config.cases &&
+				combinations.length * choices.length + results.length > maxCases
 			)
+				throw new Error(
+					`Peer matrix exceeds maxCases (${maxCases}) in embassy ${suite.name}. Select explicit combinations or raise the limit; no pins were silently skipped.`,
+				)
+			if (!config.cases)
+				combinations = combinations.flatMap((peers) =>
+					choices.map((version) => ({ ...peers, [name]: version })),
+				)
 		}
-		cases.push(
-			...combinations.map((peers) => ({
+		const cases =
+			config.cases ??
+			combinations.map((peers) => ({
 				name: Object.entries(peers)
 					.map(([name, version]) => `${name}@${version ?? `absent`}`)
 					.join(` + `),
 				peers,
-			})),
-		)
-	}
-	const unique = new Map<string, PeerCase>()
-	for (const entry of cases) {
-		for (const name of Object.keys(entry.peers))
-			if (!Object.hasOwn(support.ranges, name))
-				throw new Error(`Case ${entry.name} selects undeclared peer ${name}.`)
-		const peers = { ...entry.peers }
-		for (const name of support.optional)
-			if (peers[name] === undefined) peers[name] = null
-		if (!supports(support, peers, config.prereleases === `include`))
-			throw new Error(
-				`Case ${entry.name} omits a required peer or selects a version outside the proposed ranges.`,
+			}))
+		const seen = new Set<string>()
+		for (const entry of cases) {
+			const peers = { ...entry.peers }
+			for (const name of support.optional)
+				if (peers[name] === undefined) peers[name] = null
+			if (!supports(support, peers))
+				throw new Error(
+					`Case ${entry.name} omits a required peer or selects a version outside peerDependencies.`,
+				)
+			const aliases: Record<string, string | null> = {}
+			const groups: Record<string, string[]> = {}
+			for (const [name, version] of Object.entries(peers)) {
+				if (!Object.hasOwn(pins, name))
+					throw new Error(`Case ${entry.name} selects undeclared peer ${name}.`)
+				const pin = pins[name]!.find((pin) => pin.version === version)
+				if (version !== null && !pin)
+					throw new Error(
+						`Case ${entry.name} selects ${name}@${version} without a matching pinned ${name}_v<label> development alias.`,
+					)
+				aliases[name] = pin?.alias ?? null
+				groups[name] = pin?.groups ?? []
+			}
+			const key = JSON.stringify(
+				Object.entries(peers).sort(([a], [b]) => a.localeCompare(b)),
 			)
-		const key = JSON.stringify(
-			Object.entries(peers).sort(([a], [b]) => a.localeCompare(b)),
-		)
-		if (!unique.has(key)) unique.set(key, { ...entry, peers })
+			if (seen.has(key)) continue
+			seen.add(key)
+			results.push({
+				name: suites ? `${suite.name}: ${entry.name}` : entry.name,
+				peers,
+				embassy: suite.name,
+				aliases,
+				groups,
+			})
+		}
+		// Explicit combinations may constrain coupled peers, but must exercise each
+		// pin and optional absence for the relationship they claim to check.
+		for (const peer of suite.peers) {
+			for (const version of [
+				...new Set(pins[peer]!.map((pin) => pin.version)),
+				...(support.optional.includes(peer) ? [null] : []),
+			]) {
+				if (
+					!results.some(
+						(entry) =>
+							entry.embassy === suite.name && entry.peers[peer] === version,
+					)
+				)
+					throw new Error(
+						`Embassy ${suite.name} has no case for ${peer}@${version ?? `absent`}. Every pinned representative and optional absence must be exercised.`,
+					)
+			}
+		}
 	}
-	const result = [...unique.values()]
-	if (
-		!result.length ||
-		new Set(result.map((entry) => entry.name)).size !== result.length
-	)
+	if (!results.length || results.length > maxCases)
 		throw new Error(
-			`Resolved peer cases must have unique names and cannot be empty.`,
+			`Peer matrix must contain 1 to maxCases (${maxCases}) cases.`,
 		)
-	if (result.length > maxCases)
-		throw new Error(
-			`Peer matrix exceeds maxCases (${maxCases}). Select explicit combinations or raise the limit.`,
-		)
-	return result
+	return results
 }
 
 export async function preparePeerPlan(
 	baseDirname: string,
 	peerConfig: string,
 	artifactDirectory: string,
+	fallback?: {
+		testPattern?: string | undefined
+		testCommand?: string | undefined
+	},
 ): Promise<PeerPlan> {
 	const config = await readPeerConfig(path.resolve(baseDirname, peerConfig))
 	const git = simpleGit(baseDirname)
@@ -197,9 +173,11 @@ export async function preparePeerPlan(
 		candidateCommit,
 		config.manifest ?? `package.json`,
 	)
-	const cases = await resolvePeerCases(config, support, baseDirname)
+	const suites = peerSuites(config, Object.keys(support.ranges), fallback)
+	const cases = await resolvePeerCases(config, support, baseDirname, suites)
 	const plan: PeerPlan = {
-		version: 1,
+		version: 2,
+		suites,
 		configHash: digest(JSON.stringify(config)),
 		candidateCommit,
 		cases,
@@ -252,6 +230,10 @@ export async function preparePeerPlan(
 						path.join(temporary, `pnpm-lock.yaml`),
 						`utf8`,
 					),
+					workspaceConfig: await readFile(
+						path.join(temporary, `pnpm-workspace.yaml`),
+						`utf8`,
+					),
 					artifacts,
 				}
 			} finally {
@@ -265,7 +247,17 @@ export async function preparePeerPlan(
 export function isPeerPlan(value: unknown): value is PeerPlan {
 	if (
 		!object(value) ||
-		value.version !== 1 ||
+		value.version !== 2 ||
+		!Array.isArray(value.suites) ||
+		value.suites.some(
+			(suite) =>
+				!object(suite) ||
+				typeof suite.name !== `string` ||
+				typeof suite.testPattern !== `string` ||
+				typeof suite.testCommand !== `string` ||
+				!Array.isArray(suite.peers) ||
+				suite.peers.some((peer) => typeof peer !== `string`),
+		) ||
 		typeof value.configHash !== `string` ||
 		!/^[a-f0-9]{64}$/.test(value.configHash) ||
 		typeof value.candidateCommit !== `string` ||
@@ -300,6 +292,7 @@ export function isPeerPlan(value: unknown): value is PeerPlan {
 				typeof installation.candidate !== `string` ||
 				typeof installation.manifest !== `string` ||
 				typeof installation.lockfile !== `string` ||
+				typeof installation.workspaceConfig !== `string` ||
 				!Array.isArray(installation.artifacts) ||
 				installation.artifacts.some(
 					(artifact) =>
@@ -322,6 +315,7 @@ export async function restorePeerInstall(
 	source: string,
 	target: string,
 ): Promise<void> {
+	await copyRegistryConfig(source, target)
 	await mkdir(path.join(target, `.breakage-artifacts`), { recursive: true })
 	for (const artifact of installation.artifacts) {
 		const filename = path.resolve(source, artifact.file)
@@ -336,4 +330,8 @@ export async function restorePeerInstall(
 	}
 	await writeFile(path.join(target, `package.json`), installation.manifest)
 	await writeFile(path.join(target, `pnpm-lock.yaml`), installation.lockfile)
+	await writeFile(
+		path.join(target, `pnpm-workspace.yaml`),
+		installation.workspaceConfig,
+	)
 }

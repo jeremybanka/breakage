@@ -1,6 +1,6 @@
 import path from "node:path"
 
-import { satisfies, subset, validRange } from "semver"
+import { satisfies, validRange } from "semver"
 import { simpleGit } from "simple-git"
 import type { SimpleGit } from "simple-git"
 
@@ -11,13 +11,6 @@ export type PeerSupport = {
 	optional: string[]
 	devDependencies?: Record<string, string>
 }
-export type PeerSupportChange = {
-	peer: string
-	released: string
-	proposed: string | null
-	reason: `range-narrowed` | `peer-required`
-}
-
 export async function readPeerSupport(
 	git: SimpleGit,
 	commit: string,
@@ -40,7 +33,7 @@ export async function readPeerSupport(
 	for (const [name, range] of Object.entries(ranges)) {
 		if (typeof range !== `string`)
 			throw new Error(
-				`peerDependencies[${JSON.stringify(name)}] must declare a valid semantic version range; separate alternatives with ||.`,
+				`peerDependencies[${JSON.stringify(name)}] has invalid semantic version range ${JSON.stringify(range)}; separate alternatives with ||.`,
 			)
 		if (range.startsWith(`workspace:`)) {
 			const requested = range.slice(`workspace:`.length)
@@ -74,7 +67,7 @@ export async function readPeerSupport(
 		}
 		if (!validRange(ranges[name] as string))
 			throw new Error(
-				`peerDependencies[${JSON.stringify(name)}] must declare a valid semantic version range; separate alternatives with ||.`,
+				`peerDependencies[${JSON.stringify(name)}] has invalid semantic version range ${JSON.stringify(range)}; separate alternatives with ||.`,
 			)
 		const meta = metadata[name]
 		if (object(meta) && meta.optional === true) optional.push(name)
@@ -90,38 +83,6 @@ export async function readPeerSupport(
 		optional,
 		devDependencies: devDependencies as Record<string, string>,
 	}
-}
-
-export function droppedSupport(
-	released: PeerSupport,
-	proposed: PeerSupport,
-): PeerSupportChange[] {
-	const changes: PeerSupportChange[] = Object.entries(released.ranges)
-		.filter(
-			([name, range]) =>
-				proposed.ranges[name] === undefined ||
-				!subset(range, proposed.ranges[name]!),
-		)
-		.map(([peer, range]) => ({
-			peer,
-			released: range,
-			proposed: proposed.ranges[peer] ?? null,
-			reason: `range-narrowed`,
-		}))
-	for (const [peer, range] of Object.entries(proposed.ranges)) {
-		if (
-			!proposed.optional.includes(peer) &&
-			(!Object.hasOwn(released.ranges, peer) ||
-				released.optional.includes(peer))
-		)
-			changes.push({
-				peer,
-				released: released.ranges[peer] ?? `absent`,
-				proposed: range,
-				reason: `peer-required`,
-			})
-	}
-	return changes
 }
 
 export function supports(

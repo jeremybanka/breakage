@@ -14,12 +14,15 @@ export type BaselineOptions = {
 	tagPattern?: string | undefined
 	baseDirname?: string
 	peerConfig?: string | undefined
+	testPattern?: string | undefined
+	testCommand?: string | undefined
 }
 
 export type BreakagePreludeOptions = BaselineOptions & { out: string }
 
 export type BreakageBaseline = {
 	version: 1
+	kind?: `peers`
 	tagPattern: string | null
 	packageDirectory: string
 	ref: string
@@ -37,7 +40,11 @@ function isBaseline(value: unknown): value is BreakageBaseline {
 		(record.tagPattern === null || typeof record.tagPattern === `string`) &&
 		typeof record.packageDirectory === `string` &&
 		typeof record.ref === `string` &&
-		record.ref.startsWith(`refs/tags/`) &&
+		(record.kind === `peers`
+			? record.ref === `HEAD` && record.peers !== undefined
+			: record.kind === undefined &&
+				record.ref.startsWith(`refs/tags/`) &&
+				record.peers === undefined) &&
 		typeof record.commit === `string` &&
 		objectId.test(record.commit) &&
 		(record.peers === undefined || isPeerPlan(record.peers))
@@ -50,6 +57,8 @@ export async function breakagePrelude({
 	tagPattern,
 	baseDirname = process.cwd(),
 	peerConfig,
+	testPattern,
+	testCommand,
 }: BreakagePreludeOptions): Promise<BreakageBaseline> {
 	const filename = path.resolve(baseDirname, out)
 	const temporaryPath = `${filename}.${randomUUID()}.tmp`
@@ -61,6 +70,37 @@ export async function breakagePrelude({
 			throw new Error(`Baseline output must be gitignored: ${filename}.`)
 		}
 		canInvalidate = true
+		if (peerConfig !== undefined) {
+			if (
+				!(
+					await git.raw([`check-ignore`, `--`, `${filename}.peers/probe`])
+				).trim()
+			)
+				throw new Error(
+					`Peer artifact directory must be gitignored: ${filename}.peers.`,
+				)
+			const peers = await preparePeerPlan(
+				baseDirname,
+				peerConfig,
+				`${filename}.peers`,
+				{ testPattern, testCommand },
+			)
+			const baseline: BreakageBaseline = {
+				version: 1,
+				kind: `peers`,
+				tagPattern: tagPattern ?? null,
+				packageDirectory: await git.revparse([`--show-prefix`]),
+				ref: `HEAD`,
+				commit: peers.candidateCommit,
+				peers,
+			}
+			await mkdir(path.dirname(filename), { recursive: true })
+			await writeFile(temporaryPath, `${JSON.stringify(baseline, null, 2)}\n`, {
+				flag: `wx`,
+			})
+			await rename(temporaryPath, filename)
+			return baseline
+		}
 		const remoteTags = await git.listRemote([`--tags`, `origin`])
 		const ref = latestReleaseTag(remoteTags, tagPattern)
 		if (!ref) {
@@ -98,21 +138,6 @@ export async function breakagePrelude({
 			ref,
 			commit,
 		}
-		if (peerConfig !== undefined) {
-			if (
-				!(
-					await git.raw([`check-ignore`, `--`, `${filename}.peers/probe`])
-				).trim()
-			)
-				throw new Error(
-					`Peer artifact directory must be gitignored: ${filename}.peers.`,
-				)
-			baseline.peers = await preparePeerPlan(
-				baseDirname,
-				peerConfig,
-				`${filename}.peers`,
-			)
-		}
 		await mkdir(path.dirname(filename), { recursive: true })
 		await writeFile(temporaryPath, `${JSON.stringify(baseline, null, 2)}\n`, {
 			flag: `wx`,
@@ -145,6 +170,7 @@ export async function readBaseline(
 			throw new Error(`Baseline belongs to a different package or tag pattern.`)
 		}
 		if (
+			baseline.kind !== `peers` &&
 			(
 				await git.raw([`check-ref-format`, `--normalize`, baseline.ref])
 			).trim() !== baseline.ref

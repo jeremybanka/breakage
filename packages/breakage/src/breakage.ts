@@ -10,7 +10,6 @@ import { readBaseline } from "./baseline.ts"
 import { withDirectoryLock } from "./directory-lock.ts"
 import { checkPeerMatrix } from "./peer-matrix.ts"
 import type { PeerMatrixOutcome } from "./peer-matrix.ts"
-import type { PeerPlan } from "./peer-plan.ts"
 import { latestReleaseTag as selectLatestReleaseTag } from "./release-tag.ts"
 import { withTestFileState } from "./test-file-state.ts"
 
@@ -34,7 +33,9 @@ export type BreakageOptions = {
 	verbose?: boolean | undefined
 }
 
-export type PeerBreakageOptions = BreakageOptions & { peerConfig: string }
+export type PeerBreakageOptions = Partial<BreakageOptions> & {
+	peerConfig: string
+}
 
 export type BreakageOutcome =
 	| { gitWasClean: false }
@@ -84,7 +85,7 @@ export async function breakage({
 	certifyCommand,
 	baseDirname = process.cwd(),
 	verbose = false,
-}: BreakageOptions & { peerConfig?: string }): Promise<
+}: Partial<BreakageOptions> & { peerConfig?: string }): Promise<
 	(BreakageOutcome | PeerMatrixOutcome) & { summary: string }
 > {
 	let mark: Chronicle[`mark`] | undefined
@@ -113,9 +114,33 @@ export async function breakage({
 			gitWasClean: false,
 		}
 	}
+	if (peerConfig !== undefined) {
+		if (!(await git.status()).isClean())
+			return {
+				gitWasClean: false,
+				summary: `The git repository must be clean to run this command.`,
+			}
+		const baseline =
+			baselineFile === undefined
+				? undefined
+				: await readBaseline(git, path.resolve(baseDirname, baselineFile), {
+						tagPattern,
+						peerConfig,
+					})
+		return checkPeerMatrix({
+			baseDirname,
+			testPattern,
+			testCommand,
+			peerConfig,
+			peerPlan: baseline?.peers,
+		})
+	}
+	if (!testPattern || !testCommand || !certifyCommand)
+		throw new Error(
+			`Public compatibility checks require testPattern, testCommand, and certifyCommand.`,
+		)
 	let latestReleaseTag: string | undefined
 	let releaseCommit: string
-	let peerPlan: PeerPlan | undefined
 	if (baselineFile !== undefined) {
 		const baseline = await readBaseline(
 			git,
@@ -124,7 +149,6 @@ export async function breakage({
 		)
 		latestReleaseTag = baseline.ref
 		releaseCommit = baseline.commit
-		peerPlan = baseline.peers
 		mark?.(`read pinned release baseline`)
 	} else {
 		const tagsRemote = await git.listRemote([`--tags`, `origin`])
@@ -189,31 +213,6 @@ export async function breakage({
 		minimatch(file, testPattern),
 	)
 	mark?.(`filtered to public test files`)
-	if (peerConfig !== undefined) {
-		if (!(await git.status()).isClean())
-			return {
-				gitWasClean: false,
-				summary: `The git repository must be clean to run this command.`,
-			}
-		if (!productionTestFiles.length)
-			return {
-				gitWasClean: true,
-				lastReleaseFound: true,
-				lastReleaseTag: latestReleaseTag,
-				testsWereFound: false,
-				summary: `No tests were found matching the pattern "${testPattern}".`,
-			}
-		return checkPeerMatrix({
-			baseDirname,
-			releaseCommit,
-			releaseTag: latestReleaseTag,
-			testFiles: productionTestFiles,
-			testCommand,
-			peerConfig,
-			certifyCommand,
-			peerPlan,
-		})
-	}
 
 	const prepared = await withTestFileState(git, baseDirname, async (state) => {
 		if (!(await state.isClean())) {

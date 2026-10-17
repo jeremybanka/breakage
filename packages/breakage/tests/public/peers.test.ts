@@ -5,7 +5,7 @@ import { breakage, breakagePrelude } from "breakage"
 
 import { fixture, git } from "./fixture.ts"
 
-it(`reports peer regressions against released assertions through the API and CLI`, async () => {
+it(`reports peer regressions against current embassy assertions through the API and CLI`, async () => {
 	const project = fixture()
 	try {
 		project.write(
@@ -14,6 +14,10 @@ it(`reports peer regressions against released assertions through the API and CLI
 				name: `consumer-plugin`,
 				version: `1.0.0`,
 				peerDependencies: { host: `^1.0.0` },
+				devDependencies: {
+					host_v1: `npm:host@1.0.0`,
+					host_v1_1: `npm:host@1.1.0`,
+				},
 			}),
 		)
 		project.write(
@@ -23,6 +27,7 @@ it(`reports peer regressions against released assertions through the API and CLI
 		project.write(
 			`peers.json`,
 			JSON.stringify({
+				install: false,
 				cases: [
 					{ name: `working`, peers: { host: `1.0.0` } },
 					{ name: `regression`, peers: { host: `1.1.0` } },
@@ -35,7 +40,7 @@ it(`reports peer regressions against released assertions through the API and CLI
 		git(project.repository, `push`, `--tags`, `origin`)
 		project.write(
 			`public/contract.ts`,
-			`// A new assertion cannot erase the released promise.\n`,
+			`import assert from "node:assert/strict"; assert.equal(JSON.parse(process.env.BREAKAGE_PEERS).host, "1.0.0", "current embassy promise");`,
 		)
 		const options = {
 			...project.options,
@@ -53,9 +58,9 @@ it(`reports peer regressions against released assertions through the API and CLI
 			peerCheck: true,
 			success: false,
 			peerResults: [
-				{ name: `working`, peers: { host: `1.0.0` }, status: `passed` },
+				{ name: `peers: working`, peers: { host: `1.0.0` }, status: `passed` },
 				{
-					name: `regression`,
+					name: `peers: regression`,
 					peers: { host: `1.1.0` },
 					status: `contract-failed`,
 				},
@@ -77,7 +82,58 @@ it(`reports peer regressions against released assertions through the API and CLI
 			success: false,
 			peerResults: [{ status: `passed` }, { status: `contract-failed` }],
 		})
-		expect(project.read(`public/contract.ts`)).toContain(`A new assertion`)
+		expect(project.read(`public/contract.ts`)).toContain(
+			`current embassy promise`,
+		)
+	} finally {
+		project.cleanup()
+	}
+})
+
+it(`prints actionable pin diagnostics and exits 2 before running an embassy`, () => {
+	const project = fixture()
+	try {
+		project.write(
+			`package.json`,
+			JSON.stringify({
+				name: `consumer-plugin`,
+				peerDependencies: { host: `^1 || >=2` },
+				devDependencies: {
+					host_v1: `npm:host@1.0.0`,
+					host_v2: `npm:other@2.0.0`,
+				},
+			}),
+		)
+		project.write(`embassy.ts`, `throw new Error("must not run");`)
+		project.write(
+			`peers.json`,
+			JSON.stringify({
+				embassies: {
+					host: { testPattern: `embassy.ts`, testCommand: `false` },
+				},
+			}),
+		)
+		git(project.repository, `add`, `.`)
+		git(project.repository, `commit`, `-m`, `Invalid pinned mapping`)
+		const configured = process.env.BREAKAGE_CLI_ENTRYPOINT
+		if (!configured) throw new Error(`BREAKAGE_CLI_ENTRYPOINT is required`)
+		const cli = Bun.spawnSync(
+			[
+				process.execPath,
+				path.resolve(configured),
+				`--`,
+				`--peer-config=peers.json`,
+			],
+			{ cwd: project.repository },
+		)
+		expect(cli.exitCode).toBe(2)
+		expect(cli.stderr.toString()).toContain(`devDependencies["host_v2"]`)
+		expect(cli.stderr.toString()).toContain(`must target peer host`)
+		expect(cli.stderr.toString()).toContain(
+			`no pinned development alias satisfying group ">=2"`,
+		)
+		expect(cli.stderr.toString()).not.toContain(`must not run`)
+		expect(cli.stderr.toString()).not.toContain(`at <anonymous>`)
 	} finally {
 		project.cleanup()
 	}

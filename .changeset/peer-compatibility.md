@@ -2,4 +2,4 @@
 "breakage": patch
 ---
 
-Run preserved consumer contracts across isolated peer environments, certify dropped support, pin version selections and dependency resolution, and check combinations spanning workspace releases, multiple majors, and optional peer absence.
+Run current peer embassy suites against exact _v development aliases, validate coverage of arbitrary declared semver groups with actionable diagnostics, and isolate pinned registry or Git workspace releases with reproducible plans, multiple-peer combinations, and optional-peer absence.

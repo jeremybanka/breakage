@@ -1,95 +1,19 @@
 import { rejects } from "node:assert/strict"
-import { readFile, rename } from "node:fs/promises"
+import { readFile } from "node:fs/promises"
 import path from "node:path"
 
 import { expect, it } from "bun:test"
-import { simpleGit } from "simple-git"
 
 import { breakage, breakagePrelude } from "../src/breakage.ts"
-import { selectPeerVersions } from "../src/peer-plan.ts"
 import { peerProject } from "./peer-project.ts"
 
-it(`samples lower and upper published versions per range segment and compatibility line`, () => {
-	expect(
-		selectPeerVersions(`^2.4.0 || ^3.1.0`, [
-			`2.3.0`,
-			`2.4.0`,
-			`2.5.0`,
-			`3.0.0`,
-			`3.1.0`,
-			`3.7.0`,
-			`4.0.0-beta.1`,
-		]),
-	).toEqual([`2.4.0`, `2.5.0`, `3.1.0`, `3.7.0`])
-	expect(
-		selectPeerVersions(`>=0.2.0 <0.4.0`, [`0.2.0`, `0.2.5`, `0.3.0`, `0.3.9`]),
-	).toEqual([`0.2.0`, `0.2.5`, `0.3.0`, `0.3.9`])
-	expect(() => selectPeerVersions(`^5.0.0`, [`4.0.0`])).toThrow(
-		`No published stable peer versions`,
-	)
-})
-
-it(`replays a fetched release commit that has no local tag`, async () => {
-	const project = await peerProject({
-		cases: [{ name: `host`, peers: { host: `1.0.0` } }],
-	})
+it(`pins only manifest representatives without registry discovery or a public release baseline`, async () => {
+	const project = await peerProject({})
 	try {
-		const producer = path.join(project.directory, `producer`)
-		await project.git.clone(
-			path.join(project.directory, `remote.git`),
-			producer,
-		)
-		const producerGit = simpleGit(producer)
-		await producerGit
-			.addConfig(`user.name`, `Test`)
-			.addConfig(`user.email`, `test@example.invalid`)
-		await Bun.write(
-			path.join(producer, `public/contract.ts`),
-			`throw new Error("fresh released contract");`,
-		)
-		await producerGit.add(`.`).commit(`New release`).addTag(`plugin@1.1.0`)
-		await producerGit.push(`origin`, `--tags`)
-		const out = `.breakage/baseline.json`
-		await breakagePrelude({ ...project.options, out })
-		expect(await project.git.tag()).not.toContain(`plugin@1.1.0`)
-		const result = await breakage({ ...project.options, baselineFile: out })
-		expect(result).toMatchObject({
-			success: false,
-			peerResults: [{ status: `contract-failed` }],
-		})
-		if (!(`peerResults` in result)) throw new Error(`Missing report`)
-		expect(result.peerResults[0]!.stderr).toContain(`fresh released contract`)
-	} finally {
-		await project.cleanup()
-	}
-})
-
-it(`pins discovered versions deterministically and replays without registry or origin discovery`, async () => {
-	let published = [`1.0.0`, `1.1.0`]
-	const server = Bun.serve({
-		port: 0,
-		hostname: `127.0.0.1`,
-		fetch() {
-			return Response.json({
-				name: `host`,
-				"dist-tags": { latest: published[published.length - 1] },
-				versions: Object.fromEntries(
-					published.map((version) => [
-						version,
-						{
-							name: `host`,
-							version,
-							dist: { tarball: `http://127.0.0.1/unused.tgz` },
-						},
-					]),
-				),
-			})
-		},
-	})
-	const project = await peerProject({ resolve: true })
-	try {
-		await project.write(`.npmrc`, `registry=http://127.0.0.1:${server.port}/\n`)
-		await project.git.add(`.`).commit(`Use test registry`)
+		await project.git.removeRemote(`origin`)
+		await project.git.tag([`-d`, `plugin@1.0.0`])
+		await project.write(`.npmrc`, `registry=http://127.0.0.1:1/\n`)
+		await project.git.add(`.`).commit(`Disable registry`)
 		const out = `.breakage/peer-baseline.json`
 		const first = await breakagePrelude({ ...project.options, out })
 		expect(first.peers?.cases.map((entry) => entry.peers.host)).toEqual([
@@ -101,34 +25,37 @@ it(`pins discovered versions deterministically and replays without registry or o
 		expect(await readFile(path.join(project.repository, out), `utf8`)).toBe(
 			bytes,
 		)
-		published = [...published, `1.2.0`]
-		await breakagePrelude({ ...project.options, out })
-		expect(await readFile(path.join(project.repository, out), `utf8`)).not.toBe(
-			bytes,
-		)
-		await server.stop(true)
-		await rename(
-			path.join(project.directory, `remote.git`),
-			path.join(project.directory, `offline.git`),
-		)
-		const result = await breakage({ ...project.options, baselineFile: out })
-		expect(result).toMatchObject({
-			peerResults: [
-				{ peers: { host: `1.0.0` }, status: `passed` },
-				{ peers: { host: `1.2.0` }, status: `contract-failed` },
-			],
+		expect(
+			await breakage({ ...project.options, baselineFile: out }),
+		).toMatchObject({
+			peerResults: [{ status: `passed` }, { status: `contract-failed` }],
 		})
-		await project.write(
-			`peers.json`,
-			JSON.stringify({ resolve: true, setupCommand: `true` }),
+		await rejects(
+			breakage({ ...project.options, baselineFile: out, testCommand: `true` }),
+			/another embassy selection/,
 		)
-		await project.git.add(`.`).commit(`Change matrix`)
+		await project.write(
+			`package.json`,
+			JSON.stringify({
+				name: `fixture-plugin`,
+				peerDependencies: { host: `>=1` },
+				devDependencies: {
+					host_v1: `npm:host@1.0.0`,
+					host_v19_future: `npm:host@2.0.1`,
+				},
+			}),
+		)
+		await project.git.add(`.`).commit(`Renovate updates one pin`)
 		await rejects(
 			breakage({ ...project.options, baselineFile: out }),
 			/another configuration or candidate commit/,
 		)
+		const next = await breakagePrelude({ ...project.options, out })
+		expect(next.peers?.cases.map((entry) => entry.peers.host)).toEqual([
+			`1.0.0`,
+			`2.0.1`,
+		])
 	} finally {
-		await server.stop(true)
 		await project.cleanup()
 	}
-}, 30000)
+})

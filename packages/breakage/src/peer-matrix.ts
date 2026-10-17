@@ -1,4 +1,4 @@
-import { readPeerConfig } from "./peer-config.ts"
+import { peerSuites, readPeerConfig } from "./peer-config.ts"
 import type { PeerCase } from "./peer-config.ts"
 export type { PeerCase, PeerConfig } from "./peer-config.ts"
 import { exec } from "node:child_process"
@@ -7,6 +7,7 @@ import { tmpdir } from "node:os"
 import path from "node:path"
 
 import { simpleGit } from "simple-git"
+import { minimatch } from "minimatch"
 
 import {
 	installPeerEnvironment,
@@ -15,8 +16,7 @@ import {
 	verifyPeerEnvironment,
 } from "./peer-install.ts"
 
-import { droppedSupport, readPeerSupport, supports } from "./peer-support.ts"
-import type { PeerSupportChange } from "./peer-support.ts"
+import { readPeerSupport } from "./peer-support.ts"
 import { digest, resolvePeerCases, restorePeerInstall } from "./peer-plan.ts"
 import type { PeerPlan } from "./peer-plan.ts"
 
@@ -28,30 +28,19 @@ export type PeerCaseResult = PeerCase & {
 }
 export type PeerMatrixOutcome = {
 	gitWasClean: true
-	lastReleaseFound: true
-	lastReleaseTag: string
-	testsWereFound: true
-	testsFound: string[]
 	peerCheck: true
 	success: boolean
 	candidateCommit: string
 	contractCommit: string
 	peerResults: PeerCaseResult[]
-	supportChanges: PeerSupportChange[]
-	supportCertified: boolean
-	certificationStdout: string
-	certificationStderr: string
 	summary: string
 }
 
 export type PeerContext = {
 	baseDirname: string
-	releaseCommit: string
-	releaseTag: string
-	testFiles: string[]
-	testCommand: string
+	testPattern?: string | undefined
+	testCommand?: string | undefined
 	peerConfig: string
-	certifyCommand: string
 	peerPlan?: PeerPlan | undefined
 }
 
@@ -102,60 +91,42 @@ export async function checkPeerMatrix(
 			`Peer snapshot belongs to another configuration or candidate commit. Run breakage prelude again.`,
 		)
 	const manifest = config.manifest ?? `package.json`
-	const releasedSupport = await readPeerSupport(
-		git,
-		context.releaseCommit,
-		manifest,
+	const support = await readPeerSupport(git, candidateCommit, manifest)
+	const suites = peerSuites(config, Object.keys(support.ranges), context)
+	const cases = await resolvePeerCases(
+		config,
+		support,
+		context.baseDirname,
+		suites,
 	)
-	const proposedSupport = await readPeerSupport(git, candidateCommit, manifest)
-	const supportChanges = droppedSupport(releasedSupport, proposedSupport)
-	const certification = supportChanges.length
-		? await command(context.certifyCommand, context.baseDirname)
-		: { success: true, stdout: ``, stderr: `` }
-	const peerResults: PeerCaseResult[] = []
-	const cases =
-		context.peerPlan?.cases ??
-		(await resolvePeerCases(config, proposedSupport, context.baseDirname))
-	for (const entry of cases) {
-		if (
-			!supports(proposedSupport, entry.peers, config.prereleases === `include`)
-		) {
-			peerResults.push({
-				...entry,
-				status: `setup-failed`,
-				stdout: ``,
-				stderr: `Case ${entry.name} selects a peer outside the proposed support ranges.`,
-			})
-			continue
-		}
-		const contract = supports(
-			releasedSupport,
-			entry.peers,
-			config.prereleases === `include`,
+	if (
+		context.peerPlan &&
+		(JSON.stringify(context.peerPlan.suites) !== JSON.stringify(suites) ||
+			JSON.stringify(context.peerPlan.cases) !== JSON.stringify(cases))
+	)
+		throw new Error(
+			`Peer snapshot belongs to another embassy selection. Run breakage prelude again.`,
 		)
-			? `released`
-			: `current`
+	const files = (
+		await git.raw([`ls-tree`, `-r`, `--name-only`, `-z`, candidateCommit])
+	)
+		.split(`\0`)
+		.filter(Boolean)
+	for (const suite of suites)
+		if (!files.some((file) => minimatch(file, suite.testPattern)))
+			throw new Error(
+				`Embassy ${suite.name} selected no current tests with pattern ${JSON.stringify(suite.testPattern)}.`,
+			)
+	const peerResults: PeerCaseResult[] = []
+	for (const entry of cases) {
+		const suite = suites.find((suite) => suite.name === entry.embassy)!
+		const contract = `current` as const
 		const temporary = await mkdtemp(path.join(tmpdir(), `breakage-peer-`))
 		try {
 			const checkout = path.join(temporary, `checkout`)
 			await simpleGit().clone(root, checkout, [`--no-local`, `--quiet`])
 			const clone = simpleGit(checkout)
 			await clone.checkout(candidateCommit)
-			// A prelude fetch by SHA need not leave a local ref for clone to copy.
-			await clone.fetch([
-				root,
-				context.releaseCommit,
-				`--no-tags`,
-				`--no-write-fetch-head`,
-			])
-			if (contract === `released`)
-				await clone.raw([
-					`restore`,
-					`--source=${context.releaseCommit}`,
-					`--worktree`,
-					`--`,
-					...context.testFiles.map((file) => `${prefix}${file}`),
-				])
 			const cwd = path.join(checkout, prefix)
 			let candidate: string | undefined
 			if (config.install) {
@@ -182,8 +153,9 @@ export async function checkPeerMatrix(
 				BREAKAGE_CASE: entry.name,
 				BREAKAGE_PEERS: JSON.stringify(entry.peers),
 				BREAKAGE_CANDIDATE_COMMIT: candidateCommit,
-				BREAKAGE_CONTRACT_COMMIT:
-					contract === `released` ? context.releaseCommit : candidateCommit,
+				BREAKAGE_CONTRACT_COMMIT: candidateCommit,
+				BREAKAGE_EMBASSY: suite.name,
+				BREAKAGE_PEER_ALIASES: JSON.stringify(entry.aliases),
 			}
 			if (config.setupCommand) {
 				const setup = await command(config.setupCommand, cwd, env)
@@ -199,7 +171,7 @@ export async function checkPeerMatrix(
 				}
 			}
 			if (candidate) await verifyPeerEnvironment(cwd, candidate, entry)
-			const result = await command(context.testCommand, cwd, env)
+			const result = await command(suite.testCommand, cwd, env)
 			if (candidate) await verifyPeerEnvironment(cwd, candidate, entry)
 			peerResults.push({
 				...entry,
@@ -219,26 +191,16 @@ export async function checkPeerMatrix(
 			await rm(temporary, { recursive: true, force: true })
 		}
 	}
-	const success =
-		certification.success &&
-		peerResults.every((result) => result.status === `passed`)
+	const success = peerResults.every((entry) => entry.status === `passed`)
 	return {
 		gitWasClean: true,
-		lastReleaseFound: true,
-		lastReleaseTag: context.releaseTag,
-		testsWereFound: true,
-		testsFound: context.testFiles,
 		peerCheck: true,
 		success,
 		candidateCommit,
-		contractCommit: context.releaseCommit,
+		contractCommit: candidateCommit,
 		peerResults,
-		supportChanges,
-		supportCertified: certification.success,
-		certificationStdout: certification.stdout,
-		certificationStderr: certification.stderr,
 		summary: success
-			? `All peer cases passed.`
-			: `Peer compatibility check failed.`,
+			? `All ${peerResults.length} peer embassy cases passed.`
+			: `Peer embassy checks failed in ${peerResults.filter((entry) => entry.status !== `passed`).length} of ${peerResults.length} cases.`,
 	}
 }

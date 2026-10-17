@@ -49,6 +49,10 @@ it(`installs exact peer artifacts and the packed candidate without using workspa
 				type: `module`,
 				exports: `./index.ts`,
 				peerDependencies: { host: `^1.0.0` },
+				devDependencies: {
+					host_v1: `npm:host@1.0.0`,
+					host_v1_1: `npm:host@1.1.0`,
+				},
 			}),
 		)
 		await project.write(
@@ -94,7 +98,7 @@ it(`installs exact peer artifacts and the packed candidate without using workspa
 			).version,
 		).toBe(`9.0.0`)
 		expect((await project.git.status()).isClean()).toBe(true)
-		const artifact = baseline.peers?.installations?.old?.artifacts[0]
+		const artifact = baseline.peers?.installations?.[`peers: old`]?.artifacts[0]
 		if (!artifact) throw new Error(`Missing pinned artifact`)
 		await writeFile(
 			path.resolve(project.repository, artifact.file),

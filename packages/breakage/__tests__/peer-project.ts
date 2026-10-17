@@ -26,10 +26,14 @@ export async function peerProject(
 			version: `1.0.0`,
 			type: `module`,
 			peerDependencies: { host: `^1.0.0` },
+			devDependencies: {
+				host_v1: `npm:host@1.0.0`,
+				host_v1_1: `npm:host@1.1.0`,
+			},
 		}),
 	)
 	await write(`public/contract.ts`, contract)
-	await write(`peers.json`, JSON.stringify(config))
+	await write(`peers.json`, JSON.stringify({ install: false, ...config }))
 	const git = simpleGit(repository)
 	await git
 		.init()

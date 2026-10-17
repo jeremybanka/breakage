@@ -27,9 +27,9 @@ const BREAKAGE_MANUAL = options(
 		"tagPattern?": `string`,
 		"baselineFile?": `string`,
 		"peerConfig?": `string`,
-		testPattern: `string`,
-		testCommand: `string`,
-		certifyCommand: `string`,
+		"testPattern?": `string`,
+		"testCommand?": `string`,
+		"certifyCommand?": `string`,
 		"baseDirname?": `string`,
 		"verbose?": `boolean`,
 	}),
@@ -38,7 +38,7 @@ const BREAKAGE_MANUAL = options(
 			aliases: [`peer-config`],
 			completion: { repeatable: false, fileSystem: `files` },
 			required: false,
-			description: `Run released contracts across the cases in a peer configuration file.`,
+			description: `Run current embassy suites against validated, exactly pinned peer aliases.`,
 			example: `--peer-config=breakage.peers.json`,
 		},
 		tagPattern: {
@@ -60,7 +60,7 @@ const BREAKAGE_MANUAL = options(
 			aliases: [`test-pattern`, `pattern`],
 			completion: { repeatable: false },
 			flag: `p`,
-			required: true,
+			required: false,
 			description: `The pattern to match test files that test the public API of the library.`,
 			example: `--pattern="*__public.test.ts"`,
 		},
@@ -68,7 +68,7 @@ const BREAKAGE_MANUAL = options(
 			aliases: [`test-command`],
 			completion: { repeatable: false },
 			flag: `t`,
-			required: true,
+			required: false,
 			description: `Complete bash command that runs the tests for the library's public API.`,
 			example: `--testCommand="npm run test"`,
 		},
@@ -76,7 +76,7 @@ const BREAKAGE_MANUAL = options(
 			aliases: [`certify-command`],
 			completion: { repeatable: false },
 			flag: `c`,
-			required: true,
+			required: false,
 			description: `Complete bash command that determines whether a major version bump for your package is indicated in the workspace. Exit code 0 indicates that a major version bump is indicated, and exit code 1 indicates that no major version bump is indicated.`,
 			example: `--certifyCommand=\tsx scripts/certify-major-version-bump.node`,
 		},
@@ -97,7 +97,9 @@ const BREAKAGE_MANUAL = options(
 			parse: parseBooleanOption,
 		},
 	},
-) satisfies OptionsGroup<BreakageOptions & { peerConfig?: string | undefined }>
+) satisfies OptionsGroup<
+	Partial<BreakageOptions> & { peerConfig?: string | undefined }
+>
 
 const PRELUDE_MANUAL = options(
 	`Resolve and fetch the release baseline for a cacheable compatibility check.`,
@@ -187,6 +189,18 @@ const parse = cli(
 	},
 )
 
+function failSetup(error: unknown): never {
+	const messages: string[] = []
+	const seen = new Set<unknown>()
+	while (error !== undefined && !seen.has(error)) {
+		seen.add(error)
+		messages.push(error instanceof Error ? error.message : inspect(error))
+		error = error instanceof Error ? error.cause : undefined
+	}
+	process.stderr.write(`${messages.join(`\n`)}\n`)
+	process.exit(2)
+}
+
 const completion = await completionResponse(parse.definition, process.argv)
 if (completion !== undefined) {
 	process.stdout.write(completion)
@@ -210,22 +224,36 @@ if (completion !== undefined) {
 			const baseline = await breakagePrelude({
 				...inputs.opts,
 				out: inputs.opts.out ?? `.breakage/baseline.json`,
-			})
+			}).catch(failSetup)
 			process.stdout.write(`Pinned ${baseline.ref} at ${baseline.commit}.\n`)
 			break
 		}
 		case ``:
 		case `$configPath`: {
 			const { returnValue } = await encapsulate(
-				() =>
-					inputs.opts.peerConfig === undefined
-						? breakage(inputs.opts)
-						: breakage({ ...inputs.opts, peerConfig: inputs.opts.peerConfig }),
+				() => {
+					if (inputs.opts.peerConfig !== undefined)
+						return breakage({
+							...inputs.opts,
+							peerConfig: inputs.opts.peerConfig,
+						})
+					const { testPattern, testCommand, certifyCommand } = inputs.opts
+					if (!testPattern || !testCommand || !certifyCommand)
+						throw new Error(
+							`Public compatibility check required arguments were not provided: testPattern, testCommand, and certifyCommand.`,
+						)
+					return breakage({
+						...inputs.opts,
+						testPattern,
+						testCommand,
+						certifyCommand,
+					})
+				},
 				{
 					console: true,
 					stdout: true,
 				},
-			)
+			).catch(failSetup)
 			if (`peerCheck` in returnValue) {
 				process.stdout.write(`${JSON.stringify(returnValue, null, 2)}\n`)
 				process.exit(
