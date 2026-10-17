@@ -33,7 +33,6 @@
 		"breakage-supervisor": "npm:breakage@0.8.2",
 		"cspell": "10.4.0",
 		"dprint": "0.63.0",
-		"dprint-plugin-malva": "0.16.0",
 		"dprint-plugin-yaml": "0.6.0",
 		"turbo": "2.11.8",
 		"typescript": "7.0.2",

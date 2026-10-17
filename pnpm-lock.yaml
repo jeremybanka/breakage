@@ -207,9 +207,6 @@ importers:
       dprint:
         specifier: 0.63.0
         version: 0.63.0
-      dprint-plugin-malva:
-        specifier: 0.16.0
-        version: 0.16.0
       dprint-plugin-yaml:
         specifier: 0.6.0
         version: 0.6.0
@@ -1566,9 +1563,6 @@ packages:
 
   dom-accessibility-api@0.5.16:
     resolution: {integrity: sha512-X7BJ2yElsnOJ30pZF4uIIDfBEVgF4XEBxL9Bxhy6dnrm5hkzqmsWHGTiHqRiITNhMyFLyAiWndIJP7Z1NTteDg==}
-
-  dprint-plugin-malva@0.16.0:
-    resolution: {integrity: sha512-cHisdhrNcBHfvTG/jgHUkVyL6zeY+C5yLO+E/UyiTbp6wzauB3d25YyPZeMlsd7M/PDT8W4Yre8jKJ/xMwthiw==}
 
   dprint-plugin-yaml@0.6.0:
     resolution: {integrity: sha512-jFCM6LxutTjfiSR7BtDhbZA2OvuqYY9xksULg0vdu0nZV1hiaupvRfJHGZSiQS9aLmqMNc+5WcHpOBSwxCK7qQ==}
@@ -3100,8 +3094,6 @@ snapshots:
   detect-libc@2.1.2: {}
 
   dom-accessibility-api@0.5.16: {}
-
-  dprint-plugin-malva@0.16.0: {}
 
   dprint-plugin-yaml@0.6.0: {}
 
