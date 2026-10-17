@@ -198,6 +198,9 @@ importers:
       '@types/node':
         specifier: 26.6.5
         version: 26.6.5
+      breakage-supervisor:
+        specifier: npm:breakage@0.8.2
+        version: breakage@0.8.2
       cspell:
         specifier: 10.4.0
         version: 10.4.0
@@ -1453,6 +1456,10 @@ packages:
   brace-expansion@5.0.12:
     resolution: {integrity: sha512-YovQ3rzhaLMIrDjNDMkNS01tea93qhEhG5xy8f6+R0l+dw3Ki+5sCoIoI942iuLZTHWogWktgwVDhU09iNEimQ==}
     engines: {node: 20 || >=22}
+
+  breakage@0.8.2:
+    resolution: {integrity: sha512-3/2UbTqcec8daCHPjKVvQ82ImHr2IW6n3OYn2ztLW+GYsSv2aZiF9BU0wPsNyzwqVsik7mWPtywgE9zhD0O1zQ==}
+    hasBin: true
 
   bun-types@1.4.3:
     resolution: {integrity: sha512-tinRJNGOmUN+tEAsn2y2e942n9JHRHR42iUYzDH75NmhJqVBokGSQkkfSFdNWwsANIdrK6ACH9t01M452YyTwg==}
@@ -2950,6 +2957,17 @@ snapshots:
   brace-expansion@5.0.12:
     dependencies:
       balanced-match: 4.0.4
+
+  breakage@0.8.2:
+    dependencies:
+      arktype: 2.2.8
+      comline: 0.9.0(arktype@2.2.8)
+      minimatch: 10.2.6
+      simple-git: 4.0.2
+      takua: 0.2.3
+    transitivePeerDependencies:
+      - supports-color
+      - zod
 
   bun-types@1.4.3:
     dependencies:

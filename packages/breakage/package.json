@@ -31,8 +31,9 @@
 		"postversion": "dprint fmt package.json",
 		"schema": "bun src/breakage.x.ts --outdir=dist -- schema",
 		"pretest": "pnpm run build",
-		"test": "bun test -- ./__tests__",
-		"test:watch": "bun test --watch -- ./__tests__"
+		"test": "BREAKAGE_CLI_ENTRYPOINT=./src/breakage.x.ts bun test -- ./__tests__ ./tests/public",
+		"test:public": "BREAKAGE_CLI_ENTRYPOINT=./src/breakage.x.ts bun test -- ./tests/public",
+		"test:watch": "BREAKAGE_CLI_ENTRYPOINT=./src/breakage.x.ts bun test --watch -- ./__tests__ ./tests/public"
 	},
 	"dependencies": {
 		"arktype": "2.2.8",

@@ -82,8 +82,8 @@ Add these scripts to the tested package, preserving your existing runner and cer
 ```json
 {
 	"scripts": {
-		"test:breaks:prelude": "breakage prelude --out .breakage/baseline.json",
-		"test:breaks": "breakage --baseline-file .breakage/baseline.json"
+		"test:breakage:prelude": "breakage prelude --out .breakage/baseline.json",
+		"test:breakage": "breakage --baseline-file .breakage/baseline.json"
 	}
 }
 ```
@@ -93,11 +93,11 @@ Use [Turbo's deferred hashing](https://turborepo.dev/docs/reference/configuratio
 ```json
 {
 	"tasks": {
-		"test:breaks:prelude": {
+		"test:breakage:prelude": {
 			"cache": false
 		},
-		"test:breaks": {
-			"dependsOn": ["test:breaks:prelude", "^build"],
+		"test:breakage": {
+			"dependsOn": ["test:breakage:prelude", "^build"],
 			"inputs": [
 				"$TURBO_DEFAULT$",
 				{ "mode": "jit", "globs": [".breakage/baseline.json"] }
@@ -108,7 +108,7 @@ Use [Turbo's deferred hashing](https://turborepo.dev/docs/reference/configuratio
 }
 ```
 
-Run `turbo run test:breaks` as usual. The prelude runs even when the compatibility check hits its cache; a failed prelude prevents the downstream task from replaying a cached success. Keep all additional runner, helper, configuration, environment, and certification inputs in the compatibility task's hash, including release-plan files outside the package directory. Keep upstream `^build` prerequisites; the tested package does not need a self-build preflight. For runners without deferred hashing, finish the prelude before starting the task runner and include its snapshot in the check's cache key.
+Run `turbo run test:breakage` as usual. The prelude runs even when the compatibility check hits its cache; a failed prelude prevents the downstream task from replaying a cached success. Keep all additional runner, helper, configuration, environment, and certification inputs in the compatibility task's hash, including release-plan files outside the package directory. Keep upstream `^build` prerequisites; the tested package does not need a self-build preflight. For runners without deferred hashing, finish the prelude before starting the task runner and include its snapshot in the check's cache key.
 
 The JavaScript API exports `breakagePrelude({ out, tagPattern, baseDirname })` and accepts `baselineFile` in `breakage` options. Without `baselineFile`, the existing single-command discovery behavior is preserved.
 
