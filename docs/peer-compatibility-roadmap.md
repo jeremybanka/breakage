@@ -22,15 +22,17 @@ Extend breakage from its public relationship with its own past to named peer emb
 
 ## 4 Install isolated peer environments
 
-- [x] Install exact registry releases on demand or pack pinned workspace releases from Git using pnpm.
+- [x] Materialize candidate and historical peer sources in detached Git worktrees that share repository objects and clean up after each check.
+- [x] Delegate installation and builds to repository-defined preparation, with an explicit optional pnpm installer.
+- [x] Prove a Bun preparation workflow installs and builds pinned Git sources with pnpm unavailable.
 - [x] Verify canonical peer resolution from both the candidate and the test environment, preserving the developer's installation.
 - [x] Support explicit release archives, runner dependencies, and setup commands.
 
 ## 5 Preserve pinned representatives
 
 - [x] Let maintainers and dependency updaters change individual exact pins; never select a newer representative automatically.
-- [x] Record inferred environments, commands, package archives, dependency locks, and installation settings in reproducible prelude snapshots.
-- [x] Reject stale snapshots and corrupted artifacts; replay workspace archives without release discovery.
+- [x] Record inferred environments, commands, source commits, and archive hashes in prelude snapshots; the pnpm installer also records package archives and dependency locks.
+- [x] Reject stale snapshots and corrupted artifacts; replay pinned workspace sources without release discovery, with custom preparation owning its toolchain's reproducibility.
 
 ## 6 Handle multiple peers and optional dependencies
 

@@ -32,7 +32,9 @@ const embassySchema = type({
 const peerOptionsSchema = type({
 	"setupCommand?": `string`,
 	"manifest?": `string`,
-	"install?": `boolean`,
+	"installer?": `"pnpm"`,
+	"prepareCommand?": `string`,
+	"verifyCommand?": `string`,
 	"testDependencies?": { "[string]": `string` },
 	"sources?": { "[string]": `string` },
 	"maxEnvironments?": `number`,
@@ -70,7 +72,7 @@ const BREAKAGE_MANUAL = options(
 		peerOptions: {
 			required: false,
 			parse: (value: string) => peerOptionsSchema.assert(JSON.parse(value)),
-			description: `Shared embassy installation settings in breakage.config.json. Environments are inferred from package.json.`,
+			description: `Shared embassy preparation settings in breakage.config.json. Environments are inferred from package.json.`,
 			example: `"peerOptions": { "maxEnvironments": 64 }`,
 		},
 		tagPattern: {

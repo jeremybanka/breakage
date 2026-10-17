@@ -5,6 +5,7 @@ import { readFile } from "node:fs/promises"
 import path from "node:path"
 
 import { satisfies } from "semver"
+import { minimatch } from "minimatch"
 import { simpleGit } from "simple-git"
 
 import { object } from "./peer-config.ts"
@@ -42,21 +43,72 @@ async function packages(root: string): Promise<WorkspacePackage[]> {
 	return result
 }
 
-/** Materialize the pinned workspace release, never the current peer source. */
-export async function packWorkspacePeer(
+export type WorkspacePeerRelease = { commit: string; directory: string }
+
+async function manifestWorkspaces(root: string): Promise<WorkspacePackage[]> {
+	if (!existsSync(path.join(root, `package.json`))) return []
+	const manifest: unknown = JSON.parse(
+		await readFile(path.join(root, `package.json`), `utf8`),
+	)
+	if (!object(manifest)) return []
+	const patterns = Array.isArray(manifest.workspaces)
+		? manifest.workspaces
+		: object(manifest.workspaces)
+			? manifest.workspaces.packages
+			: undefined
+	if (
+		!Array.isArray(patterns) ||
+		!patterns.every((pattern) => typeof pattern === `string`)
+	)
+		return []
+	const include = patterns.filter((pattern) => !pattern.startsWith(`!`))
+	const exclude = patterns
+		.filter((pattern) => pattern.startsWith(`!`))
+		.map((pattern) => pattern.slice(1))
+	const files = (await simpleGit(root).raw([`ls-files`, `-z`]))
+		.split(`\0`)
+		.filter(
+			(file) =>
+				file.endsWith(`/package.json`) &&
+				include.some((pattern) =>
+					minimatch(path.posix.dirname(file), pattern),
+				) &&
+				!exclude.some((pattern) =>
+					minimatch(path.posix.dirname(file), pattern),
+				),
+		)
+	const result: WorkspacePackage[] = []
+	for (const file of files) {
+		const entry: unknown = JSON.parse(
+			await readFile(path.join(root, file), `utf8`),
+		)
+		if (
+			object(entry) &&
+			typeof entry.name === `string` &&
+			typeof entry.version === `string`
+		)
+			result.push({ file, name: entry.name, version: entry.version })
+	}
+	return result
+}
+
+export async function resolveWorkspacePeer(
 	config: PeerConfig,
 	source: string,
 	peer: string,
 	version: string,
-	artifacts: string,
-): Promise<
-	{ filename: string; overrides: Record<string, string> } | undefined
-> {
+): Promise<WorkspacePeerRelease | undefined> {
 	const sourceGit = simpleGit(source)
 	const root = await sourceGit.revparse([`--show-toplevel`])
 	const git = simpleGit(root)
 	const configured = config.workspace?.[peer]
-	const current = (await packages(root)).filter((entry) => entry.name === peer)
+	const current = (
+		configured
+			? []
+			: await (config.installer === `pnpm`
+					? packages(root)
+					: manifestWorkspaces(root))
+	).filter((entry) => entry.name === peer)
 	if (!configured && !current.length) return
 	if (!configured && current.length > 1)
 		throw new Error(
@@ -132,7 +184,25 @@ export async function packWorkspacePeer(
 		throw new Error(
 			`Workspace peer ${peer}@${version} needs exactly one matching release tag with that package version at ${file}; found ${releases.length}. Fetch its release tag or configure workspace[${JSON.stringify(peer)}].tagPattern.`,
 		)
-	const { commit } = releases[0]!
+	return { commit: releases[0]!.commit, directory: path.posix.dirname(file) }
+}
+
+/** Materialize the pinned workspace release, never the current peer source. */
+export async function packWorkspacePeer(
+	config: PeerConfig,
+	source: string,
+	peer: string,
+	version: string,
+	artifacts: string,
+): Promise<
+	{ filename: string; overrides: Record<string, string> } | undefined
+> {
+	const release = await resolveWorkspacePeer(config, source, peer, version)
+	if (!release) return
+	const { commit, directory } = release
+	const root = await simpleGit(source).revparse([`--show-toplevel`])
+	const configured = config.workspace?.[peer]
+	const file = path.posix.join(directory, `package.json`)
 	const worktree = await createPeerWorktree(root, commit)
 	const temporary = worktree.directory
 	try {

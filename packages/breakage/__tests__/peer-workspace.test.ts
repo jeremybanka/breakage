@@ -7,7 +7,7 @@ import { peerProject } from "./peer-project.ts"
 it(`swaps pinned workspace releases and their historical dependencies while keeping the candidate and embassy current`, async () => {
 	const project = await peerProject(
 		{
-			install: true,
+			installer: `pnpm`,
 			workspace: { host: { directory: `packages/host`, tagPattern: `^host@` } },
 		},
 		`throw new Error("Old suite must never run");`,

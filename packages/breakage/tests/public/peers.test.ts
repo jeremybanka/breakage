@@ -40,8 +40,16 @@ it(`reports peer regressions against current embassy assertions through the API 
 					testCommand: `"${process.execPath}" public/contract.ts`,
 				},
 			},
-			peerOptions: { install: false },
+			peerOptions: { prepareCommand: `"${process.execPath}" prepare.ts` },
 		}
+		project.write(
+			`prepare.ts`,
+			`import { mkdir, writeFile } from "node:fs/promises";
+const version = JSON.parse(process.env.BREAKAGE_PEERS).host;
+await mkdir("node_modules/host", { recursive: true });
+await writeFile("node_modules/host/package.json", JSON.stringify({ name: "host", version, main: "index.ts" }));
+await writeFile("node_modules/host/index.ts", "export const value = true;");`,
+		)
 		project.write(`breakage.config.json`, JSON.stringify(options))
 		git(project.repository, `add`, `.`)
 		git(project.repository, `commit`, `-m`, `Current contracts`)

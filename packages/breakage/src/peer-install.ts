@@ -132,7 +132,7 @@ export async function preparePeerInstall(
 		path.join(target, `pnpm-workspace.yaml`),
 		`${JSON.stringify({ packages: [], overrides }, null, 2)}\n`,
 	)
-	// The cloned workspace's lockfile describes a different dependency graph.
+	// The original workspace's lockfile describes a different dependency graph.
 	await rm(path.join(target, `pnpm-lock.yaml`), { force: true })
 	return candidate.name
 }

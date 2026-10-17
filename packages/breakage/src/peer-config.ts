@@ -17,7 +17,9 @@ export type PeerConfig = {
 	embassies?: Record<string, Embassy>
 	setupCommand?: string
 	manifest?: string
-	install?: boolean
+	installer?: `pnpm`
+	prepareCommand?: string
+	verifyCommand?: string
 	testDependencies?: Record<string, string>
 	sources?: Record<string, string>
 	maxEnvironments?: number
@@ -40,7 +42,9 @@ export function validatePeerConfig(value: unknown): PeerConfig {
 		`embassies`,
 		`setupCommand`,
 		`manifest`,
-		`install`,
+		`installer`,
+		`prepareCommand`,
+		`verifyCommand`,
 		`testDependencies`,
 		`sources`,
 		`maxEnvironments`,
@@ -87,6 +91,10 @@ export function validatePeerConfig(value: unknown): PeerConfig {
 				throw new Error(
 					`Workspace peer ${peer} needs a directory and optional tagPattern and setupCommand strings.`,
 				)
+			if (entry.setupCommand !== undefined && value.installer !== `pnpm`)
+				throw new Error(
+					`workspace[${JSON.stringify(peer)}].setupCommand requires installer: "pnpm"; build historical sources from prepareCommand for repository-defined preparation.`,
+				)
 		}
 	}
 	if (
@@ -96,8 +104,20 @@ export function validatePeerConfig(value: unknown): PeerConfig {
 		throw new Error(`setupCommand must be a string.`)
 	if (value.manifest !== undefined && typeof value.manifest !== `string`)
 		throw new Error(`manifest must be a string.`)
-	if (value.install !== undefined && typeof value.install !== `boolean`)
-		throw new Error(`install must be a boolean.`)
+	if (value.installer !== undefined && value.installer !== `pnpm`)
+		throw new Error(
+			`installer must be "pnpm"; use prepareCommand for repository-defined preparation.`,
+		)
+	for (const key of [`prepareCommand`, `verifyCommand`] as const)
+		if (
+			value[key] !== undefined &&
+			(typeof value[key] !== `string` || !value[key].trim())
+		)
+			throw new Error(`${key} must be a nonempty command.`)
+	if (value.installer && value.prepareCommand)
+		throw new Error(`Choose either installer: "pnpm" or prepareCommand.`)
+	if (value.verifyCommand && !value.prepareCommand)
+		throw new Error(`verifyCommand requires prepareCommand.`)
 	if (
 		value.maxEnvironments !== undefined &&
 		(typeof value.maxEnvironments !== `number` ||
@@ -120,7 +140,7 @@ export function validatePeerConfig(value: unknown): PeerConfig {
 		)
 	)
 		throw new Error(`testDependencies must use exact versions.`)
-	return { install: true, ...value } as PeerConfig
+	return value as PeerConfig
 }
 
 export function peerSuites(config: PeerConfig, names: string[]): PeerSuite[] {

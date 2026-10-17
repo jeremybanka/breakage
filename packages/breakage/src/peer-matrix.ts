@@ -1,7 +1,15 @@
+import { createPeerWorktree } from "./peer-worktree.ts"
 import { peerSuites, validatePeerConfig } from "./peer-config.ts"
 import type { PeerEnvironment, PeerConfig } from "./peer-config.ts"
 export type { PeerEnvironment, PeerConfig } from "./peer-config.ts"
-import { exec } from "node:child_process"
+import { command } from "./peer-command.ts"
+import {
+	prepareRepository,
+	preparationConflict,
+	verifyRepository,
+} from "./peer-preparation.ts"
+import type { PreparedPeerEnvironment } from "./peer-preparation.ts"
+import type { PeerSuite } from "./peer-config.ts"
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
@@ -46,26 +54,6 @@ export type PeerContext = {
 	baseDirname: string
 	peerConfig: PeerConfig
 	peerPlan?: PeerPlan | undefined
-}
-
-export async function command(
-	commandText: string,
-	cwd: string,
-	env: NodeJS.ProcessEnv = process.env,
-): Promise<{ success: boolean; stdout: string; stderr: string }> {
-	return new Promise((resolve) => {
-		exec(
-			commandText,
-			{ cwd, env, maxBuffer: 16 * 1024 * 1024 },
-			(error, stdout, stderr) => {
-				resolve({
-					success: error === null,
-					stdout,
-					stderr: stderr || (error?.message ?? ``),
-				})
-			},
-		)
-	})
 }
 
 export async function checkPeerMatrix(
@@ -139,19 +127,18 @@ export async function checkPeerMatrix(
 		const plan =
 			context.peerPlan ??
 			(await preparePeerPlan(context.baseDirname, config, artifacts))
+		if (config.prepareCommand)
+			return await checkRepositoryMatrix(config, context, plan, suites)
 		const peerResults: PeerEnvironmentResult[] = []
 		for (const entry of plan.environments) {
 			const suite = suites.find((suite) => suite.name === entry.embassy)!
 			const contract = `current` as const
-			const temporary = await mkdtemp(path.join(tmpdir(), `breakage-peer-`))
+			const worktree = await createPeerWorktree(root, candidateCommit)
 			try {
-				const checkout = path.join(temporary, `checkout`)
-				await simpleGit().clone(root, checkout, [`--no-local`, `--quiet`])
-				const clone = simpleGit(checkout)
-				await clone.checkout(candidateCommit)
+				const checkout = worktree.directory
 				const cwd = path.join(checkout, prefix)
 				let candidate: string | undefined
-				if (config.install) {
+				if (config.installer === `pnpm`) {
 					const installation = plan.installations?.[entry.name]
 					if (!installation)
 						throw new Error(
@@ -202,7 +189,7 @@ export async function checkPeerMatrix(
 					stderr: error instanceof Error ? error.message : String(error),
 				})
 			} finally {
-				await rm(temporary, { recursive: true, force: true })
+				await worktree.cleanup()
 			}
 		}
 		const success = peerResults.every((entry) => entry.status === `passed`)
@@ -221,4 +208,141 @@ export async function checkPeerMatrix(
 	} finally {
 		await rm(artifacts, { recursive: true, force: true })
 	}
+}
+
+async function checkRepositoryMatrix(
+	config: PeerConfig,
+	context: PeerContext,
+	plan: PeerPlan,
+	suites: PeerSuite[],
+): Promise<PeerMatrixOutcome> {
+	const ready: { entry: PeerEnvironment; prepared: PreparedPeerEnvironment }[] =
+		[]
+	const resources: PreparedPeerEnvironment[] = []
+	const failures = new Map<string, PeerEnvironmentResult>()
+	const excluded = [...plan.excluded]
+	try {
+		for (const entry of plan.environments) {
+			try {
+				const prepared = await prepareRepository(
+					config,
+					entry,
+					context.baseDirname,
+					plan,
+				)
+				resources.push(prepared)
+				const result = await command(
+					config.prepareCommand!,
+					prepared.cwd,
+					prepared.env,
+				)
+				if (!result.success) {
+					failures.set(entry.name, {
+						...entry,
+						status: `setup-failed`,
+						stdout: result.stdout,
+						stderr: result.stderr,
+					})
+					continue
+				}
+				const reason = await preparationConflict(prepared)
+				if (reason) {
+					excluded.push({ environment: entry, reason })
+					continue
+				}
+				if (config.setupCommand) {
+					const setup = await command(
+						config.setupCommand,
+						prepared.cwd,
+						prepared.env,
+					)
+					if (!setup.success) {
+						failures.set(entry.name, {
+							...entry,
+							status: `setup-failed`,
+							stdout: setup.stdout,
+							stderr: setup.stderr,
+						})
+						continue
+					}
+				}
+				await verifyRepository(config, entry, prepared)
+				ready.push({ entry, prepared })
+			} catch (error) {
+				failures.set(entry.name, {
+					...entry,
+					status: `setup-failed`,
+					stdout: ``,
+					stderr: error instanceof Error ? error.message : String(error),
+				})
+			}
+		}
+		// A preparation failure is inconclusive, never evidence that an era can
+		// be dropped. Only explicitly incompatible combinations are excluded.
+		assertPeerCoverage(
+			plan.environments,
+			[...ready.map(({ entry }) => entry), ...failures.values()],
+			suites,
+			excluded,
+		)
+		const results = new Map(failures)
+		for (const { entry, prepared } of ready) {
+			const suite = suites.find((suite) => suite.name === entry.embassy)!
+			try {
+				await verifyRepository(config, entry, prepared)
+				const result = await command(
+					suite.testCommand,
+					prepared.cwd,
+					prepared.env,
+				)
+				await verifyRepository(config, entry, prepared)
+				results.set(entry.name, {
+					...entry,
+					contract: `current`,
+					status: result.success ? `passed` : `contract-failed`,
+					stdout: result.stdout,
+					stderr: result.stderr,
+				})
+			} catch (error) {
+				results.set(entry.name, {
+					...entry,
+					status: `setup-failed`,
+					stdout: ``,
+					stderr: error instanceof Error ? error.message : String(error),
+				})
+			}
+		}
+		const peerResults = plan.environments.flatMap((entry) =>
+			results.has(entry.name) ? [results.get(entry.name)!] : [],
+		)
+		const success = peerResults.every((entry) => entry.status === `passed`)
+		return {
+			gitWasClean: true,
+			peerCheck: true,
+			success,
+			candidateCommit: plan.candidateCommit,
+			contractCommit: plan.candidateCommit,
+			peerResults,
+			excludedEnvironments: excluded,
+			summary: success
+				? `All ${peerResults.length} peer embassy environments passed.`
+				: `Peer embassy checks failed in ${peerResults.filter((entry) => entry.status !== `passed`).length} of ${peerResults.length} environments.`,
+		}
+	} finally {
+		await cleanupRepositories(resources)
+	}
+}
+
+async function cleanupRepositories(
+	resources: PreparedPeerEnvironment[],
+): Promise<void> {
+	const results = await Promise.allSettled(
+		resources.map((resource) => resource.cleanup()),
+	)
+	const failures = results.filter((result) => result.status === `rejected`)
+	if (failures.length)
+		throw new AggregateError(
+			failures.map((failure) => failure.reason),
+			`Failed to remove embassy worktrees.`,
+		)
 }

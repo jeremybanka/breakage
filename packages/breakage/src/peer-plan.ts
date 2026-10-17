@@ -1,3 +1,5 @@
+import type { PeerSource } from "./peer-preparation.ts"
+import { resolveWorkspacePeer } from "./peer-workspace.ts"
 import { createHash, randomUUID } from "node:crypto"
 import {
 	copyFile,
@@ -41,6 +43,7 @@ export type PeerPlan = {
 	candidateCommit: string
 	environments: PeerEnvironment[]
 	excluded: { environment: PeerEnvironment; reason: string }[]
+	sources?: Record<string, PeerSource>
 	packageManager?: string
 	installations?: Record<string, PeerInstallation>
 }
@@ -151,7 +154,36 @@ export async function preparePeerPlan(
 		environments,
 		excluded: [],
 	}
-	if (config.install) {
+	if (!config.installer && !config.prepareCommand)
+		throw new Error(
+			`Configure peerOptions.prepareCommand for repository preparation, or explicitly select peerOptions.installer: "pnpm".`,
+		)
+	if (config.prepareCommand) {
+		plan.sources = {}
+		for (const entry of environments)
+			for (const [peer, version] of Object.entries(entry.peers)) {
+				if (version === null || plan.sources[`${peer}@${version}`]) continue
+				const file = config.sources?.[`${peer}@${version}`]
+				if (file)
+					plan.sources[`${peer}@${version}`] = {
+						kind: `archive`,
+						file,
+						integrity: digest(await readFile(path.resolve(baseDirname, file))),
+					}
+				else {
+					const workspace = await resolveWorkspacePeer(
+						config,
+						baseDirname,
+						peer,
+						version,
+					)
+					plan.sources[`${peer}@${version}`] = workspace
+						? { kind: `workspace`, ...workspace }
+						: { kind: `registry` }
+				}
+			}
+	}
+	if (config.installer === `pnpm`) {
 		plan.packageManager = await runFile(`pnpm`, [`--version`], baseDirname)
 		plan.installations = Object.create(null) as Record<string, PeerInstallation>
 		await mkdir(artifactDirectory, { recursive: true })
@@ -305,6 +337,30 @@ export function isPeerPlan(value: unknown): value is PeerPlan {
 		)
 	)
 		return false
+	if (value.sources !== undefined) {
+		if (!object(value.sources)) return false
+		for (const source of Object.values(value.sources)) {
+			if (!object(source)) return false
+			if (source.kind === `registry`) continue
+			if (
+				source.kind === `archive` &&
+				typeof source.file === `string` &&
+				typeof source.integrity === `string` &&
+				/^[a-f0-9]{64}$/.test(source.integrity)
+			)
+				continue
+			if (
+				source.kind === `workspace` &&
+				typeof source.commit === `string` &&
+				/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(source.commit) &&
+				typeof source.directory === `string` &&
+				!path.isAbsolute(source.directory) &&
+				!source.directory.split(/[\\/]/).includes(`..`)
+			)
+				continue
+			return false
+		}
+	}
 	if (value.installations !== undefined) {
 		if (
 			!object(value.installations) ||

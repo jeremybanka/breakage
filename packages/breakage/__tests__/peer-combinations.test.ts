@@ -104,7 +104,7 @@ it(`resolves workspace range shorthand independently at each commit`, async () =
 
 it(`runs an optional peer absence case without leaking the developer's installed peer`, async () => {
 	const project = await peerProject(
-		{ install: true },
+		{ installer: `pnpm` },
 		`import assert from "node:assert/strict"; import { message } from "fixture-plugin"; assert.equal(await message(), JSON.parse(process.env.BREAKAGE_PEERS).host === null ? "fallback" : "hello");`,
 	)
 	try {
@@ -122,7 +122,7 @@ it(`runs an optional peer absence case without leaking the developer's installed
 		await runFile(`pnpm`, [`pack`, `--out`, archive], hostDirectory)
 		await project.write(
 			`breakage.config.json`,
-			JSON.stringify({ install: true, sources: { "host@1.0.0": archive } }),
+			JSON.stringify({ installer: `pnpm`, sources: { "host@1.0.0": archive } }),
 		)
 
 		await project.write(
@@ -165,7 +165,7 @@ it(`runs an optional peer absence case without leaking the developer's installed
 it(`rejects pins with no compatible environment before running embassy tests`, async () => {
 	const project = await peerProject(
 		{
-			install: true,
+			installer: `pnpm`,
 		},
 		`throw new Error("The contract must not run after an invalid installation");`,
 	)
@@ -213,7 +213,7 @@ it(`rejects pins with no compatible environment before running embassy tests`, a
 		await project.write(
 			`breakage.config.json`,
 			JSON.stringify({
-				install: true,
+				installer: `pnpm`,
 				sources,
 			}),
 		)

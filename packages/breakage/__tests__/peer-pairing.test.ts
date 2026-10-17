@@ -9,7 +9,7 @@ import { peerProject } from "./peer-project.ts"
 
 it(`infers compatible pairs within a major from dependency requirements and replays them without manual cases`, async () => {
 	const project = await peerProject(
-		{ install: true },
+		{ installer: `pnpm` },
 		`import assert from "node:assert/strict"; import { value } from "fixture-plugin"; assert.equal(value, JSON.parse(process.env.BREAKAGE_PEERS).host);`,
 	)
 	try {
@@ -60,7 +60,7 @@ it(`infers compatible pairs within a major from dependency requirements and repl
 		await project.write(`index.ts`, `export { value } from "adapter";`)
 		await project.write(
 			`breakage.config.json`,
-			JSON.stringify({ install: true, sources }),
+			JSON.stringify({ installer: `pnpm`, sources }),
 		)
 		await project.git.add(`.`).commit(`Declare irregular eras and pins`)
 		const out = `.breakage/pairs.json`

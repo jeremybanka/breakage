@@ -50,10 +50,25 @@ export async function peerProject(
 			},
 		}),
 	)
+	await write(
+		`fixture-prepare.ts`,
+		`import { mkdir, writeFile } from "node:fs/promises"; import path from "node:path";
+for (const [name, version] of Object.entries(JSON.parse(process.env.BREAKAGE_PEERS))) {
+ if (version === null) continue;
+ const directory = path.join("node_modules", name); await mkdir(directory, { recursive: true });
+ await writeFile(path.join(directory, "package.json"), JSON.stringify({ name, version, main: "index.ts" }));
+ await writeFile(path.join(directory, "index.ts"), "export const value = true;");
+}`,
+	)
 	await write(`public/contract.ts`, contract)
 	await write(
 		`breakage.config.json`,
-		JSON.stringify({ install: false, ...config }),
+		JSON.stringify({
+			...(config.installer
+				? {}
+				: { prepareCommand: `"${process.execPath}" fixture-prepare.ts` }),
+			...config,
+		}),
 	)
 	const git = simpleGit(repository)
 	await git

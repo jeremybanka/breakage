@@ -58,7 +58,7 @@ it(`installs exact peer artifacts and the packed candidate without using workspa
 		await project.write(
 			`breakage.config.json`,
 			JSON.stringify({
-				install: true,
+				installer: `pnpm`,
 				sources,
 			}),
 		)

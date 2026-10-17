@@ -18,6 +18,12 @@ import { withTestFileState } from "./test-file-state.ts"
 
 export type { BreakageBaseline, BreakagePreludeOptions } from "./baseline.ts"
 export { breakagePrelude } from "./baseline.ts"
+export type {
+	PeerPreparation,
+	PeerPreparationResult,
+	PeerVerification,
+	PeerBinding,
+} from "./peer-preparation.ts"
 export type { PeerPlan, PeerInstallation } from "./peer-plan.ts"
 export type {
 	PeerEnvironment,

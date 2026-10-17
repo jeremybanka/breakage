@@ -10,7 +10,7 @@ import { peerProject } from "./peer-project.ts"
 
 it(`installs pinned registry representatives and ignores newer advertised releases`, async () => {
 	const project = await peerProject(
-		{ install: true },
+		{ installer: `pnpm` },
 		`import assert from "node:assert/strict"; import { value } from "fixture-plugin"; assert.equal(value, JSON.parse(process.env.BREAKAGE_PEERS).host);`,
 	)
 	let server: ReturnType<typeof Bun.serve> | undefined

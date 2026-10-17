@@ -89,6 +89,9 @@ Configure public checks and embassies together in `breakage.config.json`. The or
 	"testPattern": "tests/public/**/*.test.ts",
 	"testCommand": "bun test tests/public",
 	"certifyCommand": "pnpm exec changeset-major",
+	"peerOptions": {
+		"installer": "pnpm"
+	},
 	"embassies": {
 		"react": {
 			"peers": ["react", "react-dom"],
@@ -118,13 +121,68 @@ No environment names, version selections, or cases belong in this configuration.
 }
 ```
 
-Breakage infers the two compatible environments from these pins and the packages' dependency requirements: React 18.3.1 with React DOM 18.3.1, and React 19.2.1 with React DOM 19.2.1. It records why conflicting combinations were excluded. It does not pair by alias label, position, or major number. Updating a pin changes the inferred environments without editing the breakage configuration.
+With the pnpm installer selected above, breakage infers the two compatible environments from these pins and the packages' dependency requirements: React 18.3.1 with React DOM 18.3.1, and React 19.2.1 with React DOM 19.2.1. It records why conflicting combinations were excluded. It does not pair by alias label, position, or major number. Updating a pin changes the inferred environments without editing the breakage configuration.
 
-The built-in pnpm installer is enabled by default. Build the candidate separately if its published entries need compilation. Breakage packs it, resolves each inferred environment, then installs and runs its embassy in a disposable clone. It verifies the versions visible to both the test environment and the candidate. Import the candidate and peers by their canonical package names, without source aliases. Aliases store representatives; each environment installs its selected peer under its real name. Packing and installation disable lifecycle scripts. The developer's lockfile and installation are preserved.
+### repository preparation and detached worktrees
 
-Shared installation settings belong in the same configuration under `peerOptions`. For example, add `"peerOptions": { "testDependencies": { "vitest": "4.0.18" } }` to install an exact runner version alongside the candidate. Choose a runner version appropriate to your project and pin it exactly. `peerOptions.setupCommand` runs after installation, followed by another resolution check before and after the embassy command. Set `peerOptions.install: false` only when your setup command owns installation, dependency compatibility, and verification; that mode runs every inferred combination without pruning.
+Choose either `peerOptions.prepareCommand` for repository-defined preparation or `peerOptions.installer: "pnpm"` for the built-in installer. There is no implicit package manager. A preparation command can use Bun, npm, Yarn, Cargo, Go, or the repository's existing orchestration scripts. For example, this complete embassy-only configuration delegates preparation to a tracked Bun script:
 
-Workspace peers are discovered by package name among pnpm workspace members. Breakage materializes the pinned `<peer>@<version>` Git tag in a disposable checkout, packs that peer, and includes its historical `workspace:` runtime dependencies. It fetches a missing tag from `origin` when available. A missing or ambiguous release fails setup instead of substituting current workspace code. Override discovery or build historical outputs with `peerOptions.workspace` entries; directories are relative to the check's working directory and setup commands run at the historical repository root:
+```json
+{
+	"peerOptions": {
+		"prepareCommand": "bun scripts/prepare-embassy.ts"
+	},
+	"embassies": {
+		"react": {
+			"peers": ["react", "react-dom"],
+			"testPattern": "tests/embassies/react.test.ts",
+			"testCommand": "bun test tests/embassies/react.test.ts"
+		}
+	}
+}
+```
+
+Each environment gets a detached Git worktree of the current candidate under the operating system's temporary directory. Workspace peer releases get their own detached worktrees at pinned commits. These worktrees share the repository's Git objects and have independent files and indexes. Breakage removes its worktrees after success or failure, including generated outputs and installation files; it does not prune other worktrees. Preparation and embassy commands run at the original working directory's relative location inside the candidate worktree.
+
+Custom preparation starts with the committed repository files intact, including manifests, lock files, and toolchain configuration. Breakage does not install dependencies or rewrite these files before invoking the command. The command owns installation, historical peer builds, candidate builds, and dependency compatibility. It may modify files inside the temporary worktrees to select exact versions and make each peer available under its canonical import name. The developer's checkout and installation are preserved. An executable [Bun integration test](./__tests__/peer-preparation.test.ts) demonstrates installing a pinned Git peer and building the candidate with pnpm unavailable on `PATH`.
+
+The `BREAKAGE_PREPARATION` environment variable points to a JSON input file. The exported `PeerPreparation` type describes its fields:
+
+| Field                                   | Meaning                                                                                                                                                                             |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `version`                               | Protocol version, currently `1`.                                                                                                                                                    |
+| `embassy`, `peers`, `aliases`, `groups` | Embassy name, exact versions or `null` for absence, selected aliases, and matching support groups.                                                                                  |
+| `root`, `candidate`                     | Absolute candidate worktree root, candidate package directory, and pinned commit.                                                                                                   |
+| `sources`                               | Each present peer's source: `registry`; `archive` with an absolute `file` and integrity hash; or `workspace` with absolute `root` and package `directory` plus its pinned `commit`. |
+| `testDependencies`                      | Additional exact runner or helper versions requested in configuration.                                                                                                              |
+| `resultFile`, `verifyFile`              | Absolute output paths for preparation and custom verification reports.                                                                                                              |
+
+A successful preparation command means the environment is ready. It may write `{ "status": "ready", "candidateDirectory": "staged/candidate" }` to `resultFile` when tests consume a staged package. This directory is relative to the command's working directory, or absolute, and must remain inside the candidate worktree. To exclude a proven dependency conflict, write `{ "status": "incompatible", "reason": "the dependency requirement that conflicts" }` and exit successfully. A nonzero exit always means setup failure, even if a conflict report exists. Registry outages, missing tools, failed builds, and failed assertions must not be reported as incompatible combinations.
+
+Breakage verifies the selected name and version, optional absence, and matching package identity from both the tests and candidate before and after embassy tests. By default it resolves packages through Node's `node_modules` resolution. For a custom runtime resolver, set `peerOptions.verifyCommand`; that command reads the same preparation input and writes `PeerVerification` JSON to `verifyFile` on every invocation. For example:
+
+```json
+{
+	"react": {
+		"tests": {
+			"name": "react",
+			"version": "19.2.1",
+			"identity": "/absolute/resolved/react"
+		},
+		"candidate": {
+			"name": "react",
+			"version": "19.2.1",
+			"identity": "/absolute/resolved/react"
+		}
+	}
+}
+```
+
+Report each selected peer, using `null` for both locations when it is absent. The identity must be the canonical module identity observed by the actual resolver; tests and candidate must resolve the same instance. A verification command must inspect actual resolution, rather than repeat the requested pins. Breakage clears the report before each verification so stale results cannot pass. `PeerPreparationResult`, `PeerVerification`, and `PeerBinding` are also exported types. An optional shared `peerOptions.setupCommand` runs after successful preparation and before verification.
+
+### workspace sources and the pnpm installer
+
+Custom preparation discovers workspace peers from the root `package.json`'s `workspaces` patterns, including the `workspaces.packages` form. The pnpm installer discovers pnpm workspace members instead. For other repository layouts, configure `peerOptions.workspace` explicitly. Breakage resolves the pinned `<peer>@<version>` Git tag and fetches a missing tag from `origin` when available. A missing or ambiguous release fails setup instead of substituting current workspace code. Directory overrides are relative to the check's working directory:
 
 ```json
 {
@@ -132,21 +190,30 @@ Workspace peers are discovered by package name among pnpm workspace members. Bre
 		"workspace": {
 			"@scope/host": {
 				"directory": "../host",
-				"tagPattern": "^@scope/host@",
-				"setupCommand": "pnpm install --frozen-lockfile && pnpm --filter @scope/host... build"
+				"tagPattern": "^@scope/host@"
 			}
 		}
 	}
 }
 ```
 
-Registry peers are installed on demand at their exact pinned versions. Registry and authentication settings from the repository and package `.npmrc` files are applied to temporary installations; credentials are not embedded in snapshots. Supply prebuilt peer archives with `peerOptions.sources`, such as `"peerOptions": { "sources": { "host@2.4.0": "fixtures/host-2.4.0.tgz" } }`. Paths are relative to the original working directory. An explicit archive takes precedence over workspace discovery, and its package name and version must match the selected pin.
+The pnpm installer packs the current candidate, resolves each inferred environment, then installs and runs its embassy in a detached worktree. Build the candidate beforehand if its published entries need compilation. Workspace peers are packed from their historical worktrees, including their historical `workspace:` runtime dependencies. For this installer only, `workspace[peer].setupCommand` can build historical outputs at the historical repository root. With custom preparation, the preparation script owns these builds using the supplied source directories.
 
-Run `breakage prelude --out=.breakage/baseline.json`, then `breakage --baseline-file=.breakage/baseline.json` for reproducible checks. Both commands read `breakage.config.json`. Ignore the whole `.breakage/` directory. One snapshot records the public release baseline when configured, plus the candidate commit, embassy selections, inferred environments, excluded dependency conflicts, pnpm version, installation settings, and a dependency lockfile per environment. Candidate and workspace archives are stored by content hash in `<snapshot>.peers/`. Checks verify archive integrity and use a frozen lockfile per environment; registry tarball downloads may still be needed. Changed candidates, embassy commands, pins, or configuration require a fresh prelude. A peer prelude can run configured historical workspace setup commands, but never runs embassy tests or certification.
+The pnpm installer fetches registry peers on demand at their exact pinned versions, applies registry and authentication settings from repository and package `.npmrc` files, and disables lifecycle scripts during packing and installation. Credentials are not embedded in snapshots. Import the packed candidate and peers by their canonical package names, without source aliases. Additional runners can be configured with exact `peerOptions.testDependencies` versions. `peerOptions.setupCommand` runs after installation, before resolution verification and the embassy command.
+
+Either preparation choice accepts prebuilt archives through `peerOptions.sources`, such as `{ "host@2.4.0": "fixtures/host-2.4.0.tgz" }`. Paths are relative to the original working directory. An explicit archive takes precedence over workspace discovery, and its installed package name and version must match the selected pin. Custom preparation receives the archive path and owns unpacking or installation; the pnpm installer consumes it directly.
+
+### snapshots and coverage
+
+Run `breakage prelude --out=.breakage/baseline.json`, then `breakage --baseline-file=.breakage/baseline.json` to pin a check. Both commands read `breakage.config.json`. Ignore the whole `.breakage/` directory. One snapshot records the public release baseline when configured, plus the candidate commit, embassy selections, inferred environments, and preparation settings. Changed candidates, commands, pins, or configuration require a fresh prelude. A peer prelude never runs embassy tests or certification.
+
+With custom preparation, the snapshot records workspace commit SHAs and explicit archive hashes. Checks use those Git commits without rediscovering release tags, verify archive integrity, and rerun the repository's preparation command. The command owns reproducible installation and build inputs through the repository's toolchains and lock files; breakage does not generate a dependency lock for custom workflows. Custom preparation does not run during prelude, so its conflict exclusions are reported during the check.
+
+With the pnpm installer, the snapshot also records excluded dependency conflicts, the pnpm version, and a dependency lockfile per environment. Candidate and workspace archives are stored by content hash in `<snapshot>.peers/`. Checks verify archive integrity and use frozen lock files; registry tarball downloads may still be needed. This prelude can run configured historical workspace setup commands while packing peers.
 
 Each embassy varies the peers it names. Other required peers use their first declared pin, and the report identifies the complete environment. Group coupled peers, such as `react` and `react-dom`, in one embassy so breakage can infer their compatible combinations. Optional peers include absence. `peerOptions.maxEnvironments` defaults to 32 across all embassies, counting combinations before dependency filtering; exceeding it fails instead of silently omitting coverage. Raise the limit or narrow an embassy's participating peers when appropriate.
 
-Breakage excludes only combinations that pnpm rejects with an explicit peer dependency conflict. Registry, archive, and build failures remain setup errors. Every pinned representative and optional absence for an embassy's selected peers must occur in a compatible environment. Otherwise, breakage fails before running tests, naming the uncovered alias, version, support groups, and dependency conflicts. Optional absence is represented by `null`, and the installer verifies absence from the candidate's dependency graph.
+Breakage excludes only combinations explicitly reported as incompatible by custom preparation or rejected with a peer dependency conflict by the pnpm installer. Registry, archive, and build failures remain setup errors. Every pinned representative and optional absence for an embassy's selected peers must occur in a compatible environment. Otherwise, breakage fails before running tests, naming the uncovered alias, version, support groups, and dependency conflicts. Optional absence is represented by `null` and verified from both test and candidate resolution.
 
 Commands receive `BREAKAGE_EMBASSY` and `BREAKAGE_ENVIRONMENT` as labels, `BREAKAGE_PEERS` and `BREAKAGE_PEER_ALIASES` as JSON maps, plus `BREAKAGE_CANDIDATE_COMMIT` and `BREAKAGE_CONTRACT_COMMIT`, both identifying the current candidate. Environment names are generated descriptions of the exact versions, never user-authored identifiers. The structured report records the embassy, exact versions, alias names, matching support groups, and command output for each environment. The CLI exits 0 for success, 1 for contract failures, and 2 for setup or configuration failures. These results establish compatibility with the recorded representatives; they do not prove every version in a range. Preserve historical support-range promises in your public contract suite when that is part of your consumer interface.
 
@@ -161,7 +228,7 @@ breakage prelude --out .breakage/baseline.json
 breakage --baseline-file .breakage/baseline.json
 ```
 
-Both commands discover `breakage.config.json` and accept the same `--tag-pattern` and `--base-dir` options. An explicit configuration path works as `breakage prelude ./custom.config.json --out .breakage/baseline.json` and `breakage ./custom.config.json --baseline-file .breakage/baseline.json`. The prelude does not require test or certification options, and never runs those commands or builds the package. Existing full check configurations can be reused. Output and baseline-file paths are relative to `baseDirname`, which defaults to the current working directory. The default prelude output is `.breakage/baseline.json`.
+Both commands discover `breakage.config.json` and accept the same `--tag-pattern` and `--base-dir` options. An explicit configuration path works as `breakage prelude ./custom.config.json --out .breakage/baseline.json` and `breakage ./custom.config.json --baseline-file .breakage/baseline.json`. A public-only prelude does not require test or certification options, and never runs those commands or builds the package. Peer preparation behavior is described above. Existing full check configurations can be reused. Output and baseline-file paths are relative to `baseDirname`, which defaults to the current working directory. The default prelude output is `.breakage/baseline.json`.
 
 The versioned JSON snapshot contains the selected tag ref, its resolved commit SHA, the tag pattern, and the package directory relative to the repository root. Annotated tags are peeled to commits. Contents are deterministic and written atomically, with no timestamp or nonce. Fetching uses the SHA from discovery rather than a mutable tag name. An unchanged baseline produces identical snapshot bytes; a newer release or a moved tag targeting another commit changes them. A failed discovery, fetch, or write fails the prelude and removes an older snapshot at the validated output path.
 
@@ -314,7 +381,7 @@ If a process is forcibly interrupted or restoration fails, breakage retains reco
 | `--baselineFile`   |           |          | Prelude snapshot pinning the release commit.      |
 | `--verbose`        | `-v`      |          | Print timing information for the check.           |
 
-The test and certification options are required for public checks. Embassy selections live in `embassies` in the same configuration; shared installation settings live in `peerOptions`. Embassy-only checks need no public options. `prelude --out` sets its gitignored snapshot path. `schema --outdir` sets the schema output directory. Run `breakage help` for the full option descriptions and examples.
+The test and certification options are required for public checks. Embassy selections live in `embassies` in the same configuration; shared preparation settings live in `peerOptions`. Embassy-only checks need no public options. `prelude --out` sets its gitignored snapshot path. `schema --outdir` sets the schema output directory. Run `breakage help` for the full option descriptions and examples.
 
 ## cli completion
 
