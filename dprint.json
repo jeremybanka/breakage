@@ -4,7 +4,7 @@
 	"useTabs": true,
 	"indentWidth": 2,
 	"includes": [
-		"**/*.{ts,tsx,js,jsx,mjs,cjs,json,jsonc,md,mdx,css,astro,toml,yml,yaml}"
+		"**/*.{ts,tsx,js,jsx,mjs,cjs,json,jsonc,md,mdx,astro,toml,yml,yaml}"
 	],
 	"excludes": [
 		"**/metafile-*",
@@ -45,11 +45,6 @@
 		],
 		"textWrap": "never"
 	},
-	"malva": {
-		"associations": [
-			"**/*.css"
-		]
-	},
 	"toml": {
 		"associations": [
 			"**/*.toml"
@@ -64,7 +59,6 @@
 		"./node_modules/@dprint/oxc/plugin.wasm",
 		"./node_modules/@dprint/json/plugin.wasm",
 		"./node_modules/@dprint/markdown/plugin.wasm",
-		"./node_modules/dprint-plugin-malva/plugin.wasm",
 		"./node_modules/@dprint/toml/plugin.wasm",
 		"./node_modules/dprint-plugin-yaml/plugin.wasm"
 	]
