@@ -6,12 +6,20 @@ import path from "node:path"
 import { valid } from "semver"
 import { simpleGit } from "simple-git"
 
+import { droppedSupport, readPeerSupport, supports } from "./peer-support.ts"
+import type { PeerSupportChange } from "./peer-support.ts"
+
 export type PeerCase = { name: string; peers: Record<string, string> }
-export type PeerConfig = { cases: PeerCase[]; setupCommand?: string }
+export type PeerConfig = {
+	cases: PeerCase[]
+	setupCommand?: string
+	manifest?: string
+}
 export type PeerCaseResult = PeerCase & {
 	status: `passed` | `setup-failed` | `contract-failed`
 	stdout: string
 	stderr: string
+	contract?: `released` | `current`
 }
 export type PeerMatrixOutcome = {
 	gitWasClean: true
@@ -24,6 +32,10 @@ export type PeerMatrixOutcome = {
 	candidateCommit: string
 	contractCommit: string
 	peerResults: PeerCaseResult[]
+	supportChanges: PeerSupportChange[]
+	supportCertified: boolean
+	certificationStdout: string
+	certificationStderr: string
 	summary: string
 }
 
@@ -34,6 +46,7 @@ export type PeerContext = {
 	testFiles: string[]
 	testCommand: string
 	peerConfig: string
+	certifyCommand: string
 }
 
 export function object(value: unknown): value is Record<string, unknown> {
@@ -73,6 +86,8 @@ export async function readPeerConfig(filename: string): Promise<PeerConfig> {
 		typeof value.setupCommand !== `string`
 	)
 		throw new Error(`setupCommand must be a string.`)
+	if (value.manifest !== undefined && typeof value.manifest !== `string`)
+		throw new Error(`manifest must be a string.`)
 	return value as PeerConfig
 }
 
@@ -106,34 +121,60 @@ export async function checkPeerMatrix(
 	const root = await git.revparse([`--show-toplevel`])
 	const prefix = await git.revparse([`--show-prefix`])
 	const candidateCommit = await git.revparse([`HEAD`])
+	const manifest = config.manifest ?? `package.json`
+	const releasedSupport = await readPeerSupport(
+		git,
+		context.releaseCommit,
+		manifest,
+	)
+	const proposedSupport = await readPeerSupport(git, candidateCommit, manifest)
+	const supportChanges = droppedSupport(releasedSupport, proposedSupport)
+	const certification = supportChanges.length
+		? await command(context.certifyCommand, context.baseDirname)
+		: { success: true, stdout: ``, stderr: `` }
 	const peerResults: PeerCaseResult[] = []
 	for (const entry of config.cases) {
+		if (!supports(proposedSupport, entry.peers)) {
+			peerResults.push({
+				...entry,
+				status: `setup-failed`,
+				stdout: ``,
+				stderr: `Case ${entry.name} selects a peer outside the proposed support ranges.`,
+			})
+			continue
+		}
+		const contract = supports(releasedSupport, entry.peers)
+			? `released`
+			: `current`
 		const temporary = await mkdtemp(path.join(tmpdir(), `breakage-peer-`))
 		try {
 			const checkout = path.join(temporary, `checkout`)
-			await simpleGit().clone(root, checkout, [`--no-hardlinks`, `--quiet`])
+			await simpleGit().clone(root, checkout, [`--no-local`, `--quiet`])
 			const clone = simpleGit(checkout)
 			await clone.checkout(candidateCommit)
-			await clone.raw([
-				`restore`,
-				`--source=${context.releaseCommit}`,
-				`--worktree`,
-				`--`,
-				...context.testFiles.map((file) => `${prefix}${file}`),
-			])
+			if (contract === `released`)
+				await clone.raw([
+					`restore`,
+					`--source=${context.releaseCommit}`,
+					`--worktree`,
+					`--`,
+					...context.testFiles.map((file) => `${prefix}${file}`),
+				])
 			const cwd = path.join(checkout, prefix)
 			const env = {
 				...process.env,
 				BREAKAGE_CASE: entry.name,
 				BREAKAGE_PEERS: JSON.stringify(entry.peers),
 				BREAKAGE_CANDIDATE_COMMIT: candidateCommit,
-				BREAKAGE_CONTRACT_COMMIT: context.releaseCommit,
+				BREAKAGE_CONTRACT_COMMIT:
+					contract === `released` ? context.releaseCommit : candidateCommit,
 			}
 			if (config.setupCommand) {
 				const setup = await command(config.setupCommand, cwd, env)
 				if (!setup.success) {
 					peerResults.push({
 						...entry,
+						contract,
 						status: `setup-failed`,
 						stdout: setup.stdout,
 						stderr: setup.stderr,
@@ -144,6 +185,7 @@ export async function checkPeerMatrix(
 			const result = await command(context.testCommand, cwd, env)
 			peerResults.push({
 				...entry,
+				contract,
 				status: result.success ? `passed` : `contract-failed`,
 				stdout: result.stdout,
 				stderr: result.stderr,
@@ -159,7 +201,9 @@ export async function checkPeerMatrix(
 			await rm(temporary, { recursive: true, force: true })
 		}
 	}
-	const success = peerResults.every((result) => result.status === `passed`)
+	const success =
+		certification.success &&
+		peerResults.every((result) => result.status === `passed`)
 	return {
 		gitWasClean: true,
 		lastReleaseFound: true,
@@ -171,6 +215,10 @@ export async function checkPeerMatrix(
 		candidateCommit,
 		contractCommit: context.releaseCommit,
 		peerResults,
+		supportChanges,
+		supportCertified: certification.success,
+		certificationStdout: certification.stdout,
+		certificationStderr: certification.stderr,
 		summary: success
 			? `All peer cases passed.`
 			: `Peer compatibility check failed.`,

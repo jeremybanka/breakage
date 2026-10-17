@@ -16,9 +16,9 @@ Extend breakage's released consumer contracts across the peer environments a pac
 
 ## 3 Preserve peer support promises
 
-- [ ] Preserve released peer ranges alongside released assertions. Compare them with the proposed release's ranges so editing both tests and metadata cannot silently erase support.
-- [ ] Route dropped support through intentional-break certification. Require retained support to pass; validate newly added support with current integration contracts.
-- [ ] Done when narrowing a range requires certification and a version bump cannot excuse a failing combination still claimed as supported.
+- [x] Preserve released peer ranges alongside released assertions. Compare them with the proposed release's ranges so editing both tests and metadata cannot silently erase support.
+- [x] Route dropped support through intentional-break certification. Require retained support to pass; validate newly added support with current integration contracts.
+- [x] Done when narrowing a range requires certification and a version bump cannot excuse a failing combination still claimed as supported.
 
 ## 4 Install isolated peer environments
 

@@ -76,6 +76,8 @@ Each case runs in a disposable clone of the candidate commit with the released t
 
 Peer checks return a structured report with a result for every case, the candidate commit, and the contract commit. The CLI prints that report as JSON and exits with 0 for success, 1 for contract failures, or 2 for setup failures. A failing supported peer case cannot be excused by the ordinary certification command.
 
+The peer configuration's `manifest` defaults to `package.json`, relative to the check's working directory. Breakage reads its peer ranges from both the released commit and the candidate commit. Narrowing or removing a released range requires `certifyCommand` to acknowledge the dropped support, even when the removed versions no longer appear in the matrix. Retained combinations use released contracts; newly supported combinations use current contracts. The report records that choice per case. Explicit cases outside the proposed ranges fail setup.
+
 ## caching compatibility checks
 
 The ordinary `breakage` command discovers the newest release on `origin` each time it runs. Do not cache that whole command: a new release or a moved tag can change its baseline without changing any tracked checkout files.

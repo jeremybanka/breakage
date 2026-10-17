@@ -211,6 +211,7 @@ export async function breakage({
 				testFiles: productionTestFiles,
 				testCommand,
 				peerConfig,
+				certifyCommand,
 			})
 		}
 		const noBreakingChangesDetected = await new Promise<
