@@ -27,6 +27,16 @@ pnpm build
 
 The publishable package lives in `packages/breakage`. The private root contains workspace infrastructure. Vite Plus handles task orchestration and static checks, dprint formats the workspace, and Bun runs the package's integration tests. Dependency installation configures Git hooks. See [repository commands](docs/commands.md).
 
+## Checking breakage with breakage
+
+`pnpm test:public` runs the current consumer contracts against source without building. The contracts import `breakage` through a TypeScript path mapping and exercise the CLI entrypoint selected by the current package script. When moving source files, update those runner settings; the released assertions do not depend on internal source paths. The suite covers compatible and incompatible changes, certification, CLI exit statuses and configuration, baseline replay, and restoration of tests while preserving unrelated files, the Git index, and stashes. Each scenario uses a disposable repository with a local bare origin.
+
+`pnpm test:breakage` uses the exact published `breakage@0.8.2` installed as `breakage-supervisor` to resolve the newest `breakage@` release on origin, pin its commit in `.breakage/baseline.json`, and replay its public contracts against current source. The restore pattern includes the entire `packages/breakage/tests/public/` directory, including fixture and observation code. The candidate runs only inside the contracts' disposable repositories; the public command never invokes the outer compatibility command. Run this from a clean checkout. CI runs current contracts, released contracts, and the existing build/integration tests in independent jobs, without caching the compatibility result.
+
+**Baseline bootstrap:** releases 0.8.1, 0.8.2, and 0.8.3 predate these contracts. Only their exact recorded tag/commit pairs may finish with a `BOOTSTRAP ONLY` notice and CI job summary saying historical compatibility was not established. The patch changeset accompanying this suite creates the first release baseline when published. From that release onward, a missing suite fails; missing tags, discovery errors, dirty checkouts, and other inconclusive results also fail. The bootstrap exception is never a compatibility claim. Remove the three-entry allowlist after the first contract-bearing release is published. Certification remains `false`: investigate failures and explicitly configure an intentional-break release-plan check before accepting a breaking change.
+
+The supervisor dependency is deliberately pinned independently of the candidate and excluded from automatic Renovate updates. Review supervisor upgrades separately, retaining the bootstrap policy and validating historical replay and restoration.
+
 ## Releases
 
 The first release as `breakage` is **0.8.1**, continuing the version of the last `break-check` release. Its rename and migration notes are recorded directly in the [0.8.1 changelog entry](packages/breakage/CHANGELOG.md#081); there is no pending version bump for this first publication. Subsequent consumer-visible changes use `pnpm change`. Before 1.0.0, use patch changesets for features and fixes and minor changesets for breaking changes.

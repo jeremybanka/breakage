@@ -372,8 +372,8 @@ it(`runs a fresh prelude on Turbo cache hits and misses on new releases and move
 			private: true,
 			packageManager: `bun@${Bun.version}`,
 			scripts: {
-				"test:breaks:prelude": `bun '${entrypoint}' prelude && echo ran >> .breakage/prelude.log`,
-				"test:breaks": `bun '${entrypoint}' --baseline-file=${snapshot} && echo ran >> .breakage/check.log`,
+				"test:breakage:prelude": `bun '${entrypoint}' prelude && echo ran >> .breakage/prelude.log`,
+				"test:breakage": `bun '${entrypoint}' --baseline-file=${snapshot} && echo ran >> .breakage/check.log`,
 			},
 		}),
 	)
@@ -387,9 +387,9 @@ it(`runs a fresh prelude on Turbo cache hits and misses on new releases and move
 		JSON.stringify({
 			agentGuidance: false,
 			tasks: {
-				"test:breaks:prelude": { cache: false },
-				"test:breaks": {
-					dependsOn: [`test:breaks:prelude`, `^build`],
+				"test:breakage:prelude": { cache: false },
+				"test:breakage": {
+					dependsOn: [`test:breakage:prelude`, `^build`],
 					inputs: [`$TURBO_DEFAULT$`, { mode: `jit`, globs: [snapshot] }],
 					cache: true,
 				},
@@ -411,7 +411,7 @@ it(`runs a fresh prelude on Turbo cache hits and misses on new releases and move
 			[
 				turbo,
 				`run`,
-				`test:breaks`,
+				`test:breakage`,
 				`--cache-dir=.turbo/cache`,
 				`--cache=local:rw`,
 				`--env-mode=loose`,

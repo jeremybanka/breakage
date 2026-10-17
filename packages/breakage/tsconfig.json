@@ -3,9 +3,13 @@
 	"include": [
 		"src",
 		"__tests__",
+		"tests",
 		"**/*.config.ts"
 	],
 	"compilerOptions": {
+		"paths": {
+			"breakage": ["./src/breakage.ts"]
+		},
 		"allowJs": false,
 		"declaration": true,
 		"isolatedDeclarations": true,

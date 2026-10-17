@@ -12,6 +12,7 @@
 		"moduleResolution": "NodeNext",
 		"noEmit": true,
 		"noUncheckedIndexedAccess": true,
+		"resolveJsonModule": true,
 		"rootDir": ".",
 		"skipLibCheck": true,
 		"strict": true,

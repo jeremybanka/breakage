@@ -3,6 +3,7 @@ dist/
 coverage/
 artifacts/
 .astro/
+.breakage/
 .mise/
 .pnpm-home/
 .pnpm-store/

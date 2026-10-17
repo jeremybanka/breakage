@@ -17,6 +17,8 @@
 		"release:version": "changeset version",
 		"staged": "vp staged",
 		"test": "vp run -r test",
+		"test:public": "pnpm --dir packages/breakage run test:public",
+		"test:breakage": "node scripts/check-compatibility.node.ts",
 		"test:watch": "vp run -r test:watch",
 		"workflows:update": "node scripts/update-workflows.node.ts"
 	},
@@ -28,6 +30,7 @@
 		"@dprint/oxc": "0.46.0",
 		"@dprint/toml": "0.9.0",
 		"@types/node": "26.6.5",
+		"breakage-supervisor": "npm:breakage@0.8.2",
 		"cspell": "10.4.0",
 		"dprint": "0.63.0",
 		"dprint-plugin-malva": "0.16.0",

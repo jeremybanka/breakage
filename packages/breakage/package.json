@@ -32,6 +32,7 @@
 		"schema": "bun src/breakage.x.ts --outdir=dist -- schema",
 		"pretest": "pnpm run build",
 		"test": "bun test -- ./__tests__",
+		"test:public": "BREAKAGE_CLI_ENTRYPOINT=./src/breakage.x.ts bun test -- ./tests/public",
 		"test:watch": "bun test --watch -- ./__tests__"
 	},
 	"dependencies": {
