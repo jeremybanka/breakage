@@ -1,11 +1,11 @@
 import { createHash } from "node:crypto"
+import { existsSync } from "node:fs"
 import { mkdtemp, readFile, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
 
 import { satisfies } from "semver"
 import { simpleGit } from "simple-git"
-import type { SimpleGit } from "simple-git"
 
 import { object } from "./peer-config.ts"
 import type { PeerConfig } from "./peer-config.ts"
@@ -14,22 +14,30 @@ import { withDirectoryLock } from "./directory-lock.ts"
 
 type WorkspacePackage = { file: string; name: string; version: string }
 
-async function packages(
-	git: SimpleGit,
-	commit: string,
-): Promise<WorkspacePackage[]> {
-	const files = (await git.raw([`ls-tree`, `-r`, `--name-only`, `-z`, commit]))
-		.split(`\0`)
-		.filter((file) => file === `package.json` || file.endsWith(`/package.json`))
+async function packages(root: string): Promise<WorkspacePackage[]> {
+	if (!existsSync(path.join(root, `pnpm-workspace.yaml`))) return []
+	const entries: unknown = JSON.parse(
+		await runFile(
+			`pnpm`,
+			[`--recursive`, `list`, `--depth`, `-1`, `--json`],
+			root,
+		),
+	)
+	if (!Array.isArray(entries))
+		throw new Error(`Could not discover pnpm workspace packages in ${root}.`)
 	const result: WorkspacePackage[] = []
-	for (const file of files) {
-		const manifest: unknown = JSON.parse(await git.show([`${commit}:${file}`]))
+	for (const entry of entries) {
 		if (
-			object(manifest) &&
-			typeof manifest.name === `string` &&
-			typeof manifest.version === `string`
+			object(entry) &&
+			typeof entry.name === `string` &&
+			typeof entry.version === `string` &&
+			typeof entry.path === `string`
 		)
-			result.push({ file, name: manifest.name, version: manifest.version })
+			result.push({
+				file: path.relative(root, path.join(entry.path, `package.json`)),
+				name: entry.name,
+				version: entry.version,
+			})
 	}
 	return result
 }
@@ -48,9 +56,7 @@ export async function packWorkspacePeer(
 	const root = await sourceGit.revparse([`--show-toplevel`])
 	const git = simpleGit(root)
 	const configured = config.workspace?.[peer]
-	const current = (await packages(git, `HEAD`)).filter(
-		(entry) => entry.name === peer,
-	)
+	const current = (await packages(root)).filter((entry) => entry.name === peer)
 	if (!configured && !current.length) return
 	if (!configured && current.length > 1)
 		throw new Error(
@@ -72,9 +78,28 @@ export async function packWorkspacePeer(
 		: undefined
 	const matches = (tag: string) =>
 		pattern ? pattern.test(tag) : tag === `${peer}@${version}`
-	let tags = (await git.tags()).all.filter(matches)
+	const findReleases = async () => {
+		const releases: { tag: string; commit: string }[] = []
+		for (const tag of (await git.tags()).all.filter(matches)) {
+			const commit = await git.revparse([`refs/tags/${tag}^{commit}`])
+			let manifest: unknown
+			try {
+				manifest = JSON.parse(await git.show([`${commit}:${file}`]))
+			} catch {
+				continue
+			}
+			if (
+				object(manifest) &&
+				manifest.name === peer &&
+				manifest.version === version
+			)
+				releases.push({ tag, commit })
+		}
+		return releases
+	}
+	let releases = await findReleases()
 	if (
-		!tags.length &&
+		!releases.length &&
 		(await git.getRemotes()).some((remote) => remote.name === `origin`)
 	) {
 		const remote = (await git.listRemote([`--tags`, `origin`]))
@@ -86,36 +111,22 @@ export async function packWorkspacePeer(
 					!ref.endsWith(`^{}`) &&
 					matches(ref.replace(/^refs\/tags\//, ``)),
 			)
+		const local = new Set((await git.tags()).all)
 		const common = await git.revparse([
 			`--path-format=absolute`,
 			`--git-common-dir`,
 		])
 		for (const ref of remote)
-			await withDirectoryLock(path.join(common, `breakage-fetch.lock`), () =>
-				git.fetch([
-					`origin`,
-					`${ref}:${ref}`,
-					`--no-tags`,
-					`--no-write-fetch-head`,
-				]),
-			)
-		tags = (await git.tags()).all.filter(matches)
-	}
-	const releases: { tag: string; commit: string }[] = []
-	for (const tag of tags) {
-		const commit = await git.revparse([`refs/tags/${tag}^{commit}`])
-		let manifest: unknown
-		try {
-			manifest = JSON.parse(await git.show([`${commit}:${file}`]))
-		} catch {
-			continue
-		}
-		if (
-			object(manifest) &&
-			manifest.name === peer &&
-			manifest.version === version
-		)
-			releases.push({ tag, commit })
+			if (!local.has(ref.replace(/^refs\/tags\//, ``)))
+				await withDirectoryLock(path.join(common, `breakage-fetch.lock`), () =>
+					git.fetch([
+						`origin`,
+						`${ref}:${ref}`,
+						`--no-tags`,
+						`--no-write-fetch-head`,
+					]),
+				)
+		releases = await findReleases()
 	}
 	if (releases.length !== 1)
 		throw new Error(
@@ -130,7 +141,7 @@ export async function packWorkspacePeer(
 		await simpleGit(temporary).checkout(commit)
 		if (configured?.setupCommand)
 			await runFile(`sh`, [`-c`, configured.setupCommand], temporary)
-		const historical = await packages(git, commit)
+		const historical = await packages(temporary)
 		const packed = new Map<string, string>()
 		const overrides: Record<string, string> = {}
 		const pack = async (manifestFile: string): Promise<string> => {

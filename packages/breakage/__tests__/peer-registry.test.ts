@@ -78,6 +78,11 @@ it(`installs pinned registry representatives and ignores newer advertised releas
 			}),
 		)
 		await project.write(`index.ts`, `export { value } from "host";`)
+		// A fixture with the same name is not a workspace member.
+		await project.write(
+			`fixtures/host/package.json`,
+			JSON.stringify({ name: `host`, version: `9.0.0` }),
+		)
 		await project.git.add(`.`).commit(`Use pinned registry peers`)
 		const out = `.breakage/registry.json`
 		const snapshot = await breakagePrelude({ ...project.options, out })

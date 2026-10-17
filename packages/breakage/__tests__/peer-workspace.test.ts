@@ -5,7 +5,10 @@ import { peerProject } from "./peer-project.ts"
 
 it(`swaps pinned workspace releases and their historical dependencies while keeping the candidate and embassy current`, async () => {
 	const project = await peerProject(
-		{ install: true },
+		{
+			install: true,
+			workspace: { host: { directory: `packages/host`, tagPattern: `^host@` } },
+		},
 		`throw new Error("Old suite must never run");`,
 	)
 	try {
@@ -70,6 +73,8 @@ it(`swaps pinned workspace releases and their historical dependencies while keep
 			`import assert from "node:assert/strict"; import { integration } from "fixture-plugin"; assert.equal(integration(), "current:" + JSON.parse(process.env.BREAKAGE_PEERS).host);`,
 		)
 		await project.git.add(`.`).commit(`Current candidate and embassy`)
+		await project.git.push(`origin`, `--tags`)
+		await project.git.tag([`-d`, `host@2.0.0`])
 		const out = `.breakage/workspace.json`
 		const plan = await breakagePrelude({ ...project.options, out })
 		expect(Object.keys(plan.peers!.installations!)).toHaveLength(2)
