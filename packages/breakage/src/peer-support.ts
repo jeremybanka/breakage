@@ -6,7 +6,11 @@ import type { SimpleGit } from "simple-git"
 
 import { object } from "./peer-config.ts"
 
-export type PeerSupport = { ranges: Record<string, string>; optional: string[] }
+export type PeerSupport = {
+	ranges: Record<string, string>
+	optional: string[]
+	devDependencies?: Record<string, string>
+}
 export type PeerSupportChange = {
 	peer: string
 	released: string
@@ -35,7 +39,9 @@ export async function readPeerSupport(
 	const optional: string[] = []
 	for (const [name, range] of Object.entries(ranges)) {
 		if (typeof range !== `string`)
-			throw new Error(`Peer ${name} must declare a semantic version range.`)
+			throw new Error(
+				`peerDependencies[${JSON.stringify(name)}] must declare a valid semantic version range; separate alternatives with ||.`,
+			)
 		if (range.startsWith(`workspace:`)) {
 			const requested = range.slice(`workspace:`.length)
 			if ([`*`, `^`, `~`].includes(requested)) {
@@ -67,11 +73,23 @@ export async function readPeerSupport(
 			} else ranges[name] = requested
 		}
 		if (!validRange(ranges[name] as string))
-			throw new Error(`Peer ${name} must declare a semantic version range.`)
+			throw new Error(
+				`peerDependencies[${JSON.stringify(name)}] must declare a valid semantic version range; separate alternatives with ||.`,
+			)
 		const meta = metadata[name]
 		if (object(meta) && meta.optional === true) optional.push(name)
 	}
-	return { ranges: ranges as Record<string, string>, optional }
+	const devDependencies = value.devDependencies ?? {}
+	if (
+		!object(devDependencies) ||
+		Object.values(devDependencies).some((entry) => typeof entry !== `string`)
+	)
+		throw new Error(`devDependencies must map package names to strings.`)
+	return {
+		ranges: ranges as Record<string, string>,
+		optional,
+		devDependencies: devDependencies as Record<string, string>,
+	}
 }
 
 export function droppedSupport(
