@@ -115,6 +115,7 @@ it.each([1, 2])(
 			certifyCommand: `exit 1`,
 		})
 		let restoration: Promise<void> | undefined
+		let result: Awaited<ReturnType<typeof breakage>>
 		try {
 			const deadline = Date.now() + 3000
 			while (!(await Bun.file(started).exists())) {
@@ -122,11 +123,15 @@ it.each([1, 2])(
 				await setTimeout(10)
 			}
 			restoration = restore()
-			const completedBeforeRemote = await Promise.race([
-				restoration.then(() => true),
-				setTimeout(500).then(() => false),
+			// The closed remote gate proves ordering; allow slow Git and filesystem work.
+			await Promise.race([
+				restoration,
+				setTimeout(5000, undefined, { ref: false }).then(() => {
+					throw new Error(
+						`Timed out restoring tests while the remote was blocked`,
+					)
+				}),
 			])
-			expect(completedBeforeRemote).toBe(true)
 			expect(
 				await readFile(path.join(repository, `old/public.test.js`), `utf8`),
 			).toBe(`current`)
@@ -135,9 +140,10 @@ it.each([1, 2])(
 		} finally {
 			await writeFile(gate, `go`)
 			await restoration
-			const result = await other
-			expect(result.gitWasClean).toBe(false)
+			result = await other
 		}
+		// Cleanup must not replace an earlier failure with this dependent assertion.
+		expect(result.gitWasClean).toBe(false)
 	},
 	10000,
 )
