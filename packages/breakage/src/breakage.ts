@@ -13,6 +13,20 @@ import { withTestFileState } from "./test-file-state.ts"
 
 export type { BreakageBaseline, BreakagePreludeOptions } from "./baseline.ts"
 export { breakagePrelude } from "./baseline.ts"
+export { formatNpmReport, npmCheck, npmTest } from "./npm/check.ts"
+export type {
+	NpmConfig,
+	NpmPeerEvidence,
+	NpmReport,
+	NpmRepresentativeResult,
+	NpmSuite,
+	NpmSuiteResult,
+	NpmTestSelection,
+	ReleaseContext,
+	ReleaseEvidence,
+	ReleaseIntent,
+	SupportChange,
+} from "./npm/types.ts"
 
 export type BreakageOptions = {
 	tagPattern?: string | undefined

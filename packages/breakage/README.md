@@ -212,6 +212,8 @@ If a process is forcibly interrupted or restoration fails, breakage retains reco
 
 ## options
 
+The optional [`breakage npm` command family](./npm.md) checks peer compatibility and end-of-support changes for npm packages. Its representatives, packed candidates, and release-intent hooks apply only to that namespace. The ordinary public check retains the adoption conditions and behavior described above. Both commands can use `breakage.config.ts`; default discovery prefers it over `breakage.config.json`, and an explicit configuration path wins. TypeScript configuration uses the runtime's native support for erasable TypeScript.
+
 | Check option       | Shorthand | Required | Purpose                                           |
 | ------------------ | --------- | -------- | ------------------------------------------------- |
 | `--tagPattern`     | `-g`      |          | RegExp selecting release tags.                    |
