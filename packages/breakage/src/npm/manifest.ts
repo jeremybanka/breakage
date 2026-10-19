@@ -7,6 +7,7 @@ export type Manifest = {
 	version: string
 	type?: string
 	dependencies?: Record<string, string>
+	optionalDependencies?: Record<string, string>
 	devDependencies?: Record<string, string>
 	peerDependencies?: Record<string, string>
 	peerDependenciesMeta?: Record<string, { optional?: boolean }>
@@ -44,6 +45,7 @@ export function parseManifest(value: unknown, label: string): Manifest {
 	}
 	for (const field of [
 		`dependencies`,
+		`optionalDependencies`,
 		`devDependencies`,
 		`peerDependencies`,
 	] as const) {

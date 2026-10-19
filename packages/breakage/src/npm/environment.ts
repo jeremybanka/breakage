@@ -313,16 +313,25 @@ async function copySuite(
 	}
 }
 
-async function resolvePackage(from: string, name: string): Promise<string> {
+async function findPackage(
+	from: string,
+	name: string,
+): Promise<string | undefined> {
 	const lookup =
 		createRequire(path.join(from, `__breakage_probe__.ts`)).resolve.paths(
 			name,
 		) ?? []
 	for (const directory of lookup) {
 		const location = path.join(directory, name)
-		if (await exists(path.join(location, `package.json`)))
-			return await realpath(location)
+		// An installed but broken package must fail verification, not look absent.
+		if (await exists(location)) return await realpath(location)
 	}
+	return undefined
+}
+
+async function resolvePackage(from: string, name: string): Promise<string> {
+	const location = await findPackage(from, name)
+	if (location !== undefined) return location
 	throw new Error(`Cannot resolve ${name} from ${from}.`)
 }
 
@@ -471,7 +480,18 @@ export async function verifyResolution(
 					`Runtime dependency ${installedManifest.name} resolves a different instance of ${peer}.`,
 				)
 		}
-		for (const dependency of Object.keys(installedManifest.dependencies ?? {}))
-			pending.push(await resolvePackage(directory, dependency))
+		const optional = installedManifest.optionalDependencies ?? {}
+		for (const dependency of Object.keys({
+			...installedManifest.dependencies,
+			...optional,
+		})) {
+			// npm lets optionalDependencies override dependencies of the same name.
+			if (Object.hasOwn(optional, dependency)) {
+				const location = await findPackage(directory, dependency)
+				if (location !== undefined) pending.push(location)
+			} else {
+				pending.push(await resolvePackage(directory, dependency))
+			}
+		}
 	}
 }

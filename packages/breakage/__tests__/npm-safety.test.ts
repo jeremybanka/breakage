@@ -114,6 +114,107 @@ describe(`npm environment safety`, () => {
 		expect(result.exitCode, JSON.stringify(result)).toBe(0)
 		assertStagesRemoved(f, result)
 	}, 30_000)
+	it.each([false, true])(
+		`audits installed optional runtime dependencies (shadow peer: %s)`,
+		async (shadow) => {
+			const f = setup()
+			f.representative(`next`, `2.0.0`, true)
+			f.config.releaseIntent = () => ({ status: `release`, version: `2.0.0` })
+			f.write(`helper/package.json`, {
+				name: `helper`,
+				version: `1.0.0`,
+				main: `index.js`,
+				type: `module`,
+				peerDependencies: { host: `*` },
+				files: [`index.js`],
+			})
+			f.write(
+				`helper/index.js`,
+				`import host from 'host'; export default host;`,
+			)
+			const helper = f.pack(`helper`)
+			f.write(`package.json`, {
+				...JSON.parse(f.read(`package.json`)),
+				optionalDependencies: {
+					helper: `file:${path.join(f.directory, helper)}`,
+				},
+			})
+			f.config.artifact = f.pack(`.`)
+			// Confirm npm installed the optional package; its branch must be audited
+			// even when the current contract does not happen to execute that branch.
+			f.config.installCommand += ` && test -f node_modules/helper/package.json`
+			if (shadow)
+				f.config.installCommand += ` && mkdir -p node_modules/helper/node_modules && cp -R node_modules/host node_modules/helper/node_modules/host`
+			const result = await npmTest(
+				f.config,
+				{ peer: `host`, range: `2` },
+				{ baseDirectory: f.directory },
+			)
+			expect(result.exitCode, JSON.stringify(result)).toBe(shadow ? 2 : 0)
+			if (shadow) {
+				expect(result.representatives[0]!.error).toContain(
+					`Runtime dependency helper resolves a different instance of host`,
+				)
+				expect(result.representatives[0]!.suites[0]!.status).toBe(`not-run`)
+			}
+			assertStagesRemoved(f, result)
+		},
+		30_000,
+	)
+	it.each([false, true])(
+		`permits omitted optional runtime dependencies (also declared required: %s)`,
+		async (overridesRequired) => {
+			const f = setup()
+			f.representative(`one`, `1.0.0`)
+			const dependency = {
+				helper: `file:${path.join(f.directory, `missing-helper.tgz`)}`,
+			}
+			f.write(`package.json`, {
+				...JSON.parse(f.read(`package.json`)),
+				...(overridesRequired ? { dependencies: dependency } : {}),
+				optionalDependencies: dependency,
+			})
+			f.config.artifact = f.pack(`.`)
+			f.config.installCommand += ` --omit=optional`
+			const result = await npmTest(
+				f.config,
+				{ peer: `host`, range: `1` },
+				{ baseDirectory: f.directory },
+			)
+			expect(result.exitCode, JSON.stringify(result)).toBe(0)
+			assertStagesRemoved(f, result)
+		},
+		30_000,
+	)
+	it(`rejects an installed optional runtime dependency with a missing manifest`, async () => {
+		const f = setup()
+		f.representative(`one`, `1.0.0`)
+		f.write(`helper/package.json`, {
+			name: `helper`,
+			version: `1.0.0`,
+			main: `index.js`,
+			files: [`index.js`],
+		})
+		f.write(`helper/index.js`, `module.exports = {}`)
+		const helper = f.pack(`helper`)
+		f.write(`package.json`, {
+			...JSON.parse(f.read(`package.json`)),
+			optionalDependencies: {
+				helper: `file:${path.join(f.directory, helper)}`,
+			},
+		})
+		f.config.artifact = f.pack(`.`)
+		f.config.installCommand += ` && rm node_modules/helper/package.json`
+		const result = await npmTest(
+			f.config,
+			{ peer: `host`, range: `1` },
+			{ baseDirectory: f.directory },
+		)
+		expect(result.exitCode, JSON.stringify(result)).toBe(2)
+		expect(result.representatives[0]!.error).toContain(`helper/package.json`)
+		expect(result.representatives[0]!.suites[0]!.status).toBe(`not-run`)
+		assertStagesRemoved(f, result)
+	}, 30_000)
 	it(`keeps coupled formulations intact and runs each configured relationship suite`, async () => {
 		const f = setup()
 		f.representative(`one`, `1.0.0`)
