@@ -19,7 +19,7 @@ import { simpleGit } from "simple-git"
 import { prepare } from "./command.ts"
 import { validatePeerRanges } from "./config.ts"
 import type { Manifest } from "./manifest.ts"
-import { normalizeWorkspacePeers, readManifest } from "./manifest.ts"
+import { matches, normalizeWorkspacePeers, readManifest } from "./manifest.ts"
 import { intent } from "./release.ts"
 import type { NpmConfig, NpmPeerEvidence, NpmSuite } from "./types.ts"
 
@@ -129,6 +129,70 @@ async function installed(
 	return { version: manifest.version, path: physical, source: `installed` }
 }
 
+function representativeDeclarations(
+	manifest: Manifest,
+): Record<string, string> {
+	for (const [peer, development] of Object.entries(
+		manifest.devDependencies ?? {},
+	)) {
+		for (const field of [`dependencies`, `optionalDependencies`] as const) {
+			const runtime = manifest[field]?.[peer]
+			if (runtime !== undefined && runtime !== development)
+				throw new Error(
+					`Conflicting representative declarations for ${peer}: devDependencies has ${development}, but ${field} has ${runtime}. Use one consistent requirement.`,
+				)
+		}
+	}
+	// Optional runtime declarations retain npm's override of required ones.
+	return {
+		...manifest.devDependencies,
+		...manifest.dependencies,
+		...manifest.optionalDependencies,
+	}
+}
+
+/** Exclude disjoint formulations without acquiring or preparing their stages. */
+export async function maySelectEnvironment(
+	config: NpmConfig,
+	base: string,
+	directory: string,
+	packageManifest: Manifest,
+	selection: { peer: string; range: string },
+): Promise<boolean> {
+	const manifest = await readManifest(path.join(directory, `package.json`))
+	const declarations = representativeDeclarations(manifest)
+	const { peer, range } = selection
+	if (peer === packageManifest.name)
+		return matches(packageManifest.version, range)
+	if (manifest.breakage?.candidates?.includes(peer)) {
+		const local = config.localPeers?.[peer]
+		if (!local)
+			throw new Error(`Candidate ${peer} has no localPeers configuration.`)
+		const packageDirectory = path.resolve(base, local.directory)
+		const current = await readManifest(
+			path.join(packageDirectory, `package.json`),
+		)
+		if (current.name !== peer)
+			throw new Error(`Local peer identity mismatch for ${peer}.`)
+		const release = await intent(config, {
+			packageName: peer,
+			packageDirectory,
+			currentVersion: current.version,
+		})
+		if (release.status === `none`)
+			throw new Error(`Candidate ${peer} has no certified release intent.`)
+		return matches(release.version, range)
+	}
+	const declared = declarations[peer]
+	if (declared === undefined) return false
+	if (!semver.validRange(declared))
+		throw new Error(
+			`Invalid representative constraint for ${peer}: ${declared}.`,
+		)
+	// Overlap is only eligibility: preparation still verifies the actual version.
+	return semver.intersects(declared, range, { includePrerelease: true })
+}
+
 export async function prepareEnvironment(
 	config: NpmConfig,
 	base: string,
@@ -150,12 +214,7 @@ export async function prepareEnvironment(
 	}
 	const inputs = await Promise.all([readFile(filename), readFile(lockfile)])
 	const manifest = await readManifest(filename)
-	// npm lets optionalDependencies override dependencies of the same name.
-	const declarations = {
-		...manifest.devDependencies,
-		...manifest.dependencies,
-		...manifest.optionalDependencies,
-	}
+	const declarations = representativeDeclarations(manifest)
 	const candidates: Environment[`candidates`] = {}
 	for (const peer of manifest.breakage?.candidates ?? []) {
 		if (!peerNames.includes(peer))
@@ -379,21 +438,42 @@ async function copySuite(
 async function findPackage(
 	from: string,
 	name: string,
+	installation: string,
 ): Promise<string | undefined> {
+	const origin = await realpath(from)
+	// A linked store package may resolve siblings in its own installation namespace.
+	// Never grant access to the store's or checkout's unrelated ancestor installs.
+	const parts = origin.split(path.sep)
+	const modules = parts.lastIndexOf(`node_modules`)
+	const boundary = within(installation, origin)
+		? installation
+		: modules < 0
+			? origin
+			: parts.slice(0, modules + 1).join(path.sep)
 	const lookup =
-		createRequire(path.join(from, `__breakage_probe__.ts`)).resolve.paths(
+		createRequire(path.join(origin, `__breakage_probe__.ts`)).resolve.paths(
 			name,
 		) ?? []
 	for (const directory of lookup) {
 		const location = path.join(directory, name)
 		// An installed but broken package must fail verification, not look absent.
-		if (await exists(location)) return await realpath(location)
+		if (await exists(location)) {
+			if (!within(installation, directory) && !within(boundary, directory))
+				throw new Error(
+					`Dependency ${name} resolves outside the representative installation: ${location}.`,
+				)
+			return await realpath(location)
+		}
 	}
 	return undefined
 }
 
-async function resolvePackage(from: string, name: string): Promise<string> {
-	const location = await findPackage(from, name)
+async function resolvePackage(
+	from: string,
+	name: string,
+	installation: string,
+): Promise<string> {
+	const location = await findPackage(from, name, installation)
 	if (location !== undefined) return location
 	throw new Error(`Cannot resolve ${name} from ${from}.`)
 }
@@ -513,15 +593,16 @@ export async function verifyResolution(
 	environment: Environment,
 ): Promise<void> {
 	const { stage, peers } = environment
+	const installation = await realpath(environment.directory)
 	const packages = [manifest.name, ...Object.keys(environment.candidates)]
 	for (const [peer, evidence] of Object.entries(peers)) {
 		const expected = await realpath(evidence.path)
-		if ((await resolvePackage(stage, peer)) !== expected)
+		if ((await resolvePackage(stage, peer, installation)) !== expected)
 			throw new Error(`Tests resolve a shadow copy of ${peer}.`)
 		for (const name of packages) {
 			if (name === peer) continue
 			const origin = path.join(stage, `node_modules`, name)
-			if ((await resolvePackage(origin, peer)) !== expected)
+			if ((await resolvePackage(origin, peer, installation)) !== expected)
 				throw new Error(
 					`Candidate ${name} resolves a different instance of ${peer} than its tests.`,
 				)
@@ -548,7 +629,7 @@ export async function verifyResolution(
 			const evidence = peers[peer]
 			if (
 				evidence &&
-				(await resolvePackage(directory, peer)) !==
+				(await resolvePackage(directory, peer, installation)) !==
 					(await realpath(evidence.path))
 			)
 				throw new Error(
@@ -562,10 +643,10 @@ export async function verifyResolution(
 		})) {
 			// npm lets optionalDependencies override dependencies of the same name.
 			if (Object.hasOwn(optional, dependency)) {
-				const location = await findPackage(directory, dependency)
+				const location = await findPackage(directory, dependency, installation)
 				if (location !== undefined) pending.push(location)
 			} else {
-				pending.push(await resolvePackage(directory, dependency))
+				pending.push(await resolvePackage(directory, dependency, installation))
 			}
 		}
 	}

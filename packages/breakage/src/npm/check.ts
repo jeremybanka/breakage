@@ -7,6 +7,7 @@ import { validateConfig, validatePeerRanges } from "./config.ts"
 import {
 	checkCandidatePeers,
 	discover,
+	maySelectEnvironment,
 	prepareEnvironment,
 	stageCandidate,
 	verifyResolution,
@@ -153,6 +154,18 @@ async function runRepresentative(
 	)
 		return result
 	try {
+		if (
+			selection &&
+			`peer` in selection &&
+			!(await maySelectEnvironment(
+				config,
+				base,
+				directory,
+				manifest,
+				selection,
+			))
+		)
+			return result
 		return await withStage(directory, async (stage) => {
 			const environment = await prepareEnvironment(
 				config,

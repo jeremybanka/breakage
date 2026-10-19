@@ -1,3 +1,6 @@
+import { existsSync } from "node:fs"
+import path from "node:path"
+
 import { afterEach, describe, expect, it } from "bun:test"
 
 import { npmCheck, npmTest } from "../src/npm/check.ts"
@@ -30,6 +33,58 @@ function makeOptional(
 	lock.packages[`node_modules/${peer}`].optional = true
 	f.write(filename, lock)
 }
+
+describe(`representative development declarations`, () => {
+	it.each([`dependencies`, `optionalDependencies`] as const)(
+		`rejects conflicting devDependencies and %s before preparation`,
+		async (field) => {
+			const f = (fixture = npmFixture())
+			const directory = `environments/released-2`
+			f.update(`${directory}/package.json`, {
+				dependencies: {},
+				[field]: { host: `1.0.0` },
+				devDependencies: { host: `2.0.0` },
+			})
+			f.config.prepareCommand = `touch prepared`
+			const result = await npmTest(
+				f.config,
+				{ representative: directory },
+				{ baseDirectory: f.directory },
+			)
+			expect(result.exitCode).toBe(2)
+			expect(result.representatives[1]!.error).toContain(
+				`Conflicting representative declarations for host`,
+			)
+			for (const detail of [field, `devDependencies`, `1.0.0`, `2.0.0`])
+				expect(result.representatives[1]!.error).toContain(detail)
+			expect(existsSync(path.join(f.directory, directory, `prepared`))).toBe(
+				false,
+			)
+			assertStagesRemoved(f, result)
+		},
+		30_000,
+	)
+
+	it(`accepts identical development and runtime declarations`, async () => {
+		const f = (fixture = npmFixture())
+		const directory = `environments/released-1`
+		f.update(`${directory}/package.json`, {
+			devDependencies: { host: `1.0.0` },
+		})
+		const filename = `${directory}/package-lock.json`
+		const lock = JSON.parse(f.read(filename))
+		lock.packages[``].devDependencies = { host: `1.0.0` }
+		f.write(filename, lock)
+		const result = await npmTest(
+			f.config,
+			{ representative: directory },
+			{ baseDirectory: f.directory },
+		)
+		expect(result.exitCode, JSON.stringify(result)).toBe(0)
+		expect(result.representatives[0]!.suites[0]!.status).toBe(`passed`)
+		assertStagesRemoved(f, result)
+	}, 30_000)
+})
 
 describe(`representative optional dependencies`, () => {
 	it.each([

@@ -103,6 +103,8 @@ breakage npm check --config ./breakage.config.ts --json
 
 All matching representatives run. Every explicit `||` era needs coverage. Preview versions cover only an exact preview alternative, not stable ranges or other previews. Released representatives outside declared support warn; excluding a planned local release fails the release check. Focused requests can intentionally explore versions outside declared support. An audit reports declarations and release-policy findings without claiming assertions passed. Exit statuses are 0 for successful requested work, 1 for compatibility or uncertified support failures, and 2 for setup or coverage errors.
 
+Focused peer/range requests read manifests first and skip disjoint declarations before acquiring stages or preparing dependencies. Coordinated candidates are selected by their certified intended versions. Excluded environments need no lockfile or available stage. Broad overlapping declarations still require preparation to establish the installed version, so use disjoint constraints or `--representative` when running independent checks concurrently in one checkout. Selected installations retain all frozen-input, identity, and compatibility checks.
+
 ## Coordinated releases
 
 Create a separate representative that explicitly names candidate peers. Leave an unpublished peer out of the frozen dependency list:
@@ -172,6 +174,10 @@ This callback also receives `changes`, with each peer's previous and current dec
 `prepareCommand` runs in each representative and must install from its frozen lock file. For another package manager, set `lockfile` and this command accordingly, keeping the environment independent of workspace package substitution. Breakage requires unchanged manifest/lock bytes and checks direct installed identities. An existing installation that changes peer versions during frozen preparation is reported as stale; rerun after reviewing the updated installation. The configured package manager establishes lock consistency; Breakage does not reimplement its lock format.
 
 Installed peers may come from `dependencies`, `devDependencies`, or `optionalDependencies`. An optional dependency overrides a required dependency of the same name. When present, it supplies peer evidence and runs its selected relationship suite normally. When genuinely absent, it supplies no evidence: a required peer still fails, while an optional peer may be omitted. Broken installed links and missing manifests remain errors. Optional-peer absence coverage is not required.
+
+A representative must not declare conflicting development and runtime requirements for the same dependency. For example, `dependencies.host: "1.0.0"` together with `devDependencies.host: "2.0.0"` is a setup error before installation. Remove the duplicate or give both declarations the same specifier. The same rule applies when the runtime declaration is optional.
+
+Runtime dependencies must resolve through the representative or its test installation. Explicit package-store links remain supported, including dependencies alongside the linked package in its nearest `node_modules` namespace. Finding a dependency only in an unrelated ancestor installation is a setup error, even if it is optional and would make the assertions pass. Breakage checks this before and after execution.
 
 The ignored `test/` directory is also the ownership lock. An existing directory is rejected without deleting it. Independent environments execute concurrently, while two runs cannot own the same environment. On normal completion or failure, Breakage removes only the stage it created. After a killed process, confirm its commands have stopped, inspect the remaining stage, and remove it before retrying.
 
