@@ -1,0 +1,32 @@
+{
+	"npm": {
+		"artifact": "artifacts/integration-1.1.0.tgz",
+		"representatives": "peer-environments/*",
+		"lockfile": "package-lock.json",
+		"prepareCommand": "npm ci --ignore-scripts --offline --cache ../../.cache --no-audit --no-fund",
+		"installCommand": "npm install --ignore-scripts --legacy-peer-deps --package-lock=false --offline --cache ../../../.cache --no-audit --no-fund",
+		"suites": {
+			"host": {
+				"files": [
+					"contracts/*.ts"
+				],
+				"command": "node contracts/check.ts"
+			},
+			"renderer": {
+				"files": [
+					"contracts/renderer.ts"
+				],
+				"command": "node contracts/renderer.ts"
+			}
+		},
+		"localPeers": {
+			"host": {
+				"directory": "local-host",
+				"artifact": "artifacts/host-2.0.0.tgz"
+			}
+		},
+		"baseline": {
+			"firstRelease": true
+		}
+	}
+}

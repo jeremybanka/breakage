@@ -21,13 +21,14 @@
 		"breakage": "./dist/breakage.x.js"
 	},
 	"files": [
+		"npm.md",
 		"dist",
 		"src"
 	],
 	"scripts": {
 		"build": "vp pack && pnpm run schema",
 		"check": "pnpm run check:tsc",
-		"check:tsc": "tsc --noEmit",
+		"check:tsc": "tsc --noEmit && tsc --project tests/public/fixtures/npm && tsc --project __tests__/fixtures/npm/candidate-minimatch && tsc --project __tests__/fixtures/npm/candidate-peer-ranges && tsc --project __tests__/fixtures/npm/runtime-dependencies && tsc --project __tests__/fixtures/npm/coupled-peers",
 		"postversion": "dprint fmt package.json",
 		"schema": "bun src/breakage.x.ts --outdir=dist -- schema",
 		"pretest": "pnpm run build",
@@ -39,11 +40,15 @@
 		"arktype": "2.2.8",
 		"comline": "0.9.0",
 		"minimatch": "10.2.6",
+		"semver": "7.8.5",
 		"simple-git": "4.0.2",
 		"takua": "0.2.3"
 	},
 	"devDependencies": {
 		"@types/bun": "npm:bun-types@1.4.3",
+		"@types/semver": "7.8.0",
+		"minimatch-v8": "npm:minimatch@8.0.7",
+		"minimatch-v9": "npm:minimatch@9.0.9",
 		"typescript": "7.0.2"
 	},
 	"publishConfig": {

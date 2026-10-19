@@ -18,5 +18,12 @@
 			"node"
 		],
 		"target": "ES2022"
-	}
+	},
+	"exclude": [
+		"node_modules",
+		"dist",
+		"coverage",
+		"__tests__/fixtures/npm",
+		"tests/public/fixtures/npm"
+	]
 }

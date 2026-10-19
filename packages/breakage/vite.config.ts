@@ -1,7 +1,9 @@
 import tsdownConfig from "./tsdown.config.js"
 
-import { defineConfig } from "vite-plus"
+import { defineConfig, type UserConfig } from "vite-plus"
 
-export default defineConfig({
+const config: UserConfig = defineConfig({
 	pack: tsdownConfig,
 })
+
+export default config

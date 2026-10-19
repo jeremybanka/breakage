@@ -1,0 +1,27 @@
+{
+	"extends": "../../../../tsconfig.json",
+	"include": [
+		"**/*.ts"
+	],
+	"exclude": [
+		"node_modules",
+		"dist",
+		"**/dist"
+	],
+	"compilerOptions": {
+		"paths": {
+			"integration": [
+				"./src/index.ts"
+			],
+			"host": [
+				"./local-host/src/index.ts"
+			],
+			"breakage": [
+				"../../../../src/breakage.ts"
+			],
+			"minimatch": [
+				"../../../../node_modules/minimatch-v8/dist/mjs/index.d.ts"
+			]
+		}
+	}
+}

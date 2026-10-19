@@ -1,0 +1,12 @@
+{
+	"name": "environment-candidate",
+	"version": "1.0.0",
+	"private": true,
+	"type": "module",
+	"dependencies": {},
+	"breakage": {
+		"candidates": [
+			"host"
+		]
+	}
+}

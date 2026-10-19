@@ -2,6 +2,7 @@
 
 - Keep project-level contributor, maintenance, release, and documentation guidance here. Put package-specific guidance alongside each package.
 - Prefer `.ts` for source files and Node scripts. Do not create `.js`, `.cjs`, `.mjs`, or `.mts` source files; modern Node can run erasable TypeScript directly.
+- Keep executable test fixtures in real TypeScript files, organized as complete miniature projects with their source, manifests, configuration, and representative environments together. Copy and build those projects in disposable directories; tests should express only case-specific changes, and pass varying inputs as data rather than interpolating source code into strings.
 - Put reusable packages in `packages/` and applications in `apps/`.
 - Name release compatibility checks `test:breakage` and their baseline preparation commands `test:breakage:prelude`; keep scripts, task-runner configuration, CI, examples, and documentation aligned.
 - Use the canonical commands in `docs/commands.md`: `fmt` writes formatting, `check` aggregates `check:*` validators, and `test` runs once. Coverage commands use the `cov` prefix where implemented. Keep CI and documentation aligned when changing commands.

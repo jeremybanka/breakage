@@ -1,0 +1,15 @@
+{
+	"name": "integration",
+	"version": "1.1.0",
+	"type": "module",
+	"main": "dist/index.js",
+	"files": [
+		"dist"
+	],
+	"peerDependencies": {
+		"host": "^1 || ^2"
+	},
+	"optionalDependencies": {
+		"helper": "file:./artifacts/helper-1.0.0.tgz"
+	}
+}

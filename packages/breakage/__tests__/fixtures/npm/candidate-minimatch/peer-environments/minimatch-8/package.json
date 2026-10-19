@@ -1,0 +1,14 @@
+{
+	"name": "environment-minimatch-8",
+	"version": "1.0.0",
+	"private": true,
+	"type": "module",
+	"dependencies": {
+		"minimatch": "8.0.7"
+	},
+	"breakage": {
+		"candidates": [
+			"host"
+		]
+	}
+}

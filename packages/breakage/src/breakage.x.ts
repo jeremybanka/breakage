@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-import * as path from "node:path"
 import { inspect } from "node:util"
 
 import { type } from "arktype"
@@ -15,11 +14,18 @@ import {
 	optional,
 	options,
 	parseBooleanOption,
+	required,
 } from "comline"
 import logger from "takua"
 
 import type { BreakageOptions } from "./breakage.ts"
 import { breakage, breakagePrelude } from "./breakage.ts"
+import {
+	defaultConfig,
+	npmCheckManual,
+	npmTestManual,
+	runNpmCli,
+} from "./npm/cli.ts"
 
 const BREAKAGE_MANUAL = options(
 	`Check for breaking changes in a package.`,
@@ -147,6 +153,11 @@ const parse = cli(
 		routes: optional({
 			help: null,
 			schema: null,
+			npm: optional({
+				help: null,
+				check: null,
+				test: optional({ $peer: required({ $range: null }) }),
+			}),
 			prelude: optional({ $configPath: null }),
 			$configPath: null,
 		}),
@@ -155,6 +166,11 @@ const parse = cli(
 			$configPath: BREAKAGE_MANUAL,
 			help: noOptions(`Show usage.`),
 			schema: SCHEMA_MANUAL,
+			npm: noOptions(`Show npm compatibility commands.`),
+			"npm/help": noOptions(`Show npm compatibility commands.`),
+			"npm/check": npmCheckManual,
+			"npm/test": npmTestManual,
+			"npm/test/$peer/$range": npmTestManual,
 			prelude: PRELUDE_MANUAL,
 			"prelude/$configPath": PRELUDE_MANUAL,
 		},
@@ -163,12 +179,12 @@ const parse = cli(
 			"prelude/$configPath": { fileSystem: `files` },
 		},
 		discoverConfigPath: (args: readonly string[]) => {
-			if (args[0] === `help` || args[0] === `schema`) {
+			if (args[0] === `help` || args[0] === `schema` || args[0] === `npm`) {
 				return
 			}
 			const configPath =
 				(args[0] === `prelude` ? args[1] : args[0]) ??
-				path.join(process.cwd(), `breakage.config.json`)
+				defaultConfig(process.cwd())
 			return configPath
 		},
 	},
@@ -186,8 +202,19 @@ if (completion !== undefined) {
 	logWarnings(warnings)
 
 	switch (inputs.case) {
+		case `npm`:
+		case `npm/help`:
 		case `help`:
 			console.log(help(parse.definition))
+			break
+		case `npm/check`:
+			process.exitCode = await runNpmCli(`check`, inputs.opts)
+			break
+		case `npm/test`:
+			process.exitCode = await runNpmCli(`test`, inputs.opts)
+			break
+		case `npm/test/$peer/$range`:
+			process.exitCode = await runNpmCli(`test`, inputs.opts, inputs.params)
 			break
 		case `schema`:
 			{
