@@ -90,3 +90,41 @@ it(`requires support and coordinated evidence for a planned local peer release`,
 	).toMatchObject({ version: `3.0.0`, source: `candidate` })
 	assertStagesRemoved(project, supported)
 }, 30_000)
+
+it(`validates a coordinated peer's requirement on the package under test`, async () => {
+	project = npmFixture()
+	project.representative(`next`, `2.0.0`, true)
+	project.write(`package.json`, {
+		...JSON.parse(project.read(`package.json`)),
+		peerDependencies: { host: `^2` },
+	})
+	project.config.artifact = project.pack(`.`)
+	project.config.releaseIntent = () => ({ status: `release`, version: `2.0.0` })
+	const host = JSON.parse(project.read(`local-host/package.json`))
+	for (const range of [`^1`, `^2`]) {
+		project.write(`local-host/package.json`, {
+			...host,
+			peerDependencies: { integration: range },
+		})
+		project.config.localPeers!.host!.artifact = project.pack(`local-host`)
+		for (const coverageOnly of [false, true]) {
+			const report = await npmCheck(project.config, {
+				baseDirectory: project.directory,
+				coverageOnly,
+			})
+			expect(report.exitCode, JSON.stringify(report)).toBe(
+				range === `^1` ? 0 : 2,
+			)
+			expect(report.representatives[0]!.peers.integration).toMatchObject({
+				version: `1.1.0`,
+				source: `candidate`,
+			})
+			if (range === `^2`) {
+				expect(report.representatives[0]!.error).toContain(
+					`requires integration: ^2, but the representative provides integration@1.1.0`,
+				)
+			}
+			assertStagesRemoved(project, report)
+		}
+	}
+}, 30_000)

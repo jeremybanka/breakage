@@ -143,7 +143,9 @@ For a core still labeled `0.53.3` with a planned `0.54.0` release, an integratio
 
 Candidate results are conditional on publication. They can cover a new era, but cannot excuse an incompatible released version that the integration still advertises. Unreleased local edits with no release intent create no new coordination obligation. Registering a currently declared local peer means the integration must accommodate its planned releases. Registrations retained only for historical resolution do not impose this obligation after the peer declaration is removed. The repository owns publication order.
 
-Focused `npm test` commands remain available for exploration before advertising an upcoming version. They check release intent for the selected candidate environments but do not audit every planned local release; require the full check or coverage audit as part of the release gate.
+Every coordinated candidate must also accept the representative's peer versions in its own normalized `peerDependencies`. For example, a candidate declaring `minimatch: ^8` cannot be approved alongside Minimatch 9, even if the integration declares `^9` and its assertions pass. Both full checks and coverage audits reject that conflict before candidate installation with exit 2, identifying the candidate, required range, and observed version. The representative must supply required peers needed only by a coordinated candidate too; these additional identities do not require separate integration suites. Absent optional peers are allowed, but present optional peers must satisfy their ranges. Another coordinated peer contributes its certified intended version; a peer on the integration itself uses the integration's current archive version.
+
+Focused `npm test` commands remain available for exploration before advertising an upcoming version. They warn about coordinated candidates' incompatible peer ranges and still execute, while missing required peers remain setup errors. They check release intent for the selected candidate environments but do not audit every planned local release; require the full check or coverage audit as part of the release gate.
 
 ## Removing support
 

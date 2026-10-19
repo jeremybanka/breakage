@@ -5,6 +5,7 @@ import semver from "semver"
 import { command, errorMessage } from "./command.ts"
 import { validateConfig, validatePeerRanges } from "./config.ts"
 import {
+	checkCandidatePeers,
 	discover,
 	prepareEnvironment,
 	stageCandidate,
@@ -158,7 +159,7 @@ async function runRepresentative(
 				base,
 				directory,
 				stage,
-				Object.keys(manifest.peerDependencies ?? {}),
+				manifest,
 			)
 			result.peers = environment.peers
 			for (const peer of Object.keys(manifest.peerDependencies ?? {})) {
@@ -171,9 +172,8 @@ async function runRepresentative(
 					)
 			}
 			for (const [peer, evidence] of Object.entries(result.peers)) {
-				if (
-					!matches(evidence.version, manifest.peerDependencies?.[peer] ?? `*`)
-				)
+				const range = manifest.peerDependencies?.[peer]
+				if (range !== undefined && !matches(evidence.version, range))
 					result.warnings.push(
 						`${peer}@${evidence.version} is outside declared support.`,
 					)
@@ -194,6 +194,7 @@ async function runRepresentative(
 			})
 			result.suites = peers.map((peer) => ({ peer, status: `not-run` }))
 			if (!peers.length) return result
+			result.warnings.push(...checkCandidatePeers(environment, !!selection))
 			if (coverageOnly) {
 				result.status = `audited`
 				return result

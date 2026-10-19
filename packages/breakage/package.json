@@ -47,6 +47,8 @@
 	"devDependencies": {
 		"@types/bun": "npm:bun-types@1.4.3",
 		"@types/semver": "7.8.0",
+		"minimatch-v8": "npm:minimatch@8.0.7",
+		"minimatch-v9": "npm:minimatch@9.0.9",
 		"typescript": "7.0.2"
 	},
 	"publishConfig": {

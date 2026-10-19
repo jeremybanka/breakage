@@ -134,8 +134,9 @@ export async function prepareEnvironment(
 	base: string,
 	directory: string,
 	stage: string,
-	peerNames: string[],
+	packageManifest: Manifest,
 ): Promise<Environment> {
+	const peerNames = Object.keys(packageManifest.peerDependencies ?? {})
 	const filename = path.join(directory, `package.json`)
 	const lockfile = path.join(directory, config.lockfile)
 	for (const input of [filename, lockfile]) {
@@ -181,13 +182,23 @@ export async function prepareEnvironment(
 			manifest: localManifest,
 		}
 	}
-	const relevant = peerNames.filter(
+	const relevant = [
+		...new Set([
+			...peerNames,
+			...Object.values(candidates).flatMap((candidate) =>
+				Object.keys(candidate.manifest.peerDependencies ?? {}),
+			),
+		]),
+	].filter(
 		(peer) =>
-			declarations[peer] !== undefined || candidates[peer] !== undefined,
+			peer === packageManifest.name ||
+			declarations[peer] !== undefined ||
+			candidates[peer] !== undefined,
 	)
 	const before: Record<string, string> = {}
 	for (const peer of relevant) {
 		if (
+			peer !== packageManifest.name &&
 			!candidates[peer] &&
 			(await exists(path.join(directory, `node_modules`, peer)))
 		)
@@ -219,16 +230,17 @@ export async function prepareEnvironment(
 	const peers: Environment[`peers`] = {}
 	for (const peer of relevant) {
 		const candidate = candidates[peer]
-		const evidence: NpmPeerEvidence = candidate
+		const staged = candidate !== undefined || peer === packageManifest.name
+		const evidence: NpmPeerEvidence = staged
 			? {
-					version: candidate.version,
+					version: candidate?.version ?? packageManifest.version,
 					path: path.join(stage, `node_modules`, peer),
 					source: `candidate`,
 				}
 			: await installed(directory, peer)
 		const specifier = declarations[peer]
 		if (
-			!(candidate && specifier === undefined) &&
+			!(staged && specifier === undefined) &&
 			(!specifier ||
 				!semver.validRange(specifier) ||
 				!semver.satisfies(evidence.version, specifier, {
@@ -245,7 +257,7 @@ export async function prepareEnvironment(
 			)
 		for (const local of Object.values(config.localPeers ?? {})) {
 			if (
-				!candidate &&
+				!staged &&
 				within(
 					await realpath(path.resolve(base, local.directory)),
 					evidence.path,
@@ -258,6 +270,37 @@ export async function prepareEnvironment(
 		peers[peer] = evidence
 	}
 	return { directory, stage, manifest, peers, candidates }
+}
+
+/** Validate the complete coordinated formulation before an audit or execution. */
+export function checkCandidatePeers(
+	environment: Environment,
+	focused: boolean,
+): string[] {
+	const conflicts: string[] = []
+	for (const [name, candidate] of Object.entries(environment.candidates)) {
+		for (const [peer, range] of Object.entries(
+			candidate.manifest.peerDependencies ?? {},
+		)) {
+			const evidence = environment.peers[peer]
+			if (!evidence) {
+				if (candidate.manifest.peerDependenciesMeta?.[peer]?.optional) continue
+				throw new Error(
+					`Complete representative is missing required peer ${peer}: ${range} of coordinated candidate ${name}@${candidate.version}.`,
+				)
+			}
+			// This is declaration membership; exact-preview coverage is audited separately.
+			if (!semver.satisfies(evidence.version, range))
+				conflicts.push(
+					`Coordinated candidate ${name}@${candidate.version} requires ${peer}: ${range}, but the representative provides ${peer}@${evidence.version}.`,
+				)
+		}
+	}
+	if (conflicts.length && !focused) throw new Error(conflicts.join(`\n`))
+	return conflicts.map(
+		(conflict) =>
+			`${conflict} Running focused exploration outside declared support.`,
+	)
 }
 
 async function copySuite(
