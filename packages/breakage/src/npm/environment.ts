@@ -150,7 +150,12 @@ export async function prepareEnvironment(
 	}
 	const inputs = await Promise.all([readFile(filename), readFile(lockfile)])
 	const manifest = await readManifest(filename)
-	const declarations = { ...manifest.devDependencies, ...manifest.dependencies }
+	// npm lets optionalDependencies override dependencies of the same name.
+	const declarations = {
+		...manifest.devDependencies,
+		...manifest.dependencies,
+		...manifest.optionalDependencies,
+	}
 	const candidates: Environment[`candidates`] = {}
 	for (const peer of manifest.breakage?.candidates ?? []) {
 		if (!peerNames.includes(peer))
@@ -231,6 +236,12 @@ export async function prepareEnvironment(
 	for (const peer of relevant) {
 		const candidate = candidates[peer]
 		const staged = candidate !== undefined || peer === packageManifest.name
+		if (
+			!staged &&
+			Object.hasOwn(manifest.optionalDependencies ?? {}, peer) &&
+			!(await exists(path.join(directory, `node_modules`, peer)))
+		)
+			continue
 		const evidence: NpmPeerEvidence = staged
 			? {
 					version: candidate?.version ?? packageManifest.version,
@@ -255,14 +266,17 @@ export async function prepareEnvironment(
 			throw new Error(
 				`Stale installed ${peer}: frozen preparation changed ${before[peer]} to ${evidence.version}.`,
 			)
-		for (const local of Object.values(config.localPeers ?? {})) {
+		for (const [localPeer, local] of Object.entries(config.localPeers ?? {})) {
+			if (staged) continue
+			const localDirectory = path.resolve(base, local.directory)
+			// Historical-only registrations need not exist in today's checkout.
 			if (
-				!staged &&
-				within(
-					await realpath(path.resolve(base, local.directory)),
-					evidence.path,
-				)
+				!peerNames.includes(localPeer) &&
+				!relevant.includes(localPeer) &&
+				!(await exists(localDirectory))
 			)
+				continue
+			if (within(await realpath(localDirectory), evidence.path))
 				throw new Error(
 					`Released peer ${peer} resolves into a local workspace package.`,
 				)

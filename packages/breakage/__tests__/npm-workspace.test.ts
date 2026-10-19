@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { execFileSync } from "node:child_process"
-import { existsSync } from "node:fs"
+import { existsSync, rmSync, symlinkSync } from "node:fs"
 import path from "node:path"
 
 import { afterEach, describe, expect, it } from "bun:test"
@@ -148,6 +148,96 @@ describe(`authored support eras`, () => {
 })
 
 describe(`historical workspace declarations`, () => {
+	it.each([false, true])(
+		`allows a historical-only peer directory to be removed (coverage only: %s)`,
+		async (coverageOnly) => {
+			const f = setup()
+			f.copy(`local-host`, `legacy-local`)
+			f.update(`legacy-local/package.json`, { name: `legacy` })
+			f.config.localPeers!.legacy = {
+				directory: `legacy-local`,
+				artifact: `not-built-legacy.tgz`,
+			}
+			f.baseline({ host: `^1 || ^2`, legacy: `workspace:^` })
+			rmSync(path.join(f.directory, `legacy-local`), { recursive: true })
+			const inspected: string[] = []
+			f.config.releaseIntent = ({ packageName }) => {
+				inspected.push(packageName)
+				return { status: `none` }
+			}
+			const previous = await previousManifest(f.config, f.directory)
+			expect(previous!.peerDependencies!.legacy).toBe(`^2.0.0`)
+			const result = await npmCheck(f.config, {
+				baseDirectory: f.directory,
+				coverageOnly,
+			})
+			expect(result.exitCode, JSON.stringify(result)).toBe(0)
+			expect(result.support.status).toBe(`unchanged`)
+			expect(inspected).toEqual([`host`])
+			expect(result.representatives.map((entry) => entry.status)).toEqual([
+				coverageOnly ? `audited` : `passed`,
+				coverageOnly ? `audited` : `passed`,
+			])
+			assertStagesRemoved(f, result)
+		},
+		30_000,
+	)
+
+	it(`keeps isolation checks for existing historical-only directories`, async () => {
+		const f = setup()
+		f.copy(`local-host`, `legacy-local`)
+		f.update(`legacy-local/package.json`, { name: `legacy` })
+		f.config.localPeers!.legacy = {
+			directory: `legacy-local`,
+			artifact: `not-built-legacy.tgz`,
+		}
+		f.baseline({ host: `^1 || ^2`, legacy: `workspace:^` })
+		f.copy(`released-host`, `legacy-local/node_modules/host`)
+		f.config.prepareCommand += ` && rm -r node_modules/host && ln -s ../../../legacy-local/node_modules/host node_modules/host`
+		const result = await npmTest(
+			f.config,
+			{ representative: `environments/released-1` },
+			{ baseDirectory: f.directory },
+		)
+		expect(result.exitCode, JSON.stringify(result)).toBe(2)
+		expect(result.representatives[0]!.error).toContain(
+			`Released peer host resolves into a local workspace package`,
+		)
+		assertStagesRemoved(f, result)
+	}, 30_000)
+
+	it(`does not treat a broken historical directory link as a removed directory`, async () => {
+		const f = setup()
+		f.config.localPeers!.legacy = {
+			directory: `legacy-local`,
+			artifact: `not-built-legacy.tgz`,
+		}
+		symlinkSync(`missing-legacy`, path.join(f.directory, `legacy-local`))
+		const result = await npmTest(
+			f.config,
+			{ representative: `environments/released-1` },
+			{ baseDirectory: f.directory },
+		)
+		expect(result.exitCode, JSON.stringify(result)).toBe(2)
+		expect(result.representatives[0]!.error).toContain(`legacy-local`)
+		assertStagesRemoved(f, result)
+	}, 30_000)
+
+	it(`still requires directories for currently declared local peers`, async () => {
+		const f = setup()
+		rmSync(path.join(f.directory, `local-host`), { recursive: true })
+		const result = await npmCheck(f.config, {
+			baseDirectory: f.directory,
+			coverageOnly: true,
+		})
+		expect(result.exitCode, JSON.stringify(result)).toBe(2)
+		expect(result.errors.join()).toContain(
+			`Cannot inspect planned local release for host`,
+		)
+		expect(result.representatives[0]!.error).toContain(`local-host`)
+		assertStagesRemoved(f, result)
+	}, 30_000)
+
 	it.each([
 		[`workspace:`, `0.53.3`],
 		[`workspace:*`, `0.53.3`],

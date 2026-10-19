@@ -14,6 +14,8 @@ A fixed declaration such as `workspace:^0.53.3` is accepted and compared as `^0.
 
 Older releases may have used moving shorthand. For the baseline comparison, register that peer's directory in `localPeers`; Breakage reads its version from the same historical commit as the integration manifest. For example, historical `workspace:^` becomes `^0.53.3` when that commit's peer version is `0.53.3`, even if today's checkout or release plan says `0.54.0`. Missing historical evidence is a setup error. The configured directory must exist at the baseline commit; automatic tracking across package moves is unsupported.
 
+After removing a peer requirement, you may retain its historical registration even if its directory has been deleted from the current checkout. Breakage still checks existing registered directories for workspace-source leaks. A broken directory link remains an error.
+
 ## Start with released peers
 
 In the integration package, create complete environments for the peer formulations you want to exercise. For example, `peer-environments/core-1/package.json`:
@@ -168,6 +170,8 @@ This callback also receives `changes`, with each peer's previous and current dec
 ## Installation, isolation, and recovery
 
 `prepareCommand` runs in each representative and must install from its frozen lock file. For another package manager, set `lockfile` and this command accordingly, keeping the environment independent of workspace package substitution. Breakage requires unchanged manifest/lock bytes and checks direct installed identities. An existing installation that changes peer versions during frozen preparation is reported as stale; rerun after reviewing the updated installation. The configured package manager establishes lock consistency; Breakage does not reimplement its lock format.
+
+Installed peers may come from `dependencies`, `devDependencies`, or `optionalDependencies`. An optional dependency overrides a required dependency of the same name. When present, it supplies peer evidence and runs its selected relationship suite normally. When genuinely absent, it supplies no evidence: a required peer still fails, while an optional peer may be omitted. Broken installed links and missing manifests remain errors. Optional-peer absence coverage is not required.
 
 The ignored `test/` directory is also the ownership lock. An existing directory is rejected without deleting it. Independent environments execute concurrently, while two runs cannot own the same environment. On normal completion or failure, Breakage removes only the stage it created. After a killed process, confirm its commands have stopped, inspect the remaining stage, and remove it before retrying.
 
