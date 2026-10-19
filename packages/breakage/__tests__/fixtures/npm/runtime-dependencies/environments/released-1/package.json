@@ -4,6 +4,6 @@
 	"private": true,
 	"type": "module",
 	"dependencies": {
-		"host": "1.0.0"
+		"runtime-host": "1.0.0"
 	}
 }

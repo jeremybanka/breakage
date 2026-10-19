@@ -16,6 +16,7 @@
 		"flightdeck",
 		"jeremybanka",
 		"libexec",
+		"minimatch",
 		"oxlint",
 		"pathspecs",
 		"renovatebot",

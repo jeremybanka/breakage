@@ -21,7 +21,7 @@ function setup(major: 8 | 9): NpmFixture {
 		new URL(`./fixtures/npm/candidate-minimatch/`, import.meta.url),
 		(project) => {
 			project.update(`package.json`, {
-				peerDependencies: { host: `^2`, minimatch: `^${major}` },
+				peerDependencies: { "minimatch-host": `^2`, minimatch: `^${major}` },
 			})
 			project.config.representatives = `peer-environments/minimatch-${major}`
 		},
@@ -66,7 +66,7 @@ describe(`real minimatch major-version incompatibility`, () => {
 		expect(result.exitCode, JSON.stringify(result, null, 2)).toBe(1)
 		expect(result.representatives[0]!.status).toBe(`compatibility-failure`)
 		expect(result.representatives[0]!.warnings).toEqual([
-			`Coordinated candidate host@2.0.0 requires minimatch: ^8, but the representative provides minimatch@${version}. Running focused exploration outside declared support.`,
+			`Coordinated candidate minimatch-host@2.0.0 requires minimatch: ^8, but the representative provides minimatch@${version}. Running focused exploration outside declared support.`,
 		])
 		for (const suite of result.representatives[0]!.suites) {
 			expect(suite.status).toBe(`compatibility-failure`)
@@ -87,7 +87,7 @@ describe(`real minimatch major-version incompatibility`, () => {
 			f.config.installCommand = `touch ../../../candidate-installed && ${f.config.installCommand}`
 			if (coverageOnly) {
 				f.config.artifact = `not-built.tgz`
-				f.config.localPeers!.host!.artifact = `not-built-host.tgz`
+				f.config.localPeers![`minimatch-host`]!.artifact = `not-built-host.tgz`
 			}
 			const result = await npmCheck(f.config, {
 				baseDirectory: f.directory,
@@ -96,7 +96,7 @@ describe(`real minimatch major-version incompatibility`, () => {
 			assertStagesRemoved(f, result)
 			const representative = result.representatives[0]!
 			expect(result.support.status).toBe(`unchanged`)
-			expect(representative.peers.host).toMatchObject({
+			expect(representative.peers[`minimatch-host`]).toMatchObject({
 				version: `2.0.0`,
 				source: `candidate`,
 			})
@@ -111,7 +111,7 @@ describe(`real minimatch major-version incompatibility`, () => {
 				false,
 			)
 			expect(representative.status).toBe(`setup-error`)
-			for (const detail of [`host`, `minimatch`, `^8`, version]) {
+			for (const detail of [`minimatch-host`, `minimatch`, `^8`, version]) {
 				expect(representative.error).toContain(detail)
 			}
 			for (const suite of representative.suites) {

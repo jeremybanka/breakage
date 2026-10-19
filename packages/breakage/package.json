@@ -28,7 +28,7 @@
 	"scripts": {
 		"build": "vp pack && pnpm run schema",
 		"check": "pnpm run check:tsc",
-		"check:tsc": "tsc --noEmit && tsc --project tests/public/fixtures/npm && tsc --project __tests__/fixtures/npm/candidate-minimatch && tsc --project __tests__/fixtures/npm/candidate-peer-ranges && tsc --project __tests__/fixtures/npm/runtime-dependencies && tsc --project __tests__/fixtures/npm/coupled-peers",
+		"check:tsc": "tsc --noEmit",
 		"postversion": "dprint fmt package.json",
 		"schema": "bun src/breakage.x.ts --outdir=dist -- schema",
 		"pretest": "pnpm run build",

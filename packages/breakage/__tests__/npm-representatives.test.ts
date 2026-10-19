@@ -139,11 +139,11 @@ describe(`representative optional dependencies`, () => {
 				(project) => {
 					if (optionalPeer)
 						project.update(`package.json`, {
-							peerDependenciesMeta: { host: { optional: true } },
+							peerDependenciesMeta: { "coupled-host": { optional: true } },
 						})
 				},
 			))
-			makeOptional(f, `peer-environments/one`, `host`, true)
+			makeOptional(f, `peer-environments/one`, `coupled-host`, true)
 			f.config.prepareCommand += ` --omit=optional`
 			const result = await npmTest(
 				f.config,
@@ -152,14 +152,16 @@ describe(`representative optional dependencies`, () => {
 			)
 			expect(result.exitCode, JSON.stringify(result)).toBe(optionalPeer ? 0 : 2)
 			const representative = result.representatives[0]!
-			expect(representative.peers.host).toBeUndefined()
+			expect(representative.peers[`coupled-host`]).toBeUndefined()
 			if (optionalPeer) {
 				expect(representative.status).toBe(`passed`)
 				expect(representative.suites).toMatchObject([
-					{ peer: `renderer`, status: `passed` },
+					{ peer: `coupled-renderer`, status: `passed` },
 				])
 			} else {
-				expect(representative.error).toContain(`missing required peer host`)
+				expect(representative.error).toContain(
+					`missing required peer coupled-host`,
+				)
 				expect(representative.suites).toEqual([])
 			}
 			assertStagesRemoved(f, result)
@@ -171,7 +173,9 @@ describe(`representative optional dependencies`, () => {
 		const f = (fixture = npmFixture(
 			new URL(`./fixtures/npm/candidate-peer-ranges/`, import.meta.url),
 			(project) => {
-				project.update(`package.json`, { peerDependencies: { host: `^2` } })
+				project.update(`package.json`, {
+					peerDependencies: { "ranges-host": `^2` },
+				})
 				project.copy(`src/host-only.ts`, `src/index.ts`)
 				delete project.config.suites.renderer
 			},
@@ -184,9 +188,9 @@ describe(`representative optional dependencies`, () => {
 			source: `installed`,
 		})
 		expect(result.representatives[0]!.suites).toMatchObject([
-			{ peer: `host`, status: `passed` },
+			{ peer: `ranges-host`, status: `passed` },
 		])
-		expect(result.coverage.map((entry) => entry.peer)).toEqual([`host`])
+		expect(result.coverage.map((entry) => entry.peer)).toEqual([`ranges-host`])
 		assertStagesRemoved(f, result)
 	}, 30_000)
 

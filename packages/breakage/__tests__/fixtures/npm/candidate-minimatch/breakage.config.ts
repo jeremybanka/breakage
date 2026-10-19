@@ -3,10 +3,10 @@ import type { NpmConfig } from "breakage"
 const config: { npm: NpmConfig } = {
 	npm: {
 		releaseIntent: ({ packageName }) =>
-			packageName === `host`
+			packageName === `minimatch-host`
 				? { status: `release`, version: `2.0.0` }
 				: { status: `none` },
-		artifact: "artifacts/integration-1.1.0.tgz",
+		artifact: "artifacts/minimatch-integration-1.1.0.tgz",
 		representatives: "peer-environments/minimatch-8",
 		lockfile: "package-lock.json",
 		prepareCommand:
@@ -14,7 +14,7 @@ const config: { npm: NpmConfig } = {
 		installCommand:
 			"npm install --ignore-scripts --legacy-peer-deps --package-lock=false --offline --cache ../../../.cache --no-audit --no-fund",
 		suites: {
-			host: {
+			"minimatch-host": {
 				files: ["contracts/*.ts"],
 				command: "node contracts/check.ts",
 			},
@@ -24,9 +24,9 @@ const config: { npm: NpmConfig } = {
 			},
 		},
 		localPeers: {
-			host: {
+			"minimatch-host": {
 				directory: "local-host",
-				artifact: "artifacts/host-2.0.0.tgz",
+				artifact: "artifacts/minimatch-host-2.0.0.tgz",
 			},
 		},
 		baseline: {

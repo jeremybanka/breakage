@@ -1,6 +1,20 @@
 packages:
   - apps/*
   - packages/*
+  # Current fixture packages participate in builds; frozen environments and released sources do not.
+  - packages/breakage/tests/public/fixtures/npm
+  - packages/breakage/tests/public/fixtures/npm/local-host
+  - packages/breakage/__tests__/fixtures/npm/candidate-minimatch
+  - packages/breakage/__tests__/fixtures/npm/candidate-minimatch/local-host
+  - packages/breakage/__tests__/fixtures/npm/candidate-peer-ranges
+  - packages/breakage/__tests__/fixtures/npm/candidate-peer-ranges/local-host
+  - packages/breakage/__tests__/fixtures/npm/candidate-peer-ranges/renderer-source
+  - packages/breakage/__tests__/fixtures/npm/runtime-dependencies
+  - packages/breakage/__tests__/fixtures/npm/runtime-dependencies/helper
+  - packages/breakage/__tests__/fixtures/npm/runtime-dependencies/local-host
+  - packages/breakage/__tests__/fixtures/npm/coupled-peers
+  - packages/breakage/__tests__/fixtures/npm/coupled-peers/local-host
+  - packages/breakage/__tests__/fixtures/npm/coupled-peers/renderer
 
 allowBuilds:
   dprint: true

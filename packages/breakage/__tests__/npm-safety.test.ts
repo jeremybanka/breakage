@@ -146,7 +146,7 @@ describe(`npm environment safety`, () => {
 		f.representative(`one`, `1.0.0`)
 		const result = await npmTest(
 			f.config,
-			{ peer: `host`, range: `1` },
+			{ peer: `runtime-host`, range: `1` },
 			{ baseDirectory: f.directory },
 		)
 		expect(result.exitCode, JSON.stringify(result)).toBe(0)
@@ -162,16 +162,16 @@ describe(`npm environment safety`, () => {
 			// even when the current contract does not happen to execute that branch.
 			f.config.installCommand += ` && test -f node_modules/helper/package.json`
 			if (shadow)
-				f.config.installCommand += ` && mkdir -p node_modules/helper/node_modules && cp -R node_modules/host node_modules/helper/node_modules/host`
+				f.config.installCommand += ` && mkdir -p node_modules/helper/node_modules && cp -R node_modules/runtime-host node_modules/helper/node_modules/runtime-host`
 			const result = await npmTest(
 				f.config,
-				{ peer: `host`, range: `2` },
+				{ peer: `runtime-host`, range: `2` },
 				{ baseDirectory: f.directory },
 			)
 			expect(result.exitCode, JSON.stringify(result)).toBe(shadow ? 2 : 0)
 			if (shadow) {
 				expect(result.representatives[0]!.error).toContain(
-					`Runtime dependency helper resolves a different instance of host`,
+					`Runtime dependency helper resolves a different instance of runtime-host`,
 				)
 				expect(result.representatives[0]!.suites[0]!.status).toBe(`not-run`)
 			}
@@ -216,7 +216,7 @@ describe(`npm environment safety`, () => {
 		f.config.installCommand += ` && rm node_modules/helper/package.json`
 		const result = await npmTest(
 			f.config,
-			{ peer: `host`, range: `1` },
+			{ peer: `runtime-host`, range: `1` },
 			{ baseDirectory: f.directory },
 		)
 		expect(result.exitCode, JSON.stringify(result)).toBe(2)

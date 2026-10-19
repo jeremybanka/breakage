@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert"
 import { minimatch } from "minimatch"
-import { matcher as hostMatcher } from "host"
-import { matcher, matches } from "integration"
+import { matcher as hostMatcher } from "minimatch-host"
+import { matcher, matches } from "minimatch-integration"
 
 assert.equal(hostMatcher, minimatch)
 assert.equal(matcher, minimatch)

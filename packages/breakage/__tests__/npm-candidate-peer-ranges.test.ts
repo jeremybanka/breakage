@@ -28,7 +28,9 @@ function setup(
 					: {}),
 			})
 			if (options.integrationDeclaresRenderer === false) {
-				project.update(`package.json`, { peerDependencies: { host: `^2` } })
+				project.update(`package.json`, {
+					peerDependencies: { "ranges-host": `^2` },
+				})
 				project.copy(`src/host-only.ts`, `src/index.ts`)
 				delete project.config.suites.renderer
 			}
@@ -69,7 +71,7 @@ describe(`coordinated candidate peer declarations`, () => {
 			const representative = result.representatives[0]!
 			assertStagesRemoved(f, result)
 			expect(result.support.status).toBe(`unchanged`)
-			expect(representative.peers.host).toMatchObject({
+			expect(representative.peers[`ranges-host`]).toMatchObject({
 				version: `2.0.0`,
 				source: `candidate`,
 			})
@@ -92,7 +94,7 @@ describe(`coordinated candidate peer declarations`, () => {
 					)
 				}
 			} else {
-				for (const detail of [`host`, `renderer`, `^19`, `18.0.0`]) {
+				for (const detail of [`ranges-host`, `renderer`, `^19`, `18.0.0`]) {
 					expect(representative.error).toContain(detail)
 				}
 				for (const suite of representative.suites) {
@@ -133,10 +135,12 @@ describe(`coordinated candidate peer declarations`, () => {
 				version: `18.0.0`,
 				source: `installed`,
 			})
-			expect(result.coverage.map((entry) => entry.peer)).toEqual([`host`])
+			expect(result.coverage.map((entry) => entry.peer)).toEqual([
+				`ranges-host`,
+			])
 			expect(
 				result.representatives[0]!.suites.map((suite) => suite.peer),
-			).toEqual([`host`])
+			).toEqual([`ranges-host`])
 			assertStagesRemoved(f, result)
 		},
 		30_000,
@@ -149,11 +153,11 @@ describe(`coordinated candidate peer declarations`, () => {
 			omitRenderer(f)
 			const options = { baseDirectory: f.directory }
 			const result = focused
-				? await npmTest(f.config, { peer: `host`, range: `2` }, options)
+				? await npmTest(f.config, { peer: `ranges-host`, range: `2` }, options)
 				: await npmCheck(f.config, options)
 			expect(result.exitCode, JSON.stringify(result)).toBe(2)
 			expect(result.representatives[0]!.error).toContain(
-				`missing required peer renderer: ^18 of coordinated candidate host@2.0.0`,
+				`missing required peer renderer: ^18 of coordinated candidate ranges-host@2.0.0`,
 			)
 			assertStagesRemoved(f, result)
 		},
@@ -186,7 +190,7 @@ describe(`coordinated candidate peer declarations`, () => {
 			const manifest = JSON.parse(f.read(`package.json`))
 			f.write(`package.json`, {
 				...manifest,
-				peerDependencies: { host: `^2`, renderer: `*` },
+				peerDependencies: { "ranges-host": `^2`, renderer: `*` },
 			})
 			f.config.artifact = f.pack(`.`)
 			f.config.localPeers!.renderer = {
@@ -197,7 +201,7 @@ describe(`coordinated candidate peer declarations`, () => {
 			const filename = `peer-environments/coordinated/package.json`
 			f.write(filename, {
 				...JSON.parse(f.read(filename)),
-				breakage: { candidates: [`host`, `renderer`] },
+				breakage: { candidates: [`ranges-host`, `renderer`] },
 			})
 			f.config.releaseIntent = ({ packageName }) => ({
 				status: `release`,
@@ -237,13 +241,13 @@ describe(`coordinated candidate peer declarations`, () => {
 		const f = setup(`^19`)
 		const result = await npmTest(
 			f.config,
-			{ peer: `host`, range: `2` },
+			{ peer: `ranges-host`, range: `2` },
 			{ baseDirectory: f.directory },
 		)
 		expect(result.exitCode, JSON.stringify(result)).toBe(0)
 		expect(result.representatives[0]!.suites[0]!.status).toBe(`passed`)
 		expect(result.representatives[0]!.warnings).toEqual([
-			`Coordinated candidate host@2.0.0 requires renderer: ^19, but the representative provides renderer@18.0.0. Running focused exploration outside declared support.`,
+			`Coordinated candidate ranges-host@2.0.0 requires renderer: ^19, but the representative provides renderer@18.0.0. Running focused exploration outside declared support.`,
 		])
 		assertStagesRemoved(f, result)
 	}, 30_000)

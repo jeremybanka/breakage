@@ -251,6 +251,93 @@ importers:
         specifier: 7.0.2
         version: 7.0.2
 
+  packages/breakage/__tests__/fixtures/npm/candidate-minimatch:
+    dependencies:
+      minimatch:
+        specifier: ^8
+        version: 8.0.7
+    devDependencies:
+      breakage:
+        specifier: workspace:*
+        version: link:../../../..
+      minimatch-host:
+        specifier: workspace:*
+        version: link:local-host
+
+  packages/breakage/__tests__/fixtures/npm/candidate-minimatch/local-host:
+    dependencies:
+      minimatch:
+        specifier: ^8
+        version: 8.0.7
+
+  packages/breakage/__tests__/fixtures/npm/candidate-peer-ranges:
+    devDependencies:
+      breakage:
+        specifier: workspace:*
+        version: link:../../../..
+      ranges-host:
+        specifier: workspace:*
+        version: link:local-host
+      renderer:
+        specifier: workspace:*
+        version: link:renderer-source
+
+  packages/breakage/__tests__/fixtures/npm/candidate-peer-ranges/local-host:
+    devDependencies:
+      renderer:
+        specifier: workspace:*
+        version: link:../renderer-source
+
+  packages/breakage/__tests__/fixtures/npm/candidate-peer-ranges/renderer-source: {}
+
+  packages/breakage/__tests__/fixtures/npm/coupled-peers:
+    devDependencies:
+      breakage:
+        specifier: workspace:*
+        version: link:../../../..
+      coupled-host:
+        specifier: workspace:*
+        version: link:local-host
+      coupled-renderer:
+        specifier: workspace:*
+        version: link:renderer
+
+  packages/breakage/__tests__/fixtures/npm/coupled-peers/local-host: {}
+
+  packages/breakage/__tests__/fixtures/npm/coupled-peers/renderer: {}
+
+  packages/breakage/__tests__/fixtures/npm/runtime-dependencies:
+    devDependencies:
+      breakage:
+        specifier: workspace:*
+        version: link:../../../..
+      runtime-host:
+        specifier: workspace:*
+        version: link:local-host
+    optionalDependencies:
+      helper:
+        specifier: workspace:*
+        version: link:helper
+
+  packages/breakage/__tests__/fixtures/npm/runtime-dependencies/helper:
+    devDependencies:
+      runtime-host:
+        specifier: workspace:*
+        version: link:../local-host
+
+  packages/breakage/__tests__/fixtures/npm/runtime-dependencies/local-host: {}
+
+  packages/breakage/tests/public/fixtures/npm:
+    devDependencies:
+      breakage:
+        specifier: workspace:*
+        version: link:../../../..
+      host:
+        specifier: workspace:*
+        version: link:local-host
+
+  packages/breakage/tests/public/fixtures/npm/local-host: {}
+
 packages:
 
   '@ark/schema@0.56.7':
@@ -1455,9 +1542,15 @@ packages:
     resolution: {integrity: sha512-Izi8RQcffqCeNVgFigKli1ssklIbpHnCYc6AknXGYoB6grJqyeby7jv12JUQgmTAnIDnbck1uxksT4dzN3PWBA==}
     engines: {node: '>=12'}
 
+  balanced-match@1.0.2:
+    resolution: {integrity: sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw==}
+
   balanced-match@4.0.4:
     resolution: {integrity: sha512-BLrgEcRTwX2o6gGxGOCNyMvGSp35YofuYzw9h1IMTRmKqttAZZVU67bdb9Pr2vUHA8+j3i2tJfjO6C6+4myGTA==}
     engines: {node: 18 || 20 || >=22}
+
+  brace-expansion@2.1.7:
+    resolution: {integrity: sha512-uZbew1NqdmPDTMJ8ah1y+b+9QEJrfkXFk3RcTQw3X0jW/xRUvFKsg1CfQdSYGdTbXZWExtU3J3ccxtnfw1Fi0g==}
 
   brace-expansion@5.0.12:
     resolution: {integrity: sha512-YovQ3rzhaLMIrDjNDMkNS01tea93qhEhG5xy8f6+R0l+dw3Ki+5sCoIoI942iuLZTHWogWktgwVDhU09iNEimQ==}
@@ -1755,6 +1848,10 @@ packages:
   minimatch@10.2.6:
     resolution: {integrity: sha512-vpLQEs+VLCr1nU0BXS07maYoFwlDAH0gngQuuttxIwutDFEMHq2blX+8vpgxDdK3J1PwjCJiep77OitTZ4Ll1A==}
     engines: {node: 18 || 20 || >=22}
+
+  minimatch@8.0.7:
+    resolution: {integrity: sha512-V+1uQNdzybxa14e/p00HZnQNNcTjnRJjDxg2V8wtkjFctq4M7hXFws4oekyTP0Jebeq7QYtpFyOeBAjc88zvYg==}
+    engines: {node: '>=16 || 14 >=14.17'}
 
   mrmime@2.0.1:
     resolution: {integrity: sha512-Y3wQdFg2Va6etvQ5I82yUhGdsKrcYox6p7FfL1LbK2J4V01F9TGlepTIhnK24t7koZibmg82KGglhA1XK5IsLQ==}
@@ -2957,7 +3054,13 @@ snapshots:
 
   assertion-error@2.0.1: {}
 
+  balanced-match@1.0.2: {}
+
   balanced-match@4.0.4: {}
+
+  brace-expansion@2.1.7:
+    dependencies:
+      balanced-match: 1.0.2
 
   brace-expansion@5.0.12:
     dependencies:
@@ -3252,6 +3355,10 @@ snapshots:
   minimatch@10.2.6:
     dependencies:
       brace-expansion: 5.0.12
+
+  minimatch@8.0.7:
+    dependencies:
+      brace-expansion: 2.1.7
 
   mrmime@2.0.1: {}
 

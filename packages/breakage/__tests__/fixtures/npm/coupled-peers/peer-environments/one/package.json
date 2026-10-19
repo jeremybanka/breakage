@@ -4,7 +4,7 @@
 	"private": true,
 	"type": "module",
 	"dependencies": {
-		"host": "1.0.0",
-		"renderer": "19.0.0"
+		"coupled-host": "1.0.0",
+		"coupled-renderer": "19.0.0"
 	}
 }
