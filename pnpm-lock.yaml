@@ -251,8 +251,8 @@ importers:
         specifier: npm:minimatch@8.0.7
         version: minimatch@8.0.7
       minimatch-v9:
-        specifier: npm:minimatch@9.0.9
-        version: minimatch@9.0.9
+        specifier: npm:minimatch@10.2.6
+        version: minimatch@10.2.6
       typescript:
         specifier: 7.0.2
         version: 7.0.2
@@ -1772,10 +1772,6 @@ packages:
     resolution: {integrity: sha512-V+1uQNdzybxa14e/p00HZnQNNcTjnRJjDxg2V8wtkjFctq4M7hXFws4oekyTP0Jebeq7QYtpFyOeBAjc88zvYg==}
     engines: {node: '>=16 || 14 >=14.17'}
 
-  minimatch@9.0.9:
-    resolution: {integrity: sha512-OBwBN9AL4dqmETlpS2zasx+vTeWclWzkblfZk7KTA5j3jeOONz/tRCnZomUyvNg83wL5Zv9Ss6HMJXAgL8R2Yg==}
-    engines: {node: '>=16 || 14 >=14.17'}
-
   mrmime@2.0.1:
     resolution: {integrity: sha512-Y3wQdFg2Va6etvQ5I82yUhGdsKrcYox6p7FfL1LbK2J4V01F9TGlepTIhnK24t7koZibmg82KGglhA1XK5IsLQ==}
     engines: {node: '>=10'}
@@ -3280,10 +3276,6 @@ snapshots:
       brace-expansion: 5.0.12
 
   minimatch@8.0.7:
-    dependencies:
-      brace-expansion: 2.1.7
-
-  minimatch@9.0.9:
     dependencies:
       brace-expansion: 2.1.7
 
