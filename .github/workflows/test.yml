@@ -27,13 +27,38 @@ jobs:
       - uses: ./.github/actions/setup
       - run: pnpm run test:breakage
 
-  Tests:
+  TestShards:
+    name: Test shard ${{ matrix.shard }}
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup
-      - run: pnpm run test
+      - run: pnpm run test:shard --shard=${{ matrix.shard }}/${{ strategy.job-total }}
+
+  Package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - run: pnpm run build
       - name: Pack release artifacts
         working-directory: packages/breakage
         run: pnpm pack --pack-destination /tmp
+
+  Tests:
+    if: ${{ always() }}
+    needs: [TestShards, Package]
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - name: Require every shard and release packaging to pass
+        env:
+          SHARDS_RESULT: ${{ needs.TestShards.result }}
+          PACKAGE_RESULT: ${{ needs.Package.result }}
+        run: test "$SHARDS_RESULT" = success && test "$PACKAGE_RESULT" = success
