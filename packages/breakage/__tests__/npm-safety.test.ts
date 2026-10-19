@@ -20,8 +20,16 @@ afterEach(() => {
 	fixture?.clean()
 	fixture = undefined
 })
-function setup(): NpmFixture {
-	fixture = npmFixture()
+function setup(
+	project?: `runtime-dependencies` | `coupled-peers`,
+	customize?: (fixture: NpmFixture) => void,
+): NpmFixture {
+	fixture = npmFixture(
+		project
+			? new URL(`./fixtures/npm/${project}/`, import.meta.url)
+			: undefined,
+		customize,
+	)
 	return fixture
 }
 
@@ -44,13 +52,7 @@ describe(`npm environment safety`, () => {
 			const originalArchive = readFileSync(archive)
 			f.config.installCommand += ` && rm node_modules/host/package.json && ln ../../../.cache/host-manifest.json node_modules/host/package.json`
 			f.config.releaseIntent = () => ({ status: `release`, version })
-			f.copy(
-				new URL(
-					`./fixtures/npm/environment/check-manifest-storage.ts`,
-					import.meta.url,
-				),
-				`contracts/check.ts`,
-			)
+			f.copy(`contracts/check-manifest-storage.ts`, `contracts/check.ts`)
 			f.config.suites.host!.command = `node contracts/check.ts ${version}`
 			const result = await npmTest(
 				f.config,
@@ -133,33 +135,15 @@ describe(`npm environment safety`, () => {
 		assertStagesRemoved(f, result)
 	}, 30_000)
 	it(`runs a packed runtime dependency while preserving the chosen host instance`, async () => {
-		const f = setup()
+		const f = setup(`runtime-dependencies`, (project) => {
+			const manifest = JSON.parse(project.read(`package.json`))
+			project.update(`package.json`, {
+				dependencies: manifest.optionalDependencies,
+				optionalDependencies: {},
+			})
+			project.copy(`src/with-helper.ts`, `src/index.ts`)
+		})
 		f.representative(`one`, `1.0.0`)
-		f.write(`helper/package.json`, {
-			name: `helper`,
-			version: `1.0.0`,
-			main: `index.js`,
-			type: `module`,
-			peerDependencies: { host: `*` },
-			files: [`index.js`],
-		})
-		f.compile(
-			new URL(`./fixtures/npm/environment/helper.ts`, import.meta.url),
-			`helper/index.js`,
-		)
-		const helper = f.pack(`helper`)
-		f.write(`package.json`, {
-			...JSON.parse(f.read(`package.json`)),
-			dependencies: { helper: `file:${path.join(f.directory, helper)}` },
-		})
-		f.compile(
-			new URL(
-				`./fixtures/npm/environment/integration-with-helper.ts`,
-				import.meta.url,
-			),
-			`index.js`,
-		)
-		f.config.artifact = f.pack(`.`)
 		const result = await npmTest(
 			f.config,
 			{ peer: `host`, range: `1` },
@@ -171,29 +155,9 @@ describe(`npm environment safety`, () => {
 	it.each([false, true])(
 		`audits installed optional runtime dependencies (shadow peer: %s)`,
 		async (shadow) => {
-			const f = setup()
+			const f = setup(`runtime-dependencies`)
 			f.representative(`next`, `2.0.0`, true)
 			f.config.releaseIntent = () => ({ status: `release`, version: `2.0.0` })
-			f.write(`helper/package.json`, {
-				name: `helper`,
-				version: `1.0.0`,
-				main: `index.js`,
-				type: `module`,
-				peerDependencies: { host: `*` },
-				files: [`index.js`],
-			})
-			f.compile(
-				new URL(`./fixtures/npm/environment/helper.ts`, import.meta.url),
-				`helper/index.js`,
-			)
-			const helper = f.pack(`helper`)
-			f.write(`package.json`, {
-				...JSON.parse(f.read(`package.json`)),
-				optionalDependencies: {
-					helper: `file:${path.join(f.directory, helper)}`,
-				},
-			})
-			f.config.artifact = f.pack(`.`)
 			// Confirm npm installed the optional package; its branch must be audited
 			// even when the current contract does not happen to execute that branch.
 			f.config.installCommand += ` && test -f node_modules/helper/package.json`
@@ -241,26 +205,14 @@ describe(`npm environment safety`, () => {
 		30_000,
 	)
 	it(`rejects an installed optional runtime dependency with a missing manifest`, async () => {
-		const f = setup()
+		const f = setup(`runtime-dependencies`, (project) => {
+			project.copy(`helper/src/empty.ts`, `helper/src/index.ts`)
+			project.update(`helper/package.json`, {
+				type: `commonjs`,
+				peerDependencies: {},
+			})
+		})
 		f.representative(`one`, `1.0.0`)
-		f.write(`helper/package.json`, {
-			name: `helper`,
-			version: `1.0.0`,
-			main: `index.js`,
-			files: [`index.js`],
-		})
-		f.compile(
-			new URL(`./fixtures/npm/environment/empty-helper.ts`, import.meta.url),
-			`helper/index.js`,
-		)
-		const helper = f.pack(`helper`)
-		f.write(`package.json`, {
-			...JSON.parse(f.read(`package.json`)),
-			optionalDependencies: {
-				helper: `file:${path.join(f.directory, helper)}`,
-			},
-		})
-		f.config.artifact = f.pack(`.`)
 		f.config.installCommand += ` && rm node_modules/helper/package.json`
 		const result = await npmTest(
 			f.config,
@@ -273,43 +225,7 @@ describe(`npm environment safety`, () => {
 		assertStagesRemoved(f, result)
 	}, 30_000)
 	it(`keeps coupled formulations intact and runs each configured relationship suite`, async () => {
-		const f = setup()
-		f.representative(`one`, `1.0.0`)
-		f.write(`renderer/package.json`, {
-			name: `renderer`,
-			version: `19.0.0`,
-			main: `index.js`,
-			type: `module`,
-			files: [`index.js`],
-		})
-		f.compile(
-			new URL(`./fixtures/npm/environment/renderer.ts`, import.meta.url),
-			`renderer/index.js`,
-		)
-		const archive = f.pack(`renderer`)
-		f.write(`package.json`, {
-			...JSON.parse(f.read(`package.json`)),
-			peerDependencies: { host: `^1`, renderer: `^19` },
-		})
-		f.config.artifact = f.pack(`.`)
-		const env = JSON.parse(f.read(`peer-environments/one/package.json`))
-		env.dependencies.renderer = `19.0.0`
-		f.write(`peer-environments/one/package.json`, env)
-		const lock = JSON.parse(f.read(`peer-environments/one/package-lock.json`))
-		lock.packages[``].dependencies = env.dependencies
-		lock.packages[`node_modules/renderer`] = {
-			version: `19.0.0`,
-			resolved: `file:../../${archive}`,
-		}
-		f.write(`peer-environments/one/package-lock.json`, lock)
-		f.copy(
-			new URL(`./fixtures/npm/environment/check-renderer.ts`, import.meta.url),
-			`contracts/renderer.ts`,
-		)
-		f.config.suites.renderer = {
-			files: [`contracts/renderer.ts`],
-			command: `node contracts/renderer.ts`,
-		}
+		const f = setup(`coupled-peers`)
 		const result = await npmCheck(f.config, { baseDirectory: f.directory })
 		expect(result.exitCode, JSON.stringify(result)).toBe(0)
 		expect(result.representatives).toHaveLength(1)

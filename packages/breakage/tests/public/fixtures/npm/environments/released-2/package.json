@@ -1,0 +1,9 @@
+{
+	"name": "environment-released-2",
+	"version": "1.0.0",
+	"private": true,
+	"type": "module",
+	"dependencies": {
+		"host": "2.0.0"
+	}
+}

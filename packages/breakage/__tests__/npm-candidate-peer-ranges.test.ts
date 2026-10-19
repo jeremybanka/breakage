@@ -18,100 +18,38 @@ function setup(
 		rendererVersion?: string
 	} = {},
 ): NpmFixture {
-	const f = (fixture = npmFixture())
-	const integrationDeclaresRenderer =
-		options.integrationDeclaresRenderer ?? true
-	const rendererVersion = options.rendererVersion ?? `18.0.0`
-	const integrationPeers: Record<string, string> = { host: `^2` }
-	if (integrationDeclaresRenderer) integrationPeers.renderer = `^18`
-	const packages = [
-		{
-			directory: `renderer-source`,
-			name: `renderer`,
-			version: rendererVersion,
-			peerDependencies: {},
-			source: `renderer.ts`,
+	const f = (fixture = npmFixture(
+		new URL(`./fixtures/npm/candidate-peer-ranges/`, import.meta.url),
+		(project) => {
+			project.update(`local-host/package.json`, {
+				peerDependencies: { renderer: hostRendererRange },
+				...(options.rendererOptional
+					? { peerDependenciesMeta: { renderer: { optional: true } } }
+					: {}),
+			})
+			if (options.integrationDeclaresRenderer === false) {
+				project.update(`package.json`, { peerDependencies: { host: `^2` } })
+				project.copy(`src/host-only.ts`, `src/index.ts`)
+				delete project.config.suites.renderer
+			}
+			if (options.rendererVersion) {
+				const version = options.rendererVersion
+				project.update(`renderer-source/package.json`, { version })
+				project.update(`peer-environments/coordinated/package.json`, {
+					dependencies: { renderer: version },
+				})
+				const filename = `peer-environments/coordinated/package-lock.json`
+				const lock = JSON.parse(project.read(filename))
+				lock.packages[``].dependencies.renderer = version
+				Object.assign(lock.packages[`node_modules/renderer`], {
+					version,
+					resolved: `file:../../artifacts/renderer-${version}.tgz`,
+				})
+				project.write(filename, lock)
+			}
 		},
-		{
-			directory: `local-host`,
-			name: `host`,
-			version: `2.0.0`,
-			peerDependencies: { renderer: hostRendererRange },
-			source: `host.ts`,
-		},
-		{
-			directory: `.`,
-			name: `integration`,
-			version: `1.1.0`,
-			peerDependencies: integrationPeers,
-			source: integrationDeclaresRenderer
-				? `integration.ts`
-				: `integration-host-only.ts`,
-		},
-	]
-	const archives: Record<string, string> = {}
-	for (const pkg of packages) {
-		f.write(`${pkg.directory}/package.json`, {
-			name: pkg.name,
-			version: pkg.version,
-			type: `module`,
-			main: `dist/index.js`,
-			files: [`dist`],
-			peerDependencies: pkg.peerDependencies,
-			...(pkg.name === `host` && options.rendererOptional
-				? { peerDependenciesMeta: { renderer: { optional: true } } }
-				: {}),
-		})
-		f.compile(
-			new URL(
-				`./fixtures/npm/candidate-peer-ranges/${pkg.source}`,
-				import.meta.url,
-			),
-			`${pkg.directory}/dist/index.js`,
-		)
-		archives[pkg.name] = f.pack(pkg.directory)
-	}
-	f.config.artifact = archives.integration!
-	f.config.localPeers!.host!.artifact = archives.host!
-	f.config.releaseIntent = ({ packageName }) =>
-		packageName === `host`
-			? { status: `release`, version: `2.0.0` }
-			: { status: `none` }
-	f.copy(
-		new URL(`./fixtures/npm/candidate-peer-ranges/check.ts`, import.meta.url),
-		`contracts/check.ts`,
-	)
-	if (integrationDeclaresRenderer)
-		f.config.suites.renderer = f.config.suites.host!
-	const representative = {
-		name: `environment-coordinated`,
-		version: `1.0.0`,
-		private: true,
-		type: `module`,
-		dependencies: { renderer: rendererVersion },
-		breakage: { candidates: [`host`] },
-	}
-	f.write(`peer-environments/coordinated/package.json`, representative)
-	// Frozen preparation installs the released renderer from a real local archive.
-	// The coordinated host archive is installed afterward into the test stage.
-	f.write(`peer-environments/coordinated/package-lock.json`, {
-		name: representative.name,
-		version: representative.version,
-		lockfileVersion: 3,
-		requires: true,
-		packages: {
-			"": {
-				name: representative.name,
-				version: representative.version,
-				dependencies: representative.dependencies,
-			},
-			"node_modules/renderer": {
-				version: rendererVersion,
-				resolved: `file:../../${archives.renderer}`,
-			},
-		},
-	})
-	f.baseline(integrationPeers)
+	))
+	f.baseline(JSON.parse(f.read(`package.json`)).peerDependencies)
 	return f
 }
 

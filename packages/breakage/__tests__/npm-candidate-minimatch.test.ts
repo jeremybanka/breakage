@@ -1,4 +1,4 @@
-import { cpSync, existsSync, readFileSync } from "node:fs"
+import { existsSync } from "node:fs"
 import { createRequire } from "node:module"
 import path from "node:path"
 
@@ -18,111 +18,19 @@ afterEach(() => {
 // Minimatch 9 removed the default export used by the coordinated host below:
 // https://github.com/isaacs/minimatch/blob/v9.0.5/changelog.md#90
 function setup(major: 8 | 9): NpmFixture {
-	const f = (fixture = npmFixture())
-	const minimatchManifest = createRequire(import.meta.url).resolve(
-		`minimatch-v${major}/package.json`,
-	)
-	const braceManifest = createRequire(minimatchManifest).resolve(
-		`brace-expansion/package.json`,
-	)
-	const balancedManifest = createRequire(braceManifest).resolve(
-		`balanced-match/package.json`,
-	)
-	const locked: Record<string, object> = {}
-	// Repack the installed releases without changing their metadata or code.
-	// Include both transitive dependencies so npm ci needs no registry access.
-	for (const filename of [minimatchManifest, braceManifest, balancedManifest]) {
-		const manifest = JSON.parse(readFileSync(filename, `utf8`)) as {
-			name: string
-			version: string
-			dependencies?: Record<string, string>
-		}
-		const directory = path.dirname(filename)
-		const copy = `published/${manifest.name}`
-		cpSync(directory, path.join(f.directory, copy), {
-			recursive: true,
-			filter: (source) =>
-				!path
-					.relative(directory, source)
-					.split(path.sep)
-					.includes(`node_modules`),
-		})
-		const artifact = f.pack(copy)
-		locked[`node_modules/${manifest.name}`] = {
-			version: manifest.version,
-			resolved: `file:../../${artifact}`,
-			...(manifest.dependencies ? { dependencies: manifest.dependencies } : {}),
-		}
-	}
-	const integrationPeers = { host: `^2`, minimatch: `^${major}` }
-	for (const pkg of [
-		{
-			directory: `local-host`,
-			name: `host`,
-			version: `2.0.0`,
-			peerDependencies: { minimatch: `^8` },
-			source: `host.ts`,
+	const f = (fixture = npmFixture(
+		new URL(`./fixtures/npm/candidate-minimatch/`, import.meta.url),
+		(project) => {
+			project.update(`package.json`, {
+				peerDependencies: { host: `^2`, minimatch: `^${major}` },
+			})
+			project.config.representatives = `peer-environments/minimatch-${major}`
 		},
-		{
-			directory: `.`,
-			name: `integration`,
-			version: `1.1.0`,
-			peerDependencies: integrationPeers,
-			source: `integration.ts`,
-		},
-	]) {
-		f.write(`${pkg.directory}/package.json`, {
-			name: pkg.name,
-			version: pkg.version,
-			type: `module`,
-			main: `dist/index.js`,
-			files: [`dist`],
-			peerDependencies: pkg.peerDependencies,
-		})
-		f.compile(
-			new URL(
-				`./fixtures/npm/candidate-minimatch/${pkg.source}`,
-				import.meta.url,
-			),
-			`${pkg.directory}/dist/index.js`,
-		)
-		const archive = f.pack(pkg.directory)
-		if (pkg.name === `host`) f.config.localPeers!.host!.artifact = archive
-		else f.config.artifact = archive
-	}
-	f.config.releaseIntent = ({ packageName }) =>
-		packageName === `host`
-			? { status: `release`, version: `2.0.0` }
-			: { status: `none` }
-	f.copy(
-		new URL(`./fixtures/npm/candidate-minimatch/check.ts`, import.meta.url),
-		`contracts/check.ts`,
+	))
+	f.packPublished(
+		createRequire(import.meta.url).resolve(`minimatch-v${major}/package.json`),
 	)
-	f.config.suites.minimatch = f.config.suites.host!
-	const representative = {
-		name: `environment-coordinated`,
-		version: `1.0.0`,
-		private: true,
-		type: `module`,
-		dependencies: { minimatch: major === 8 ? `8.0.7` : `9.0.9` },
-		breakage: { candidates: [`host`] },
-	}
-	f.write(`peer-environments/coordinated/package.json`, representative)
-	f.write(`peer-environments/coordinated/package-lock.json`, {
-		name: representative.name,
-		version: representative.version,
-		lockfileVersion: 3,
-		requires: true,
-		packages: {
-			"": {
-				name: representative.name,
-				version: representative.version,
-				dependencies: representative.dependencies,
-			},
-			...locked,
-		},
-	})
-	f.baseline(integrationPeers)
+	f.baseline(JSON.parse(f.read(`package.json`)).peerDependencies)
 	return f
 }
 
@@ -143,7 +51,7 @@ describe(`real minimatch major-version incompatibility`, () => {
 		const f = setup(9)
 		const result = await npmTest(
 			f.config,
-			{ representative: `peer-environments/coordinated` },
+			{ representative: `peer-environments/minimatch-9` },
 			{ baseDirectory: f.directory },
 		)
 		assertStagesRemoved(f, result)

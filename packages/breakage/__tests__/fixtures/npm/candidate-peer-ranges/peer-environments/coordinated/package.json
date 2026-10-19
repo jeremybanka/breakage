@@ -1,0 +1,14 @@
+{
+	"name": "environment-coordinated",
+	"version": "1.0.0",
+	"private": true,
+	"type": "module",
+	"dependencies": {
+		"renderer": "18.0.0"
+	},
+	"breakage": {
+		"candidates": [
+			"host"
+		]
+	}
+}

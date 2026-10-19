@@ -24,15 +24,8 @@ describe(`npm release compatibility`, () => {
 		f.representative(`one`, `1.0.0`)
 		f.representative(`one-later`, `1.9.0`)
 		f.representative(`two`, `2.0.0`)
-		f.write(`fixtures/value.txt`, `copied fixture`)
 		f.config.suites.host!.files.push(`fixtures/*`)
-		f.copy(
-			new URL(
-				`./fixtures/npm/environment/check-staged-files.ts`,
-				import.meta.url,
-			),
-			`contracts/check.ts`,
-		)
+		f.copy(`contracts/check-staged-files.ts`, `contracts/check.ts`)
 		const result = await npmCheck(f.config, { baseDirectory: f.directory })
 		expect(result.exitCode, JSON.stringify(result)).toBe(0)
 		expect(result.representatives.map((r) => r.status)).toEqual([
@@ -53,13 +46,7 @@ describe(`npm release compatibility`, () => {
 				? { status: `release`, version: `3.0.0` }
 				: { status: `none` }
 		f.config.certifyBreaking = () => true
-		f.copy(
-			new URL(
-				`./fixtures/npm/environment/check-released-host-failure.ts`,
-				import.meta.url,
-			),
-			`contracts/check.ts`,
-		)
+		f.copy(`contracts/check-released-host-failure.ts`, `contracts/check.ts`)
 		const result = await npmCheck(f.config, { baseDirectory: f.directory })
 		expect(result.exitCode).toBe(1)
 		expect(result.representatives.map((r) => r.status)).toEqual([

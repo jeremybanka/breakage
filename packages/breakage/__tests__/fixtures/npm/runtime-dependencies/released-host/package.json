@@ -1,0 +1,9 @@
+{
+	"name": "host",
+	"version": "1.0.0",
+	"type": "module",
+	"main": "dist/index.js",
+	"files": [
+		"dist"
+	]
+}

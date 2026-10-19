@@ -36,13 +36,7 @@ describe(`packaged npm CLI`, () => {
 		f.representative(`next`, `2.0.0`, true)
 		f.write(`breakage.config.json`, `invalid json that must not win`)
 		f.write(`fixture-config.json`, f.config)
-		f.copy(
-			new URL(
-				`./fixtures/npm/environment/release-intent.config.ts`,
-				import.meta.url,
-			),
-			`breakage.config.ts`,
-		)
+		f.copy(`release-intent.config.ts`, `breakage.config.ts`)
 		const result = cli(f.directory, `npm`, `test`, `host`, `3`, `--json`)
 		expect(result.status, result.stdout + result.stderr).toBe(0)
 		const report = JSON.parse(result.stdout) as NpmReport
@@ -94,10 +88,7 @@ describe(`packaged npm CLI`, () => {
 	}, 30_000)
 	it(`offers npm completion without loading executable configuration`, () => {
 		const f = (fixture = npmFixture())
-		f.copy(
-			new URL(`./fixtures/npm/environment/throwing.config.ts`, import.meta.url),
-			`breakage.config.ts`,
-		)
+		f.copy(`throwing.config.ts`, `breakage.config.ts`)
 		const result = cli(f.directory, `__complete`, `npm`, ``)
 		expect(result.status, result.stderr).toBe(0)
 		expect(result.stdout).toContain(`check`)

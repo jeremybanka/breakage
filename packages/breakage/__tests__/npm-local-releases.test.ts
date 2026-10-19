@@ -207,13 +207,7 @@ it(`preserves compatibility failures when a declared coordinated candidate fails
 	f.representative(`released`, `0.53.3`)
 	f.representative(`next`, `0.53.3`, true)
 	f.config.certifyBreaking = () => true
-	f.copy(
-		new URL(
-			`./fixtures/npm/environment/check-candidate-failure.ts`,
-			import.meta.url,
-		),
-		`contracts/check.ts`,
-	)
+	f.copy(`contracts/check-candidate-failure.ts`, `contracts/check.ts`)
 	const result = await npmCheck(f.config, { baseDirectory: f.directory })
 	expect(result.exitCode, JSON.stringify(result)).toBe(1)
 	expect(result.errors).toEqual([])

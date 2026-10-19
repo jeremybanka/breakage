@@ -1,16 +1,23 @@
 {
 	"extends": "../../../../tsconfig.json",
 	"include": [
-		"*.ts"
+		"**/*.ts"
 	],
-	"exclude": [],
+	"exclude": [
+		"node_modules",
+		"dist",
+		"**/dist"
+	],
 	"compilerOptions": {
 		"paths": {
-			"host": [
-				"./host.ts"
-			],
 			"integration": [
-				"./integration.ts"
+				"./src/index.ts"
+			],
+			"host": [
+				"./local-host/src/index.ts"
+			],
+			"breakage": [
+				"../../../../src/breakage.ts"
 			]
 		}
 	}
