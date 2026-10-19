@@ -34,7 +34,6 @@ export type NpmFixture = {
 	copy: (source: string | URL, destination: string) => void
 	build: (source: string) => string
 	pack: (source: string) => string
-	packPublished: (manifest: string) => void
 	representative: (label: string, version: string, candidate?: boolean) => void
 	baseline: (peers: Record<string, string>) => void
 	clean: () => void
@@ -47,7 +46,11 @@ export function npmFixture(
 	const directory = mkdtempSync(path.join(tmpdir(), `breakage-npm-`))
 	const clean = (): void => rmSync(directory, { recursive: true, force: true })
 	try {
-		cpSync(project, directory, { recursive: true })
+		// Copy authored inputs and the prepared cache, then install afresh in each test.
+		cpSync(project, directory, {
+			recursive: true,
+			filter: (entry) => path.basename(entry) !== `node_modules`,
+		})
 		const write = (filename: string, value: string | object): void => {
 			const destination = path.join(directory, filename)
 			mkdirSync(path.dirname(destination), { recursive: true })
@@ -102,33 +105,6 @@ export function npmFixture(
 				transpiler.transformSync(read(`${source}/src/index.ts`)),
 			)
 			return pack(source)
-		}
-		const published = new Set<string>()
-		const packPublished = (filename: string): void => {
-			if (published.has(filename)) return
-			published.add(filename)
-			const manifest = JSON.parse(readFileSync(filename, `utf8`)) as {
-				name: string
-				version: string
-				dependencies?: Record<string, string>
-			}
-			const source = path.dirname(filename)
-			const destination = `published/${manifest.name}-${manifest.version}`
-			// Repack installed releases unchanged, including their transitive dependencies.
-			cpSync(source, path.join(directory, destination), {
-				recursive: true,
-				filter: (entry) =>
-					!path
-						.relative(source, entry)
-						.split(path.sep)
-						.includes(`node_modules`),
-			})
-			pack(destination)
-			for (const dependency of Object.keys(manifest.dependencies ?? {})) {
-				packPublished(
-					createRequire(filename).resolve(`${dependency}/package.json`),
-				)
-			}
 		}
 		git(directory, `init`, `--initial-branch=main`)
 		git(directory, `config`, `user.name`, `Npm Tests`)
@@ -204,7 +180,6 @@ export function npmFixture(
 			copy,
 			build,
 			pack,
-			packPublished,
 			representative,
 			baseline,
 			clean,

@@ -18,9 +18,6 @@
 			],
 			"breakage": [
 				"../../../../src/breakage.ts"
-			],
-			"minimatch": [
-				"../../../../node_modules/minimatch-v8/dist/mjs/index.d.ts"
 			]
 		}
 	}
