@@ -1,0 +1,20 @@
+{
+	"extends": "../../../../tsconfig.json",
+	"include": [
+		"*.ts"
+	],
+	"exclude": [],
+	"compilerOptions": {
+		"paths": {
+			"host": [
+				"./host.ts"
+			],
+			"integration": [
+				"./integration.ts"
+			],
+			"minimatch": [
+				"../../../../node_modules/minimatch-v8/dist/mjs/index.d.ts"
+			]
+		}
+	}
+}

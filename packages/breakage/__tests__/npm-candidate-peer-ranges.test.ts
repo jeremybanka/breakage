@@ -1,5 +1,3 @@
-import path from "node:path"
-
 import { afterEach, describe, expect, it } from "bun:test"
 
 import { npmCheck, npmTest } from "../src/npm/check.ts"
@@ -12,14 +10,14 @@ afterEach(() => {
 	fixture = undefined
 })
 
-async function setup(
+function setup(
 	hostRendererRange: string,
 	options: {
 		integrationDeclaresRenderer?: boolean
 		rendererOptional?: boolean
 		rendererVersion?: string
 	} = {},
-): Promise<NpmFixture> {
+): NpmFixture {
 	const f = (fixture = npmFixture())
 	const integrationDeclaresRenderer =
 		options.integrationDeclaresRenderer ?? true
@@ -32,25 +30,23 @@ async function setup(
 			name: `renderer`,
 			version: rendererVersion,
 			peerDependencies: {},
-			source: `export const renderer = { render: (text: string): string => '<p>' + text + '</p>' };`,
+			source: `renderer.ts`,
 		},
 		{
 			directory: `local-host`,
 			name: `host`,
 			version: `2.0.0`,
 			peerDependencies: { renderer: hostRendererRange },
-			source: `import { renderer } from 'renderer';
-export { renderer };
-export const render = (text: string): string => renderer.render(text);`,
+			source: `host.ts`,
 		},
 		{
 			directory: `.`,
 			name: `integration`,
 			version: `1.1.0`,
 			peerDependencies: integrationPeers,
-			source: `import { render as renderWithHost } from 'host';
-export { renderer } from '${integrationDeclaresRenderer ? `renderer` : `host`}';
-export const render = (text: string): string => renderWithHost(text);`,
+			source: integrationDeclaresRenderer
+				? `integration.ts`
+				: `integration-host-only.ts`,
 		},
 	]
 	const archives: Record<string, string> = {}
@@ -66,17 +62,13 @@ export const render = (text: string): string => renderWithHost(text);`,
 				? { peerDependenciesMeta: { renderer: { optional: true } } }
 				: {}),
 		})
-		f.write(`${pkg.directory}/index.ts`, pkg.source)
-		// Compile authored TypeScript, preserving peer imports for consumer resolution.
-		const build = await Bun.build({
-			entrypoints: [path.join(f.directory, pkg.directory, `index.ts`)],
-			outdir: path.join(f.directory, pkg.directory, `dist`),
-			target: `node`,
-			format: `esm`,
-			external: [`host`, `renderer`],
-		})
-		if (!build.success)
-			throw new Error(`Fixture build failed: ${JSON.stringify(build.logs)}`)
+		f.compile(
+			new URL(
+				`./fixtures/npm/candidate-peer-ranges/${pkg.source}`,
+				import.meta.url,
+			),
+			`${pkg.directory}/dist/index.js`,
+		)
 		archives[pkg.name] = f.pack(pkg.directory)
 	}
 	f.config.artifact = archives.integration!
@@ -85,16 +77,9 @@ export const render = (text: string): string => renderWithHost(text);`,
 		packageName === `host`
 			? { status: `release`, version: `2.0.0` }
 			: { status: `none` }
-	f.write(
+	f.copy(
+		new URL(`./fixtures/npm/candidate-peer-ranges/check.ts`, import.meta.url),
 		`contracts/check.ts`,
-		`import { strict as assert } from 'node:assert';
-import { renderer } from 'renderer';
-import { renderer as hostRenderer } from 'host';
-import { renderer as integrationRenderer, render } from 'integration';
-assert.equal(hostRenderer, renderer);
-assert.equal(integrationRenderer, renderer);
-assert.equal(render('hello'), '<p>hello</p>');
-console.log('Shared renderer identity and rendering assertions passed.');`,
 	)
 	if (integrationDeclaresRenderer)
 		f.config.suites.renderer = f.config.suites.host!
@@ -141,7 +126,7 @@ describe(`coordinated candidate peer declarations`, () => {
 	])(
 		`host requiring $hostRendererRange with renderer 18 must return $expectedStatus`,
 		async ({ hostRendererRange, expectedExitCode, expectedStatus }) => {
-			const f = await setup(hostRendererRange)
+			const f = setup(hostRendererRange)
 			const result = await npmCheck(f.config, { baseDirectory: f.directory })
 			const representative = result.representatives[0]!
 			assertStagesRemoved(f, result)
@@ -183,7 +168,7 @@ describe(`coordinated candidate peer declarations`, () => {
 	it.each([false, true])(
 		`validates present optional candidate peers (coverage only: %s)`,
 		async (coverageOnly) => {
-			const f = await setup(`^19`, { rendererOptional: true })
+			const f = setup(`^19`, { rendererOptional: true })
 			const result = await npmCheck(f.config, {
 				baseDirectory: f.directory,
 				coverageOnly,
@@ -203,7 +188,7 @@ describe(`coordinated candidate peer declarations`, () => {
 	])(
 		`observes peers needed only by the candidate for range $range`,
 		async ({ range, exitCode }) => {
-			const f = await setup(range, { integrationDeclaresRenderer: false })
+			const f = setup(range, { integrationDeclaresRenderer: false })
 			const result = await npmCheck(f.config, { baseDirectory: f.directory })
 			expect(result.exitCode, JSON.stringify(result)).toBe(exitCode)
 			expect(result.representatives[0]!.peers.renderer).toMatchObject({
@@ -222,7 +207,7 @@ describe(`coordinated candidate peer declarations`, () => {
 	it.each([false, true])(
 		`requires a candidate-only required peer even during focused exploration (%s)`,
 		async (focused) => {
-			const f = await setup(`^18`, { integrationDeclaresRenderer: false })
+			const f = setup(`^18`, { integrationDeclaresRenderer: false })
 			omitRenderer(f)
 			const options = { baseDirectory: f.directory }
 			const result = focused
@@ -238,7 +223,7 @@ describe(`coordinated candidate peer declarations`, () => {
 	)
 
 	it(`allows an absent optional candidate peer during the declaration audit`, async () => {
-		const f = await setup(`^18`, {
+		const f = setup(`^18`, {
 			integrationDeclaresRenderer: false,
 			rendererOptional: true,
 		})
@@ -259,7 +244,7 @@ describe(`coordinated candidate peer declarations`, () => {
 	])(
 		`compares another candidate's intended version against $range`,
 		async ({ range, exitCode }) => {
-			const f = await setup(range)
+			const f = setup(range)
 			const manifest = JSON.parse(f.read(`package.json`))
 			f.write(`package.json`, {
 				...manifest,
@@ -298,7 +283,7 @@ describe(`coordinated candidate peer declarations`, () => {
 	])(
 		`uses npm prerelease membership for candidate-only range $range`,
 		async ({ range, exitCode }) => {
-			const f = await setup(range, {
+			const f = setup(range, {
 				integrationDeclaresRenderer: false,
 				rendererVersion: `18.0.0-beta.2`,
 			})
@@ -311,7 +296,7 @@ describe(`coordinated candidate peer declarations`, () => {
 	)
 
 	it(`warns and executes a passing focused test despite conflicting candidate ranges`, async () => {
-		const f = await setup(`^19`)
+		const f = setup(`^19`)
 		const result = await npmTest(
 			f.config,
 			{ peer: `host`, range: `2` },

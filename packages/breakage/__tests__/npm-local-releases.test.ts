@@ -207,9 +207,12 @@ it(`preserves compatibility failures when a declared coordinated candidate fails
 	f.representative(`released`, `0.53.3`)
 	f.representative(`next`, `0.53.3`, true)
 	f.config.certifyBreaking = () => true
-	f.write(
+	f.copy(
+		new URL(
+			`./fixtures/npm/environment/check-candidate-failure.ts`,
+			import.meta.url,
+		),
 		`contracts/check.ts`,
-		`${f.read(`contracts/check.ts`)}\nassert.ok(!process.cwd().includes('/next/'), 'upcoming core broke the contract');`,
 	)
 	const result = await npmCheck(f.config, { baseDirectory: f.directory })
 	expect(result.exitCode, JSON.stringify(result)).toBe(1)

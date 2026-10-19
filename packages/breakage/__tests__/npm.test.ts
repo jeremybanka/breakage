@@ -26,9 +26,12 @@ describe(`npm release compatibility`, () => {
 		f.representative(`two`, `2.0.0`)
 		f.write(`fixtures/value.txt`, `copied fixture`)
 		f.config.suites.host!.files.push(`fixtures/*`)
-		f.write(
+		f.copy(
+			new URL(
+				`./fixtures/npm/environment/check-staged-files.ts`,
+				import.meta.url,
+			),
 			`contracts/check.ts`,
-			`${f.read(`contracts/check.ts`)}\nimport { readFileSync } from 'node:fs'; assert.equal(readFileSync('fixtures/value.txt','utf8'), 'copied fixture'); assert.ok(process.cwd().includes('/peer-environments/')); assert.ok(process.cwd().endsWith('/test'));`,
 		)
 		const result = await npmCheck(f.config, { baseDirectory: f.directory })
 		expect(result.exitCode, JSON.stringify(result)).toBe(0)
@@ -50,9 +53,12 @@ describe(`npm release compatibility`, () => {
 				? { status: `release`, version: `3.0.0` }
 				: { status: `none` }
 		f.config.certifyBreaking = () => true
-		f.write(
+		f.copy(
+			new URL(
+				`./fixtures/npm/environment/check-released-host-failure.ts`,
+				import.meta.url,
+			),
 			`contracts/check.ts`,
-			`${f.read(`contracts/check.ts`)}\nassert.ok(!process.cwd().includes('/one/'), 'released host lacks the new API');`,
 		)
 		const result = await npmCheck(f.config, { baseDirectory: f.directory })
 		expect(result.exitCode).toBe(1)

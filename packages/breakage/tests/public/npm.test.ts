@@ -35,7 +35,10 @@ it(`cannot certify away a failure against a still-supported peer`, async () => {
 	project.representative(`oldest`, `1.0.0`)
 	project.representative(`current`, `2.0.0`)
 	// Keep the candidate valid but break the shared consumer identity.
-	project.write(`index.js`, `export const host = {};`)
+	project.compile(
+		new URL(`./fixtures/npm/broken-integration.ts`, import.meta.url),
+		`index.js`,
+	)
 	project.config.artifact = project.pack(`.`)
 	project.config.releaseIntent = ({ packageName }) =>
 		packageName === `integration`

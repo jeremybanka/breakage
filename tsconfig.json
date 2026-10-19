@@ -28,6 +28,8 @@
 	"exclude": [
 		"node_modules",
 		"dist",
-		"coverage"
+		"coverage",
+		"packages/breakage/__tests__/fixtures/npm",
+		"packages/breakage/tests/public/fixtures/npm"
 	]
 }

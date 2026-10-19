@@ -35,9 +35,13 @@ describe(`packaged npm CLI`, () => {
 		const f = (fixture = npmFixture())
 		f.representative(`next`, `2.0.0`, true)
 		f.write(`breakage.config.json`, `invalid json that must not win`)
-		f.write(
+		f.write(`fixture-config.json`, f.config)
+		f.copy(
+			new URL(
+				`./fixtures/npm/environment/release-intent.config.ts`,
+				import.meta.url,
+			),
 			`breakage.config.ts`,
-			`export default { npm: { ...${JSON.stringify(f.config)}, releaseIntent: () => ({status: 'release', version: '3.0.0'}) } }`,
 		)
 		const result = cli(f.directory, `npm`, `test`, `host`, `3`, `--json`)
 		expect(result.status, result.stdout + result.stderr).toBe(0)
@@ -90,9 +94,9 @@ describe(`packaged npm CLI`, () => {
 	}, 30_000)
 	it(`offers npm completion without loading executable configuration`, () => {
 		const f = (fixture = npmFixture())
-		f.write(
+		f.copy(
+			new URL(`./fixtures/npm/environment/throwing.config.ts`, import.meta.url),
 			`breakage.config.ts`,
-			`throw new Error('must not load configuration for completion')`,
 		)
 		const result = cli(f.directory, `__complete`, `npm`, ``)
 		expect(result.status, result.stderr).toBe(0)

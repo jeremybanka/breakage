@@ -44,10 +44,14 @@ describe(`npm environment safety`, () => {
 			const originalArchive = readFileSync(archive)
 			f.config.installCommand += ` && rm node_modules/host/package.json && ln ../../../.cache/host-manifest.json node_modules/host/package.json`
 			f.config.releaseIntent = () => ({ status: `release`, version })
-			f.write(
+			f.copy(
+				new URL(
+					`./fixtures/npm/environment/check-manifest-storage.ts`,
+					import.meta.url,
+				),
 				`contracts/check.ts`,
-				`${f.read(`contracts/check.ts`)}\nimport { readFileSync, statSync } from 'node:fs'; const installed = 'node_modules/host/package.json'; const cached = '../../../.cache/host-manifest.json'; assert.equal(JSON.parse(readFileSync(installed, 'utf8')).version, '${version}'); assert.equal(statSync(installed).ino === statSync(cached).ino, ${version === `2.0.0`});`,
 			)
+			f.config.suites.host!.command = `node contracts/check.ts ${version}`
 			const result = await npmTest(
 				f.config,
 				{ peer: `host`, range: version },
@@ -139,13 +143,22 @@ describe(`npm environment safety`, () => {
 			peerDependencies: { host: `*` },
 			files: [`index.js`],
 		})
-		f.write(`helper/index.js`, `import host from 'host'; export default host;`)
+		f.compile(
+			new URL(`./fixtures/npm/environment/helper.ts`, import.meta.url),
+			`helper/index.js`,
+		)
 		const helper = f.pack(`helper`)
 		f.write(`package.json`, {
 			...JSON.parse(f.read(`package.json`)),
 			dependencies: { helper: `file:${path.join(f.directory, helper)}` },
 		})
-		f.write(`index.js`, `import host from 'helper'; export { host };`)
+		f.compile(
+			new URL(
+				`./fixtures/npm/environment/integration-with-helper.ts`,
+				import.meta.url,
+			),
+			`index.js`,
+		)
 		f.config.artifact = f.pack(`.`)
 		const result = await npmTest(
 			f.config,
@@ -169,9 +182,9 @@ describe(`npm environment safety`, () => {
 				peerDependencies: { host: `*` },
 				files: [`index.js`],
 			})
-			f.write(
+			f.compile(
+				new URL(`./fixtures/npm/environment/helper.ts`, import.meta.url),
 				`helper/index.js`,
-				`import host from 'host'; export default host;`,
 			)
 			const helper = f.pack(`helper`)
 			f.write(`package.json`, {
@@ -236,7 +249,10 @@ describe(`npm environment safety`, () => {
 			main: `index.js`,
 			files: [`index.js`],
 		})
-		f.write(`helper/index.js`, `module.exports = {}`)
+		f.compile(
+			new URL(`./fixtures/npm/environment/empty-helper.ts`, import.meta.url),
+			`helper/index.js`,
+		)
 		const helper = f.pack(`helper`)
 		f.write(`package.json`, {
 			...JSON.parse(f.read(`package.json`)),
@@ -266,7 +282,10 @@ describe(`npm environment safety`, () => {
 			type: `module`,
 			files: [`index.js`],
 		})
-		f.write(`renderer/index.js`, `export const version = '19.0.0';`)
+		f.compile(
+			new URL(`./fixtures/npm/environment/renderer.ts`, import.meta.url),
+			`renderer/index.js`,
+		)
 		const archive = f.pack(`renderer`)
 		f.write(`package.json`, {
 			...JSON.parse(f.read(`package.json`)),
@@ -283,9 +302,9 @@ describe(`npm environment safety`, () => {
 			resolved: `file:../../${archive}`,
 		}
 		f.write(`peer-environments/one/package-lock.json`, lock)
-		f.write(
+		f.copy(
+			new URL(`./fixtures/npm/environment/check-renderer.ts`, import.meta.url),
 			`contracts/renderer.ts`,
-			`import {strict as assert} from 'node:assert'; import {version} from 'renderer'; assert.equal(version, '19.0.0');`,
 		)
 		f.config.suites.renderer = {
 			files: [`contracts/renderer.ts`],

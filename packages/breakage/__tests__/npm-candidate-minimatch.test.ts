@@ -17,7 +17,7 @@ afterEach(() => {
 // Real published packages, pinned through development aliases and the lockfile.
 // Minimatch 9 removed the default export used by the coordinated host below:
 // https://github.com/isaacs/minimatch/blob/v9.0.5/changelog.md#90
-async function setup(major: 8 | 9): Promise<NpmFixture> {
+function setup(major: 8 | 9): NpmFixture {
 	const f = (fixture = npmFixture())
 	const minimatchManifest = createRequire(import.meta.url).resolve(
 		`minimatch-v${major}/package.json`,
@@ -61,17 +61,14 @@ async function setup(major: 8 | 9): Promise<NpmFixture> {
 			name: `host`,
 			version: `2.0.0`,
 			peerDependencies: { minimatch: `^8` },
-			source: `import minimatch from 'minimatch';
-export { minimatch as matcher };
-export const matches = (filename: string): boolean => minimatch(filename, '**/*.ts');`,
+			source: `host.ts`,
 		},
 		{
 			directory: `.`,
 			name: `integration`,
 			version: `1.1.0`,
 			peerDependencies: integrationPeers,
-			source: `export { matches } from 'host';
-export { minimatch as matcher } from 'minimatch';`,
+			source: `integration.ts`,
 		},
 	]) {
 		f.write(`${pkg.directory}/package.json`, {
@@ -82,16 +79,13 @@ export { minimatch as matcher } from 'minimatch';`,
 			files: [`dist`],
 			peerDependencies: pkg.peerDependencies,
 		})
-		f.write(`${pkg.directory}/index.ts`, pkg.source)
-		const build = await Bun.build({
-			entrypoints: [path.join(f.directory, pkg.directory, `index.ts`)],
-			outdir: path.join(f.directory, pkg.directory, `dist`),
-			target: `node`,
-			format: `esm`,
-			external: [`host`, `minimatch`],
-		})
-		if (!build.success)
-			throw new Error(`Fixture build failed: ${JSON.stringify(build.logs)}`)
+		f.compile(
+			new URL(
+				`./fixtures/npm/candidate-minimatch/${pkg.source}`,
+				import.meta.url,
+			),
+			`${pkg.directory}/dist/index.js`,
+		)
 		const archive = f.pack(pkg.directory)
 		if (pkg.name === `host`) f.config.localPeers!.host!.artifact = archive
 		else f.config.artifact = archive
@@ -100,17 +94,9 @@ export { minimatch as matcher } from 'minimatch';`,
 		packageName === `host`
 			? { status: `release`, version: `2.0.0` }
 			: { status: `none` }
-	f.write(
+	f.copy(
+		new URL(`./fixtures/npm/candidate-minimatch/check.ts`, import.meta.url),
 		`contracts/check.ts`,
-		`import { strict as assert } from 'node:assert';
-import { minimatch } from 'minimatch';
-import { matcher as hostMatcher } from 'host';
-import { matcher, matches } from 'integration';
-assert.equal(hostMatcher, minimatch);
-assert.equal(matcher, minimatch);
-assert.equal(matches('src/file.ts'), true);
-assert.equal(matches('src/file.md'), false);
-console.log('Shared minimatch identity and file matching assertions passed.');`,
 	)
 	f.config.suites.minimatch = f.config.suites.host!
 	const representative = {
@@ -142,7 +128,7 @@ console.log('Shared minimatch identity and file matching assertions passed.');`,
 
 describe(`real minimatch major-version incompatibility`, () => {
 	it(`passes with minimatch 8, whose default export the host requires`, async () => {
-		const f = await setup(8)
+		const f = setup(8)
 		const result = await npmCheck(f.config, { baseDirectory: f.directory })
 		assertStagesRemoved(f, result)
 		expect(result.exitCode, JSON.stringify(result, null, 2)).toBe(0)
@@ -154,7 +140,7 @@ describe(`real minimatch major-version incompatibility`, () => {
 	}, 30_000)
 
 	it(`exposes the real import crash during focused exploration with minimatch 9`, async () => {
-		const f = await setup(9)
+		const f = setup(9)
 		const result = await npmTest(
 			f.config,
 			{ representative: `peer-environments/coordinated` },
@@ -178,7 +164,7 @@ describe(`real minimatch major-version incompatibility`, () => {
 	it.each([false, true])(
 		`rejects the host's incompatible declaration before execution (coverage only: %s)`,
 		async (coverageOnly) => {
-			const f = await setup(9)
+			const f = setup(9)
 			f.config.installCommand = `touch ../../../candidate-installed && ${f.config.installCommand}`
 			if (coverageOnly) {
 				f.config.artifact = `not-built.tgz`

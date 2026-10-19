@@ -1,0 +1,17 @@
+{
+	"extends": "../../../../tsconfig.json",
+	"include": [
+		"*.ts"
+	],
+	"exclude": [],
+	"compilerOptions": {
+		"paths": {
+			"host": [
+				"./host.ts"
+			],
+			"integration": [
+				"./integration.ts"
+			]
+		}
+	}
+}

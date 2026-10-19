@@ -1,0 +1,26 @@
+{
+	"extends": "../../../../tsconfig.json",
+	"include": [
+		"*.ts"
+	],
+	"exclude": [],
+	"compilerOptions": {
+		"paths": {
+			"host": [
+				"../../../../tests/public/fixtures/npm/host.ts"
+			],
+			"integration": [
+				"../../../../tests/public/fixtures/npm/integration.ts"
+			],
+			"helper": [
+				"./helper.ts"
+			],
+			"renderer": [
+				"./renderer.ts"
+			],
+			"breakage": [
+				"../../../../src/breakage.ts"
+			]
+		}
+	}
+}

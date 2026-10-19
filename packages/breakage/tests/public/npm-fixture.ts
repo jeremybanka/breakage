@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process"
 import {
+	copyFileSync,
 	existsSync,
 	mkdirSync,
 	mkdtempSync,
@@ -11,6 +12,8 @@ import { tmpdir } from "node:os"
 import path from "node:path"
 
 import type { NpmConfig, NpmReport } from "breakage"
+
+const transpiler = new Bun.Transpiler({ loader: `ts`, target: `node` })
 
 export function git(directory: string, ...args: string[]): string {
 	return execFileSync(`git`, [`-C`, directory, ...args], {
@@ -24,6 +27,8 @@ export type NpmFixture = {
 	config: NpmConfig
 	write: (filename: string, value: string | object) => void
 	read: (filename: string) => string
+	copy: (source: URL, destination: string) => void
+	compile: (source: URL, destination: string) => void
 	pack: (source: string) => string
 	representative: (label: string, version: string, candidate?: boolean) => void
 	baseline: (peers: Record<string, string>) => void
@@ -42,6 +47,16 @@ export function npmFixture(): NpmFixture {
 	}
 	const read = (filename: string): string =>
 		readFileSync(path.join(directory, filename), `utf8`)
+	const copy = (source: URL, filename: string): void => {
+		const destination = path.join(directory, filename)
+		mkdirSync(path.dirname(destination), { recursive: true })
+		copyFileSync(source, destination)
+	}
+	// Transpile real fixture sources without bundling: peer imports must resolve
+	// against the consumer's installed packages, never the test runner's tree.
+	const compile = (source: URL, filename: string): void => {
+		write(filename, transpiler.transformSync(readFileSync(source, `utf8`)))
+	}
 	const pack = (source: string): string => {
 		mkdirSync(path.join(directory, `artifacts`), { recursive: true })
 		const output = execFileSync(
@@ -79,13 +94,10 @@ export function npmFixture(): NpmFixture {
 		peerDependencies: { host: `^1 || ^2` },
 		files: [`index.js`],
 	})
-	write(
-		`index.js`,
-		`import host from 'host'; export { host }; export const value = host.value;`,
-	)
-	write(
+	compile(new URL(`./fixtures/npm/integration.ts`, import.meta.url), `index.js`)
+	copy(
+		new URL(`./fixtures/npm/check.ts`, import.meta.url),
 		`contracts/check.ts`,
-		`import { strict as assert } from 'node:assert'; import host from 'host'; import { host as used } from 'integration'; assert.equal(host, used); assert.equal(host.value, 'works');`,
 	)
 	write(`local-host/package.json`, {
 		name: `host`,
@@ -94,7 +106,10 @@ export function npmFixture(): NpmFixture {
 		main: `index.js`,
 		files: [`index.js`],
 	})
-	write(`local-host/index.js`, `export default { value: 'works' };`)
+	compile(
+		new URL(`./fixtures/npm/host.ts`, import.meta.url),
+		`local-host/index.js`,
+	)
 	const hostArchive = pack(`local-host`)
 	const artifact = pack(`.`)
 	const config: NpmConfig = {
@@ -121,7 +136,10 @@ export function npmFixture(): NpmFixture {
 			main: `index.js`,
 			files: [`index.js`],
 		})
-		write(`peer-source-${label}/index.js`, `export default { value: 'works' };`)
+		compile(
+			new URL(`./fixtures/npm/host.ts`, import.meta.url),
+			`peer-source-${label}/index.js`,
+		)
 		const archive = pack(`peer-source-${label}`)
 		const location = `peer-environments/${label}`
 		const manifest = {
@@ -182,6 +200,8 @@ export function npmFixture(): NpmFixture {
 		config,
 		write,
 		read,
+		copy,
+		compile,
 		pack,
 		representative,
 		baseline,
