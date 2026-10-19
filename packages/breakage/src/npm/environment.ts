@@ -132,6 +132,24 @@ async function installed(
 function representativeDeclarations(
 	manifest: Manifest,
 ): Record<string, string> {
+	for (const field of [
+		`dependencies`,
+		`devDependencies`,
+		`optionalDependencies`,
+		`peerDependencies`,
+	] as const) {
+		for (const [name, specifier] of Object.entries(manifest[field] ?? {})) {
+			const version = semver.parse(specifier)
+			// Semver's normalized version omits build metadata; exact pins retain it.
+			const exact =
+				version &&
+				`${version.version}${version.build.length ? `+${version.build.join(`.`)}` : ``}`
+			if (!exact || specifier !== exact)
+				throw new Error(
+					`Representative ${manifest.name} must pin ${field}.${name} to an exact version, such as 1.0.0; received ${JSON.stringify(specifier)}. Declare support ranges in the package under test, and use breakage.candidates for coordinated local releases.`,
+				)
+		}
+	}
 	for (const [peer, development] of Object.entries(
 		manifest.devDependencies ?? {},
 	)) {
@@ -151,7 +169,7 @@ function representativeDeclarations(
 	}
 }
 
-/** Exclude disjoint formulations without acquiring or preparing their stages. */
+/** Select exact pins without acquiring or preparing their stages. */
 export async function maySelectEnvironment(
 	config: NpmConfig,
 	base: string,
@@ -184,13 +202,7 @@ export async function maySelectEnvironment(
 		return matches(release.version, range)
 	}
 	const declared = declarations[peer]
-	if (declared === undefined) return false
-	if (!semver.validRange(declared))
-		throw new Error(
-			`Invalid representative constraint for ${peer}: ${declared}.`,
-		)
-	// Overlap is only eligibility: preparation still verifies the actual version.
-	return semver.intersects(declared, range, { includePrerelease: true })
+	return declared !== undefined && matches(declared, range)
 }
 
 export async function prepareEnvironment(
@@ -311,14 +323,10 @@ export async function prepareEnvironment(
 		const specifier = declarations[peer]
 		if (
 			!(staged && specifier === undefined) &&
-			(!specifier ||
-				!semver.validRange(specifier) ||
-				!semver.satisfies(evidence.version, specifier, {
-					includePrerelease: true,
-				}))
+			evidence.version !== specifier
 		) {
 			throw new Error(
-				`Representative ${peer}@${evidence.version} does not match its manifest constraint ${specifier ?? `(missing)`}.`,
+				`Representative ${peer}@${evidence.version} does not match its manifest pin ${specifier ?? `(missing)`}.`,
 			)
 		}
 		if (before[peer] && before[peer] !== evidence.version)

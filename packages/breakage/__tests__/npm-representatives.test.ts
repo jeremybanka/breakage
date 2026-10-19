@@ -21,7 +21,7 @@ function makeOptional(
 ): void {
 	const manifest = JSON.parse(f.read(`${directory}/package.json`))
 	manifest.optionalDependencies = { [peer]: manifest.dependencies[peer] }
-	if (overridesRequired) manifest.dependencies[peer] = `^99`
+	if (overridesRequired) manifest.dependencies[peer] = `99.0.0`
 	else delete manifest.dependencies[peer]
 	f.write(`${directory}/package.json`, manifest)
 	const filename = `${directory}/package-lock.json`

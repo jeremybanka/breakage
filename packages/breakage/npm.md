@@ -30,7 +30,9 @@ In the integration package, create complete environments for the peer formulatio
 }
 ```
 
-Choose real published versions appropriate for your package. Install once and commit this directory's manifest and lock file. Add any test runner and helpers it needs to its own development dependencies. Give each additional formulation its own directory and lock file. Every required peer of the integration must be present; several coupled peers share one environment. Include all intended representatives in the glob, including multiple representatives of the same era.
+Pin every dependency in an environment manifest to an exact version: `"host": "1.0.0"` and `"host": "2.1.4"` are valid; `"host": "^1"` and `"host": "^1 || ^2"` are setup errors. This applies to all entries in `dependencies`, `devDependencies`, `optionalDependencies`, and `peerDependencies`, including test runners and helpers. Exact prerelease and build versions are allowed. Ranges, wildcards, tags, aliases, workspace protocols, and file or URL specifiers are rejected before installation. The integration's own `peerDependencies` still express its supported eras with ranges. Enroll coordinated local releases through `breakage.candidates`; their certified intended versions supply the exact identities, and any accompanying dependency pins must match those versions.
+
+Choose real published versions appropriate for your package. Install once and commit this directory's manifest and lock file. Add any test runner and helpers it needs to its own development dependencies with exact pins. Give each additional formulation its own directory and lock file. Every required peer of the integration must be present; several coupled peers share one environment. Include all intended representatives in the glob, including multiple representatives of the same era.
 
 Ignore the disposable execution directories in your repository:
 
@@ -103,7 +105,7 @@ breakage npm check --config ./breakage.config.ts --json
 
 All matching representatives run. Every explicit `||` era needs coverage. Preview versions cover only an exact preview alternative, not stable ranges or other previews. Released representatives outside declared support warn; excluding a planned local release fails the release check. Focused requests can intentionally explore versions outside declared support. An audit reports declarations and release-policy findings without claiming assertions passed. Exit statuses are 0 for successful requested work, 1 for compatibility or uncertified support failures, and 2 for setup or coverage errors.
 
-Focused peer/range requests read manifests first and skip disjoint declarations before acquiring stages or preparing dependencies. Coordinated candidates are selected by their certified intended versions. Excluded environments need no lockfile or available stage. Broad overlapping declarations still require preparation to establish the installed version, so use disjoint constraints or `--representative` when running independent checks concurrently in one checkout. Selected installations retain all frozen-input, identity, and compatibility checks.
+Focused peer/range requests validate manifest pins and skip versions outside the requested range before acquiring stages or preparing dependencies. Coordinated candidates are selected by their certified intended versions, and exact-preview selection follows the same rules as coverage. Excluded environments need no lockfile or available stage. Disjoint requests for the same peer can run independently in one checkout without parsing lock files. Requests that select the same environment still contend for its stage, including requests for different peers in a coupled environment. Selected installations retain all frozen-input, identity, and compatibility checks.
 
 ## Coordinated releases
 
