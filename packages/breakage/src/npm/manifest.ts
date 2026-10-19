@@ -128,7 +128,7 @@ export function eras(range: string): string[] {
 export function matches(version: string, range: string): boolean {
 	return eras(range).some((era) =>
 		semver.prerelease(version)
-			? semver.valid(era.replace(/^=\s*/, ``)) === version
+			? semver.valid(era.replace(/^=\s*/, ``)) === semver.valid(version)
 			: semver.satisfies(version, era),
 	)
 }

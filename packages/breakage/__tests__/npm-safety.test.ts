@@ -316,6 +316,24 @@ describe(`declaration semantics`, () => {
 		expect(matches(`2.0.0-beta.1`, `>=2.0.0-beta.1 <3`)).toBe(false)
 		expect(matches(`2.0.0-beta.2`, `2.0.0-beta.1`)).toBe(false)
 	})
+	it(`compares exact previews consistently with build metadata`, () => {
+		for (const version of [`2.0.0-beta.1`, `2.0.0-beta.1+build.7`]) {
+			for (const range of [
+				`2.0.0-beta.1`,
+				`2.0.0-beta.1+build.7`,
+				`2.0.0-beta.1+build.8`,
+				`=2.0.0-beta.1+build.7`,
+				`2.0.0-beta.1+build.7 || ^2`,
+			])
+				expect(matches(version, range), `${version} matches ${range}`).toBe(
+					true,
+				)
+			for (const range of [`^2`, `>=2.0.0-beta.1 <3`, `2.0.0-beta.2+build.7`])
+				expect(matches(version, range), `${version} excludes ${range}`).toBe(
+					false,
+				)
+		}
+	})
 	it(`recognizes a new required peer even with a wildcard and permits removing a requirement`, () => {
 		const identity = { name: `integration`, version: `1.0.0` }
 		expect(

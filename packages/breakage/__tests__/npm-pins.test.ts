@@ -114,6 +114,43 @@ describe(`representative dependency pins`, () => {
 		30_000,
 	)
 
+	it.each([`focused`, `check`, `audit`] as const)(
+		`selects and covers an exact preview with build metadata (%s)`,
+		async (mode) => {
+			const version = `1.0.0-beta.1+build.7`
+			const f = (fixture = npmFixture(undefined, (project) => {
+				project.update(`package.json`, { peerDependencies: { host: version } })
+			}))
+			f.representative(`preview`, version)
+			const options = { baseDirectory: f.directory }
+			const result =
+				mode === `focused`
+					? await npmTest(f.config, { peer: `host`, range: version }, options)
+					: await npmCheck(f.config, {
+							...options,
+							coverageOnly: mode === `audit`,
+						})
+			expect(result.exitCode, JSON.stringify(result)).toBe(0)
+			expect(result.representatives[0]!.status).toBe(
+				mode === `audit` ? `audited` : `passed`,
+			)
+			expect(result.representatives[0]!.peers.host!.version).toBe(version)
+			expect(result.representatives[0]!.suites).toMatchObject([
+				{ peer: `host`, status: mode === `audit` ? `not-run` : `passed` },
+			])
+			if (mode !== `focused`)
+				expect(result.coverage).toEqual([
+					{
+						peer: `host`,
+						era: version,
+						representatives: [`peer-environments/preview`],
+					},
+				])
+			assertStagesRemoved(f, result)
+		},
+		30_000,
+	)
+
 	it(`rejects an installed peer that differs from its exact pin`, async () => {
 		const f = (fixture = npmFixture())
 		const directory = `environments/released-1`
