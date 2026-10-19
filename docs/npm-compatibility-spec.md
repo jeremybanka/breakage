@@ -1,6 +1,6 @@
 # Breakage npm compatibility specification
 
-Status: accepted implementation contract, reconciled with the [first decisions](./npm-compatibility-decisions.md), [follow-up decisions](./npm-compatibility-followup-decisions.md), and the subsequent decision to run inside each representative. This replaces the design spiked in [PR 20](https://github.com/jeremybanka/breakage/pull/20).
+Status: accepted implementation contract, reconciled with the [first decisions](./npm-compatibility-decisions.md), [follow-up decisions](./npm-compatibility-followup-decisions.md), in-place representative execution, and the adoption review decisions on explicit support eras and shared-file isolation. This replaces the design spiked in [PR 20](https://github.com/jeremybanka/breakage/pull/20).
 
 ## Motivation
 
@@ -74,6 +74,14 @@ export default {
 
 Every declared local peer needs a dedicated configured suite. Configured external suites opt into checking external peers too; the tool never discovers registry versions or generates a matrix. Suite files are current package-relative globs including contracts, fixtures, and explicit runner configuration. Each pattern must select files. Stage their relative paths intact; reject source symlinks and reserved paths rather than following them into the checkout. Runner commands must fail if no tests run. Exit 1 means assertions failed; other nonzero exits mean setup failed. Repositories must map runner-specific statuses accordingly and keep source aliases out of staged configuration.
 
+## Explicit support declarations
+
+The package under test and every coordinated peer candidate must author explicit peer support ranges, such as `^0.53.3 || ^0.54.0`. Reject moving workspace shorthand (`workspace:`, `workspace:*`, `workspace:^`, and `workspace:~`) with guidance to declare support eras. A local package version change must not silently change a current candidate's support promise. Ordinary semver ranges retain their meaning; this rule does not require exact version pins. Strip `workspace:` from an explicit semver range such as `workspace:^0.53.3`; this fixed declaration needs no local version lookup. Reject unsupported workspace aliases and relative-path syntax explicitly. Preserve peer optionality.
+
+Use normalized current declarations consistently for validation, representative selection, coverage, support comparison, and archive consistency. Packed candidates must match these declarations, including optionality. Normalization never rewrites source manifests or grants release intent.
+
+Historical baselines may contain moving shorthand. Resolve it using the registered `localPeers` package manifest at the same baseline commit: `workspace:*` and bare `workspace:` become the exact historical version, while `workspace:^` and `workspace:~` retain their respective operators. Require a matching package identity and valid version inside the same release repository. Missing registration, historical files, or supported syntax is a setup failure; never substitute today's workspace version or an intended release version. The configured local directory must identify that peer at the baseline commit. This reconstructs historical declarations only; reconstruction of historical peer artifacts remains deferred.
+
 ## Representatives and execution
 
 Representatives are complete directories discovered by a configured glob or list of globs. Each has its own manifest, lockfile, and dependency installation. Its manifest selects the entire coupled formulation. Names carry no version meaning. A representative declares candidate peers explicitly in `package.json` as `"breakage": { "candidates": ["atom.io"] }`.
@@ -97,7 +105,9 @@ Run commands from the ignored `test/` directory inside that representative. It m
 
 The repository builds and packs candidate archives before invocation. Stage a minimal consumer manifest and install the package archive and any explicitly certified peer archives. The default installation uses npm with lifecycle scripts and automatic peer installation disabled; `installCommand` can supply a repository-specific equivalent. Candidate runtime dependencies are installed, while peer instances come from the representative. Verify installed package names and versions and that tests and candidate packages resolve the same physical peer instances. Reject undeclared workspace-source links and candidate substitutions. Registry integrity attestation and historical Git reconstruction of peers are deferred; report installed identity evidence honestly.
 
-The candidate's archive must carry its current workspace manifest version. A coordinated peer archive may carry its current workspace version or its certified intended version; after installation its staged manifest is set to the intended version, without modifying the archive or workspace. Report both archive and intended versions. This supports release planning before manifests are bumped. Runtime code embedding version constants remains the repository's build responsibility.
+The candidate's archive must carry its current workspace manifest version. A coordinated peer archive may carry its current workspace version or its certified intended version. When these differ, set the installed peer manifest to the intended version by exclusively creating a fresh file beside it and atomically renaming that file over the installed entry. Preserve identity/version and declaration checks before replacement. An installed file may share storage with a package cache or another environment; never rewrite its shared contents. An archive already carrying the intended version requires no replacement. Preserve archives, workspace files, and other links to the original manifest, and report both archive and intended versions.
+
+This metadata substitution is a release-planning simulation, conditional on certified publication. It does not rebuild the artifact or alter version constants embedded in runtime code. The repository's build owns those constants and can supply an archive already carrying the intended version. Keep the observed archive version distinguishable from the simulated installed version.
 
 ## Coverage and prereleases
 
@@ -132,3 +142,5 @@ Deferred: optional-peer absence cases, registry sampling, solver-generated combi
 9. Removing supported versions requires certified breaking intent; equivalent range rewrites do not. Adding a required peer is also detected.
 10. Local per-environment execution cleans only its own ignored stage and rejects concurrent ownership or preexisting user files.
 11. A manual CI matrix can audit declarations and run each environment independently without generated state.
+12. Current candidates reject moving workspace shorthand, accept fixed support eras, and compare their normalized declarations with packed artifacts; historical shorthand resolves only at its baseline commit.
+13. Coordinated version substitution changes only the installed manifest entry, preserving hard links in caches and other environments; archives carrying their intended version need no substitution.

@@ -8,7 +8,7 @@ import { withDirectoryLock } from "../directory-lock.ts"
 import { latestReleaseTag } from "../release-tag.ts"
 import { validatePeerRanges } from "./config.ts"
 import type { Manifest } from "./manifest.ts"
-import { parseManifest, record } from "./manifest.ts"
+import { normalizeWorkspacePeers, parseManifest, record } from "./manifest.ts"
 import type {
 	NpmConfig,
 	ReleaseContext,
@@ -149,8 +149,41 @@ export async function previousManifest(
 		)
 	}
 	const prefix = await git.revparse([`--show-prefix`])
-	return parseManifest(
+	const manifest = parseManifest(
 		JSON.parse(await git.show([`${commit}:${prefix}package.json`])),
 		`release ${commit}`,
 	)
+	return await normalizeWorkspacePeers(manifest, async (peer) => {
+		const local = config.localPeers?.[peer]
+		if (!local)
+			throw new Error(
+				`Historical workspace peer ${peer} needs a localPeers directory to resolve release ${commit}.`,
+			)
+		const root = await git.revparse([`--show-toplevel`])
+		const relative = path.relative(
+			root,
+			path.resolve(directory, local.directory),
+		)
+		if (
+			relative === `..` ||
+			relative.startsWith(`..${path.sep}`) ||
+			path.isAbsolute(relative)
+		)
+			throw new Error(
+				`Historical workspace peer ${peer} escapes the release repository.`,
+			)
+		const filename = path
+			.join(relative, `package.json`)
+			.split(path.sep)
+			.join(`/`)
+		const historical = parseManifest(
+			JSON.parse(await git.show([`${commit}:${filename}`])),
+			`release ${commit}:${filename}`,
+		)
+		if (historical.name !== peer)
+			throw new Error(
+				`Historical workspace peer identity mismatch for ${peer}.`,
+			)
+		return historical.version
+	})
 }

@@ -12,7 +12,12 @@ import {
 	withStage,
 } from "./environment.ts"
 import type { Manifest } from "./manifest.ts"
-import { eras, matches, readManifest } from "./manifest.ts"
+import {
+	eras,
+	matches,
+	normalizeWorkspacePeers,
+	readManifest,
+} from "./manifest.ts"
 import { intent, previousManifest, supportChanges } from "./release.ts"
 import type {
 	NpmConfig,
@@ -208,7 +213,9 @@ async function run(
 	try {
 		validateConfig(config)
 		const base = path.resolve(baseDirectory, config.packageDirectory ?? `.`)
-		const manifest = await readManifest(path.join(base, `package.json`))
+		const manifest = await normalizeWorkspacePeers(
+			await readManifest(path.join(base, `package.json`)),
+		)
 		report.package = { name: manifest.name, version: manifest.version }
 		validatePeerRanges(manifest.peerDependencies ?? {})
 		for (const peer of Object.keys(config.suites)) {

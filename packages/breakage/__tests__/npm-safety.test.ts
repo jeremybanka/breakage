@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process"
-import { existsSync, readFileSync } from "node:fs"
+import { existsSync, linkSync, readFileSync } from "node:fs"
 import path from "node:path"
 
 import { afterEach, describe, expect, it } from "bun:test"
@@ -26,6 +26,47 @@ function setup(): NpmFixture {
 }
 
 describe(`npm environment safety`, () => {
+	it.each([`2.0.0`, `3.0.0`])(
+		`isolates intended version %s from shared manifest storage`,
+		async (version) => {
+			const f = setup()
+			f.representative(`next`, `2.0.0`, true)
+			const original = f.read(`local-host/package.json`)
+			f.write(`.cache/host-manifest.json`, original)
+			linkSync(
+				path.join(f.directory, `.cache/host-manifest.json`),
+				path.join(f.directory, `.cache/other-environment.json`),
+			)
+			const archive = path.join(
+				f.directory,
+				f.config.localPeers!.host!.artifact,
+			)
+			const originalArchive = readFileSync(archive)
+			f.config.installCommand += ` && rm node_modules/host/package.json && ln ../../../.cache/host-manifest.json node_modules/host/package.json`
+			f.config.releaseIntent = () => ({ status: `release`, version })
+			f.write(
+				`contracts/check.ts`,
+				`${f.read(`contracts/check.ts`)}\nimport { readFileSync, statSync } from 'node:fs'; const installed = 'node_modules/host/package.json'; const cached = '../../../.cache/host-manifest.json'; assert.equal(JSON.parse(readFileSync(installed, 'utf8')).version, '${version}'); assert.equal(statSync(installed).ino === statSync(cached).ino, ${version === `2.0.0`});`,
+			)
+			const result = await npmTest(
+				f.config,
+				{ peer: `host`, range: version },
+				{ baseDirectory: f.directory },
+			)
+			expect(result.exitCode, JSON.stringify(result)).toBe(0)
+			expect(result.representatives[0]!.peers.host).toMatchObject({
+				version,
+				archiveVersion: `2.0.0`,
+				source: `candidate`,
+			})
+			expect(f.read(`.cache/host-manifest.json`)).toBe(original)
+			expect(f.read(`.cache/other-environment.json`)).toBe(original)
+			expect(f.read(`local-host/package.json`)).toBe(original)
+			expect(readFileSync(archive)).toEqual(originalArchive)
+			assertStagesRemoved(f, result)
+		},
+		30_000,
+	)
 	it(`restores installation inputs on a failed non-frozen command and preserves the Git index`, async () => {
 		const f = setup()
 		f.representative(`one`, `1.0.0`)

@@ -78,6 +78,44 @@ export async function readManifest(filename: string): Promise<Manifest> {
 	return parseManifest(JSON.parse(await readFile(filename, `utf8`)), filename)
 }
 
+/** Current support is authored explicitly; only historical shorthand is resolved. */
+export async function normalizeWorkspacePeers(
+	manifest: Manifest,
+	versionAtBaseline?: (peer: string) => Promise<string>,
+): Promise<Manifest> {
+	if (!manifest.peerDependencies) return manifest
+	const entries = await Promise.all(
+		Object.entries(manifest.peerDependencies).map(async ([peer, range]) => {
+			if (!range.startsWith(`workspace:`)) return [peer, range] as const
+			const requested = range.slice(`workspace:`.length)
+			if ([``, `*`, `^`, `~`].includes(requested)) {
+				if (!versionAtBaseline)
+					throw new Error(
+						`Moving workspace peer range ${peer}: ${range} in ${manifest.name}. Declare explicit support eras, for example ^1.0.0 || ^2.0.0, so local version changes cannot change the support promise.`,
+					)
+				const version = await versionAtBaseline(peer)
+				if (!semver.valid(version))
+					throw new Error(
+						`Invalid historical workspace version for ${peer}: ${version}.`,
+					)
+				return [
+					peer,
+					`${requested === `^` || requested === `~` ? requested : ``}${version}`,
+				] as const
+			}
+			try {
+				eras(requested)
+			} catch {
+				throw new Error(
+					`Unsupported workspace peer range for ${peer}: ${range}.`,
+				)
+			}
+			return [peer, requested] as const
+		}),
+	)
+	return { ...manifest, peerDependencies: Object.fromEntries(entries) }
+}
+
 export function eras(range: string): string[] {
 	const parts = range.split(`||`).map((part) => part.trim())
 	if (parts.some((part) => !part || semver.validRange(part) === null)) {

@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto"
 import * as fs from "node:fs/promises"
 import {
 	copyFile,
@@ -5,6 +6,7 @@ import {
 	mkdir,
 	readFile,
 	realpath,
+	rename,
 	rm,
 	writeFile,
 } from "node:fs/promises"
@@ -15,8 +17,9 @@ import semver from "semver"
 import { simpleGit } from "simple-git"
 
 import { prepare } from "./command.ts"
+import { validatePeerRanges } from "./config.ts"
 import type { Manifest } from "./manifest.ts"
-import { readManifest } from "./manifest.ts"
+import { normalizeWorkspacePeers, readManifest } from "./manifest.ts"
 import { intent } from "./release.ts"
 import type { NpmConfig, NpmPeerEvidence, NpmSuite } from "./types.ts"
 
@@ -32,6 +35,7 @@ export type Environment = {
 			artifact: string
 			currentVersion: string
 			version: string
+			manifest: Manifest
 		}
 	>
 }
@@ -156,11 +160,12 @@ export async function prepareEnvironment(
 		if (!local)
 			throw new Error(`Candidate ${peer} has no localPeers configuration.`)
 		const localDirectory = path.resolve(base, local.directory)
-		const localManifest = await readManifest(
-			path.join(localDirectory, `package.json`),
+		const localManifest = await normalizeWorkspacePeers(
+			await readManifest(path.join(localDirectory, `package.json`)),
 		)
 		if (localManifest.name !== peer)
 			throw new Error(`Local peer identity mismatch for ${peer}.`)
+		validatePeerRanges(localManifest.peerDependencies ?? {})
 		const evidence = await intent(config, {
 			packageName: peer,
 			packageDirectory: localDirectory,
@@ -173,6 +178,7 @@ export async function prepareEnvironment(
 			artifact: path.resolve(base, local.artifact),
 			currentVersion: localManifest.version,
 			version: evidence.version,
+			manifest: localManifest,
 		}
 	}
 	const relevant = peerNames.filter(
@@ -398,17 +404,17 @@ export async function stageCandidate(
 				`Candidate archive identity/version mismatch for ${name}@${packed.version}.`,
 			)
 		}
+		const expectedManifest = candidate?.manifest ?? manifest
 		if (
-			name === manifest.name &&
 			Object.keys({
 				...packed.peerDependencies,
-				...manifest.peerDependencies,
+				...expectedManifest.peerDependencies,
 			}).some(
 				(peer) =>
 					packed.peerDependencies?.[peer] !==
-						manifest.peerDependencies?.[peer] ||
+						expectedManifest.peerDependencies?.[peer] ||
 					Boolean(packed.peerDependenciesMeta?.[peer]?.optional) !==
-						Boolean(manifest.peerDependenciesMeta?.[peer]?.optional),
+						Boolean(expectedManifest.peerDependenciesMeta?.[peer]?.optional),
 			)
 		) {
 			throw new Error(
@@ -418,15 +424,27 @@ export async function stageCandidate(
 		if (candidate) {
 			const evidence = environment.peers[name]
 			if (evidence) evidence.archiveVersion = packed.version
-			// Only the disposable installed manifest changes; archive and checkout stay intact.
-			const raw = JSON.parse(await readFile(filename, `utf8`)) as Record<
-				string,
-				unknown
-			>
-			await writeFile(
-				filename,
-				JSON.stringify({ ...raw, version: candidate.version }),
-			)
+			if (packed.version !== candidate.version) {
+				// Replace the entry: installed files may share an inode with a cache.
+				const raw = JSON.parse(await readFile(filename, `utf8`)) as Record<
+					string,
+					unknown
+				>
+				const temporary = path.join(
+					path.dirname(filename),
+					`.breakage-${randomUUID()}.json`,
+				)
+				await writeFile(
+					temporary,
+					JSON.stringify({ ...raw, version: candidate.version }),
+					{ flag: `wx` },
+				)
+				try {
+					await rename(temporary, filename)
+				} finally {
+					await rm(temporary, { force: true })
+				}
+			}
 		}
 	}
 	for (const suite of suites) await copySuite(base, stage, suite)

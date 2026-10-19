@@ -6,6 +6,14 @@ Consider an integration with `"atom.io": "^1 || ^2"`. Its current workspace test
 
 The npm commands require Node 22.18 or newer (including native erasable TypeScript for `.ts` configuration), Git, and your installation/test tools. They run on the filesystem, inside complete representative directories. They do not publish packages.
 
+## Declare support deliberately
+
+Current candidates must declare explicit peer support eras, for example `"atom.io": "^0.53.3 || ^0.54.0"`. Moving workspace shorthand (`workspace:`, `workspace:*`, `workspace:^`, and `workspace:~`) is rejected, including in coordinated peer candidates. With `workspace:^`, advancing the local core from `0.53.3` to `0.54.0` silently changes the published support range and drops the previous era. Keep that decision explicit and test the versions you promise to support.
+
+A fixed declaration such as `workspace:^0.53.3` is accepted and compared as `^0.53.3`, matching its packed form. Ordinary semver ranges and optional peers retain their meaning. Workspace aliases and relative paths are unsupported. Current source manifests are never rewritten by this normalization.
+
+Older releases may have used moving shorthand. For the baseline comparison, register that peer's directory in `localPeers`; Breakage reads its version from the same historical commit as the integration manifest. For example, historical `workspace:^` becomes `^0.53.3` when that commit's peer version is `0.53.3`, even if today's checkout or release plan says `0.54.0`. Missing historical evidence is a setup error. The configured directory must exist at the baseline commit; automatic tracking across package moves is unsupported.
+
 ## Start with released peers
 
 In the integration package, create complete environments for the peer formulations you want to exercise. For example, `peer-environments/core-1/package.json`:
@@ -125,7 +133,9 @@ const releaseIntent: NonNullable<NpmConfig["releaseIntent"]> = async ({
 }
 ```
 
-Missing intent blocks that candidate environment. Inspection errors and invalid evidence are setup errors, not absent intent. Intended versions must be exact and at least the current workspace version. The candidate archive may have its workspace version or the intended version. Breakage changes only the installed peer's disposable manifest to the intended version and reports both versions. Your build owns version constants embedded in executable code.
+Missing intent blocks that candidate environment. Inspection errors and invalid evidence are setup errors, not absent intent. Intended versions must be exact and at least the current workspace version. The candidate archive may have its workspace version or the intended version. Breakage reports both versions. If they differ, it substitutes the intended version in the installed peer's disposable manifest using a fresh file and atomic replacement, preserving shared cache files, other environments, the archive, and the workspace. Archives already carrying their intended version need no substitution.
+
+That substitution simulates release metadata; it does not rebuild the package or change version constants embedded in executable code. Your build owns those constants. To exercise the final version metadata directly, supply a peer archive already built with the certified intended version.
 
 Candidate results are conditional on publication. They can cover a new era, but cannot excuse an incompatible released version that the integration still advertises. The integration can ship independently when all its required released formulations pass, regardless of unrelated edits to core. The repository owns publication order.
 
