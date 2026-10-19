@@ -35,6 +35,7 @@ export type NpmConfig = {
 	prepareCommand: string
 	installCommand?: string
 	suites: Record<string, NpmSuite>
+	/** Currently declared local peers must support and exercise each planned release. */
 	localPeers?: Record<string, { directory: string; artifact: string }>
 	baseline:
 		| { firstRelease: true }

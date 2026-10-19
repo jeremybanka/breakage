@@ -359,7 +359,10 @@ describe(`npm environment safety`, () => {
 		const snapshot = JSON.parse(f.read(`.breakage/baseline.json`))
 		snapshot.commit = git(f.directory, `rev-parse`, `HEAD`).trim()
 		f.write(`.breakage/baseline.json`, snapshot)
-		f.config.releaseIntent = () => ({ status: `release`, version: `0.6.0` })
+		f.config.releaseIntent = ({ packageName }) =>
+			packageName === `integration`
+				? { status: `release`, version: `0.6.0` }
+				: { status: `none` }
 		f.config.certifyBreaking = ({ previousVersion, release }) =>
 			previousVersion.startsWith(`0.`) && release.delta === `minor`
 		const result = await npmCheck(f.config, {

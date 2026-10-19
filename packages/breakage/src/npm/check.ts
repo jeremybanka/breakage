@@ -81,6 +81,54 @@ async function checkSupport(
 	}
 }
 
+async function checkLocalReleases(
+	config: NpmConfig,
+	base: string,
+	manifest: Manifest,
+	representatives: NpmRepresentativeResult[],
+): Promise<string[]> {
+	const findings = await Promise.all(
+		Object.entries(config.localPeers ?? {}).map(async ([peer, local]) => {
+			const range = manifest.peerDependencies?.[peer]
+			// A registration may be retained solely to resolve an older baseline.
+			if (range === undefined) return []
+			try {
+				const directory = path.resolve(base, local.directory)
+				const current = await readManifest(path.join(directory, `package.json`))
+				if (current.name !== peer)
+					throw new Error(`Local peer identity mismatch for ${peer}.`)
+				const release = await intent(config, {
+					packageName: peer,
+					packageDirectory: directory,
+					currentVersion: current.version,
+				})
+				if (release.status === `none`) return []
+				if (!matches(release.version, range))
+					return [
+						`Declared support for ${peer}: ${range} does not include its planned local release ${release.version}. Update the peer range to include the intended version.`,
+					]
+				if (
+					!representatives.some(
+						(result) =>
+							result.peers[peer]?.source === `candidate` &&
+							result.peers[peer]?.version === release.version &&
+							result.suites.some((suite) => suite.peer === peer),
+					)
+				)
+					return [
+						`No coordinated representative covers planned local peer ${peer}@${release.version}. Enroll ${peer} with breakage.candidates and configure its relationship suite.`,
+					]
+				return []
+			} catch (error) {
+				return [
+					`Cannot inspect planned local release for ${peer}: ${errorMessage(error)}`,
+				]
+			}
+		}),
+	)
+	return findings.flat()
+}
+
 async function runRepresentative(
 	config: NpmConfig,
 	base: string,
@@ -274,6 +322,14 @@ async function run(
 		report.support = support
 		report.representatives = representatives
 		if (!selection) {
+			report.errors.push(
+				...(await checkLocalReleases(
+					effective,
+					base,
+					manifest,
+					representatives,
+				)),
+			)
 			for (const peer of Object.keys(config.suites)) {
 				for (const era of eras(manifest.peerDependencies![peer]!)) {
 					const matching = representatives

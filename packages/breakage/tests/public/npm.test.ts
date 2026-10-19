@@ -37,7 +37,10 @@ it(`cannot certify away a failure against a still-supported peer`, async () => {
 	// Keep the candidate valid but break the shared consumer identity.
 	project.write(`index.js`, `export const host = {};`)
 	project.config.artifact = project.pack(`.`)
-	project.config.releaseIntent = () => ({ status: `release`, version: `3.0.0` })
+	project.config.releaseIntent = ({ packageName }) =>
+		packageName === `integration`
+			? { status: `release`, version: `3.0.0` }
+			: { status: `none` }
 	project.config.certifyBreaking = () => true
 	const report = await npmCheck(project.config, {
 		baseDirectory: project.directory,
@@ -49,4 +52,41 @@ it(`cannot certify away a failure against a still-supported peer`, async () => {
 		),
 	).toBe(true)
 	assertStagesRemoved(project, report)
+}, 30_000)
+
+it(`requires support and coordinated evidence for a planned local peer release`, async () => {
+	project = npmFixture()
+	project.representative(`oldest`, `1.0.0`)
+	project.representative(`current`, `2.0.0`)
+	project.config.releaseIntent = ({ packageName }) =>
+		packageName === `host`
+			? { status: `release`, version: `3.0.0` }
+			: { status: `none` }
+	const options = { baseDirectory: project.directory }
+	const unsupported = await npmCheck(project.config, options)
+	expect(unsupported.exitCode).toBe(2)
+	expect(unsupported.errors.join()).toContain(
+		`does not include its planned local release 3.0.0`,
+	)
+	project.write(`package.json`, {
+		...JSON.parse(project.read(`package.json`)),
+		peerDependencies: { host: `*` },
+	})
+	project.config.artifact = project.pack(`.`)
+	const missing = await npmCheck(project.config, options)
+	expect(missing.exitCode).toBe(2)
+	expect(missing.errors.join()).toContain(
+		`No coordinated representative covers planned local peer host@3.0.0`,
+	)
+	project.representative(`next`, `2.0.0`, true)
+	const supported = await npmCheck(project.config, options)
+	expect(supported.exitCode, JSON.stringify(supported)).toBe(0)
+	expect(
+		supported.representatives.every((result) => result.status === `passed`),
+	).toBe(true)
+	expect(
+		supported.representatives.find((result) => result.path.endsWith(`/next`))!
+			.peers.host,
+	).toMatchObject({ version: `3.0.0`, source: `candidate` })
+	assertStagesRemoved(project, supported)
 }, 30_000)

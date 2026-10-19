@@ -187,7 +187,10 @@ describe(`historical workspace declarations`, () => {
 			peerDependencies: { host: `^3` },
 		})
 		f.representative(`three`, `3.0.0`)
-		f.config.releaseIntent = () => ({ status: `release`, version: `2.0.0` })
+		f.config.releaseIntent = ({ packageName }) =>
+			packageName === `integration`
+				? { status: `release`, version: `2.0.0` }
+				: { status: `none` }
 		const options = { baseDirectory: f.directory, coverageOnly: true }
 		const result = await npmCheck(f.config, options)
 		expect(result.exitCode, JSON.stringify(result)).toBe(1)

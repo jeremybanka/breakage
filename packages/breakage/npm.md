@@ -85,7 +85,7 @@ export default {
 }
 ```
 
-Every file glob must select at least one regular file. Remove the fixture glob if you have no fixtures. `packageDirectory` defaults to the config file's directory; all npm paths resolve from that package directory. Glob discovery uses paths as labels and installed versions as evidence. Register local peer directories in `localPeers`; each declared local peer must have a suite. External peer suites are an explicit opt-in. No matrix is inferred from registry metadata.
+Every file glob must select at least one regular file. Remove the fixture glob if you have no fixtures. `packageDirectory` defaults to the config file's directory; all npm paths resolve from that package directory. Glob discovery uses paths as labels and installed versions as evidence. Register local peer directories in `localPeers`; each declared local peer must have a suite, and its certified upcoming releases must be supported and exercised by a coordinated representative. External peer suites are an explicit opt-in. No matrix is inferred from registry metadata.
 
 The previous manifest comes from the newest matching release tag. An existing core `baselineFile` may pin a fetched release. For a package's first publication, explicitly use `baseline: { firstRelease: true }` and remove that exception after publishing; missing baseline evidence never silently passes.
 
@@ -99,7 +99,7 @@ breakage npm test --representative peer-environments/core-1
 breakage npm check --config ./breakage.config.ts --json
 ```
 
-All matching representatives run. Every explicit `||` era needs coverage. Preview versions cover only an exact preview alternative, not stable ranges or other previews. Out-of-range representatives warn; a focused request can intentionally test them. An audit reports declarations and release-policy findings without claiming assertions passed. Exit statuses are 0 for successful requested work, 1 for compatibility or uncertified support failures, and 2 for setup or coverage errors.
+All matching representatives run. Every explicit `||` era needs coverage. Preview versions cover only an exact preview alternative, not stable ranges or other previews. Released representatives outside declared support warn; excluding a planned local release fails the release check. Focused requests can intentionally explore versions outside declared support. An audit reports declarations and release-policy findings without claiming assertions passed. Exit statuses are 0 for successful requested work, 1 for compatibility or uncertified support failures, and 2 for setup or coverage errors.
 
 ## Coordinated releases
 
@@ -137,7 +137,13 @@ Missing intent blocks that candidate environment. Inspection errors and invalid 
 
 That substitution simulates release metadata; it does not rebuild the package or change version constants embedded in executable code. Your build owns those constants. To exercise the final version metadata directly, supply a peer archive already built with the certified intended version.
 
-Candidate results are conditional on publication. They can cover a new era, but cannot excuse an incompatible released version that the integration still advertises. The integration can ship independently when all its required released formulations pass, regardless of unrelated edits to core. The repository owns publication order.
+Both `npm check` and its coverage-only audit inspect each currently declared `localPeers` package's release intent, even if you omitted its candidate environment. A certified intended version must be included in the integration's peer range and covered by a coordinated representative. Missing either fails with exit 2; an installed peer at the same version does not substitute for testing the local candidate. Optional local peers have the same obligation when declared. Hook errors and invalid evidence fail setup. Hooks are evaluated once per package per invocation, and must return that package's own release intent.
+
+For a core still labeled `0.53.3` with a planned `0.54.0` release, an integration declaring only `^0.53.3` fails. Adding `|| ^0.54.0` is recommended when retaining the older era. Admission uses version membership: `0.54.0`, `*`, and other ranges containing that version qualify too. Exact-preview enrollment, coverage of other declared eras, and certification for dropping old support still apply. Your release hook supplies the intended version before a versioning PR is merged; Breakage does not infer it from an open PR.
+
+Candidate results are conditional on publication. They can cover a new era, but cannot excuse an incompatible released version that the integration still advertises. Unreleased local edits with no release intent create no new coordination obligation. Registering a currently declared local peer means the integration must accommodate its planned releases. Registrations retained only for historical resolution do not impose this obligation after the peer declaration is removed. The repository owns publication order.
+
+Focused `npm test` commands remain available for exploration before advertising an upcoming version. They check release intent for the selected candidate environments but do not audit every planned local release; require the full check or coverage audit as part of the release gate.
 
 ## Removing support
 

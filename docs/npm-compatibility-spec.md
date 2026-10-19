@@ -1,6 +1,6 @@
 # Breakage npm compatibility specification
 
-Status: accepted implementation contract, reconciled with the [first decisions](./npm-compatibility-decisions.md), [follow-up decisions](./npm-compatibility-followup-decisions.md), in-place representative execution, and the adoption review decisions on explicit support eras and shared-file isolation. This replaces the design spiked in [PR 20](https://github.com/jeremybanka/breakage/pull/20).
+Status: accepted implementation contract, reconciled with the [first decisions](./npm-compatibility-decisions.md), [follow-up decisions](./npm-compatibility-followup-decisions.md), in-place representative execution, and the adoption review decisions on explicit support eras, shared-file isolation, and planned local releases. This replaces the design spiked in [PR 20](https://github.com/jeremybanka/breakage/pull/20).
 
 ## Motivation
 
@@ -24,13 +24,13 @@ Certification never excuses a failure against a still-advertised peer. A success
 
 ## Commands and results
 
-- `breakage npm check` audits coverage, checks changes in declared support against the previous release, and executes every matching configured relationship suite in every representative.
-- `breakage npm check --coverage-only` prepares and audits all representatives and checks support changes, without installing candidate artifacts or executing assertions. It is not a compatibility pass.
+- `breakage npm check` audits coverage and planned local releases, checks changes in declared support against the previous release, and executes every matching configured relationship suite in every representative.
+- `breakage npm check --coverage-only` prepares and audits all representatives, planned local releases, and support changes, without installing candidate artifacts or executing assertions. It is not a compatibility pass.
 - `breakage npm test <peer> <range>` runs every representative matching that request, including explicitly requested versions outside declared support, with a warning for those versions.
 - `breakage npm test --representative <path>` runs the applicable suites in that exact configured representative. The path is relative to the package directory, not a semantic label. No match is an error.
 - `--config <path>` selects configuration. `--json` emits the structured report; normal output summarizes the same evidence and includes failed command output.
 
-Focused tests do not claim complete declaration coverage or perform the release baseline comparison. A developer-owned CI matrix must require the audit and all relevant focused jobs. There are no cross-job receipts, generated workflows, checked-in plans, or npm prelude.
+Focused tests do not claim complete declaration coverage, audit all planned local releases, or perform the release baseline comparison. They retain candidate release-intent and isolation checks for the environments they exercise. A developer-owned CI matrix must require the audit and all relevant focused jobs. There are no cross-job receipts, generated workflows, checked-in plans, or npm prelude.
 
 Exit statuses are 0 for successful requested work (including certified support changes), 1 for compatibility or uncertified support failures, and 2 for setup errors or missing coverage. Independent environments continue after another fails. Reports identify exact versions, conditional releases, warnings, unexecuted suites, failure phase, and whether assertions actually ran.
 
@@ -111,13 +111,19 @@ This metadata substitution is a release-planning simulation, conditional on cert
 
 ## Coverage and prereleases
 
-Each explicit `||` alternative in a current peer range is a coverage obligation. Run all matching representatives, and fail if any required alternative has none. A complete representative may satisfy several alternatives and peer suites, but each suite runs once per representative. Out-of-range representatives warn without supplying coverage. Explicit focused requests may execute them for investigation.
+Each explicit `||` alternative in a current peer range is a coverage obligation. Run all matching representatives, and fail if any required alternative has none. A complete representative may satisfy several alternatives and peer suites, but each suite runs once per representative. Released representatives outside declared support warn without supplying coverage. A planned local release outside declared support fails the release check. Explicit focused requests may execute versions outside declared support for investigation.
 
 A prerelease can cover only its exact explicitly declared alternative; it cannot represent a broad stable range or another preview. The same rule applies to focused prerelease requests. Oldest/newest representatives are useful authoring practice, not a minimum. Maintainers and dependency automation own updates; Breakage records exactly what was exercised.
 
 ## Release intent and support changes
 
 `releaseIntent({ packageName, packageDirectory, currentVersion })` returns `{ status: "none" }` or `{ status: "release", version: "2.0.0" }`. Exceptions and invalid evidence are setup errors. The intended version must be newer than the current version, or equal when the repository already applied versioning. Candidate representatives require positive evidence for every named local peer. Candidate peers may be omitted from frozen dependencies, so preparation never needs an unpublished registry version. If the representative also declares a constraint for a candidate peer, it must accept the certified version. A candidate may cover a new era, with a result explicitly conditional on publication. Publication order remains repository policy.
+
+Both `npm check` modes inspect release intent for every currently declared peer registered in `localPeers`, including optional peers, even when no candidate representative names it. Verify the registered package identity and inspect each package's release intent once per invocation, sharing evidence and failures with candidate preparation and support certification. A registration retained only for historical baseline resolution creates no current obligation after the peer declaration is removed. A local peer with no release intent creates no new obligation; inspection failures and invalid evidence fail setup.
+
+Every planned local release must fall within the downstream's declared support and have a coordinated representative for that exact intended version with its relationship suite selected. Stable version admission uses semver membership: `^0.54.0` is recommended for that era, while `0.54.0`, `*`, and any other range containing `0.54.0` also satisfy this requirement. The existing exact-preview enrollment rule still applies. A matching installed release does not replace candidate evidence. Missing support or candidate coverage is a setup/coverage failure (exit 2), including during an audit; breaking-release certification cannot waive it. During execution the candidate suite must pass, while an audit records that assertions have not run. Declared support for older eras continues to require its own coverage, and removing old support still requires the package's breaking-release certification.
+
+For example, a local core whose manifest still says `0.53.3` but whose release-intent hook certifies `0.54.0` makes a downstream declaring only `^0.53.3` fail the release check. Declaring `^0.53.3 || ^0.54.0` and providing released and coordinated representatives allows both formulations to be tested. An open versioning PR is not evidence by itself; the repository hook supplies the exact intended version from its release plan. Downstream packages with registered local peers must accommodate their planned releases even when they could independently keep shipping against an older core.
 
 The previous release manifest comes from the latest matching Git release tag, or an existing validated core `baselineFile`. Missing or invalid baseline evidence is an error. A first publication must explicitly declare `baseline: { firstRelease: true }`; no baseline failure silently becomes bootstrap success.
 
@@ -133,7 +139,7 @@ Deferred: optional-peer absence cases, registry sampling, solver-generated combi
 
 1. Historical-only users keep their existing CLI, configuration, adoption conditions, and public contracts.
 2. A locally passing integration fails against released core when the necessary core change has no certified release.
-3. An integration that passes all released formulations can ship independently of unrelated core edits.
+3. An integration that passes all released formulations can ship independently of unrelated core edits when the local core has no release intent.
 4. A certified coordinated candidate covers its exact intended formulation conditionally, without hiding failures of still-supported released peers.
 5. All matching representatives execute, coupled formulations stay intact, and missing eras fail.
 6. Explicit preview coverage never supplies stable coverage; extra-range focused tests warn and execute.
@@ -144,3 +150,4 @@ Deferred: optional-peer absence cases, registry sampling, solver-generated combi
 11. A manual CI matrix can audit declarations and run each environment independently without generated state.
 12. Current candidates reject moving workspace shorthand, accept fixed support eras, and compare their normalized declarations with packed artifacts; historical shorthand resolves only at its baseline commit.
 13. Coordinated version substitution changes only the installed manifest entry, preserving hard links in caches and other environments; archives carrying their intended version need no substitution.
+14. A planned local release fails the release check if its intended version is excluded or lacks a coordinated representative, even when released coverage passes; caret, exact, wildcard, and other containing ranges all satisfy version admission.

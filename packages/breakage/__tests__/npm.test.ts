@@ -45,7 +45,10 @@ describe(`npm release compatibility`, () => {
 		const f = setup()
 		f.representative(`one`, `1.0.0`)
 		f.representative(`two`, `2.0.0`)
-		f.config.releaseIntent = () => ({ status: `release`, version: `3.0.0` })
+		f.config.releaseIntent = ({ packageName }) =>
+			packageName === `integration`
+				? { status: `release`, version: `3.0.0` }
+				: { status: `none` }
 		f.config.certifyBreaking = () => true
 		f.write(
 			`contracts/check.ts`,
@@ -132,7 +135,10 @@ describe(`npm release compatibility`, () => {
 		})
 		expect(result.exitCode).toBe(1)
 		expect(result.support.status).toBe(`end-of-support`)
-		f.config.releaseIntent = () => ({ status: `release`, version: `2.0.0` })
+		f.config.releaseIntent = ({ packageName }) =>
+			packageName === `integration`
+				? { status: `release`, version: `2.0.0` }
+				: { status: `none` }
 		f.config.certifyBreaking = ({ release, changes }) =>
 			release.delta === `major` && changes[0]!.peer === `host`
 		result = await npmCheck(f.config, {
