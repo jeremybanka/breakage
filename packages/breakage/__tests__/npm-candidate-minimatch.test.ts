@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs"
+import { existsSync, globSync, realpathSync, rmSync } from "node:fs"
 import path from "node:path"
 
 import { afterEach, describe, expect, it } from "bun:test"
@@ -33,8 +33,7 @@ function setup(major: 8 | 9): NpmFixture {
 describe(`real minimatch major-version incompatibility`, () => {
 	it(`passes with minimatch 8, whose default export the host requires`, async () => {
 		const f = setup(8)
-		// The source fixture is prepared for type checking, but runtime evidence
-		// must come from a fresh frozen installation in the disposable project.
+		// Runtime evidence comes from a fresh frozen installation in this project.
 		for (const directory of [
 			`node_modules`,
 			`peer-environments/minimatch-8/node_modules`,
@@ -42,6 +41,14 @@ describe(`real minimatch major-version incompatibility`, () => {
 		]) {
 			expect(existsSync(path.join(f.directory, directory))).toBe(false)
 		}
+		const cache = path.join(f.directory, `.cache`)
+		const externalCacheEntries = globSync(`**/*`, { cwd: cache }).filter(
+			(entry) =>
+				!realpathSync(path.join(cache, entry)).startsWith(
+					`${cache}${path.sep}`,
+				),
+		)
+		expect(externalCacheEntries).toEqual([])
 		const result = await npmCheck(f.config, { baseDirectory: f.directory })
 		assertStagesRemoved(f, result)
 		expect(result.exitCode, JSON.stringify(result, null, 2)).toBe(0)
@@ -50,6 +57,15 @@ describe(`real minimatch major-version incompatibility`, () => {
 			expect(suite.status).toBe(`passed`)
 			expect(suite.output).toContain(`file matching assertions passed`)
 		}
+	}, 30_000)
+
+	it(`fails offline when the disposable cache is missing`, async () => {
+		const f = setup(8)
+		rmSync(path.join(f.directory, `.cache`), { recursive: true })
+		const result = await npmCheck(f.config, { baseDirectory: f.directory })
+		assertStagesRemoved(f, result)
+		expect(result.exitCode).toBe(2)
+		expect(result.representatives[0]!.error).toContain(`error: --offline:`)
 	}, 30_000)
 
 	it(`exposes the real import crash during focused exploration with minimatch 9`, async () => {

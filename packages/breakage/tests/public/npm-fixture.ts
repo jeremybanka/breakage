@@ -51,8 +51,15 @@ export function npmFixture(
 		cpSync(project, directory, {
 			recursive: true,
 			filter: (entry) =>
-				![`node_modules`, `dist`].includes(path.basename(entry)),
+				![`node_modules`, `dist`, `.cache`].includes(path.basename(entry)),
 		})
+		const cache = new URL(`.cache/`, project)
+		if (existsSync(cache))
+			cpSync(cache, path.join(directory, `.cache`), {
+				recursive: true,
+				// Preserve cached dist files and copy Bun's absolute links as owned data.
+				dereference: true,
+			})
 		const write = (filename: string, value: string | object): void => {
 			const destination = path.join(directory, filename)
 			mkdirSync(path.dirname(destination), { recursive: true })
@@ -189,12 +196,13 @@ export function npmFixture(
 			clean,
 		}
 		customize?.(fixture)
-		const packages = globSync(`**/src/index.ts`, { cwd: directory }).map(
-			(entrypoint) => {
-				const source = path.dirname(path.dirname(entrypoint))
-				return { source, manifest: JSON.parse(read(`${source}/package.json`)) }
-			},
-		)
+		const packages = globSync(`**/src/index.ts`, {
+			cwd: directory,
+			exclude: [`.cache/**`],
+		}).map((entrypoint) => {
+			const source = path.dirname(path.dirname(entrypoint))
+			return { source, manifest: JSON.parse(read(`${source}/package.json`)) }
+		})
 		for (const { source, manifest } of packages) {
 			const filename = `${source}/package.json`
 			// npm must find fixture tarballs from inside an installed candidate. Only

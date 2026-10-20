@@ -2,32 +2,32 @@
 
 Run these commands from the repository root with `pnpm run <command>`. `mise.toml` pins Node.js and pnpm and adds the root's `node_modules/.bin` to `PATH`.
 
-| Command                 | Contract                                                                       |
-| ----------------------- | ------------------------------------------------------------------------------ |
-| `fmt`                   | Apply the repository formatting policy.                                        |
-| `check`                 | Run all `check:*` validators.                                                  |
-| `check:fmt`             | Check formatting with dprint.                                                  |
-| `check:vp`              | Build workspace packages, then run Vite Plus linting and TypeScript checks.    |
-| `check:spelling`        | Check spelling with CSpell.                                                    |
-| `test`                  | Build the package and run all current Bun tests once.                          |
-| `test:fixtures:prepare` | Install frozen external fixture dependencies and populate their offline cache. |
-| `test:shard`            | Build and run a test slice with `--shard=<index>/<total>`.                     |
-| `test:public`           | Run current public consumer contracts against source once.                     |
-| `test:breakage`         | Replay released public contracts with the pinned supervisor.                   |
-| `test:watch`            | Run all current Bun tests in watch mode.                                       |
-| `build`                 | Run workspace package build scripts when available.                            |
-| `dev`                   | Run workspace package development scripts when available.                      |
-| `change`                | Author pending release notes for publishable packages.                         |
-| `release:version`       | Prepare package versions and release metadata.                                 |
-| `release:publish`       | Build and publish packages through Changesets.                                 |
-| `staged`                | Format and check staged files.                                                 |
-| `workflows:update`      | Update pinned workflow action references and mise.                             |
+| Command                 | Contract                                                                     |
+| ----------------------- | ---------------------------------------------------------------------------- |
+| `fmt`                   | Apply the repository formatting policy.                                      |
+| `check`                 | Run all `check:*` validators.                                                |
+| `check:fmt`             | Check formatting with dprint.                                                |
+| `check:vp`              | Build workspace packages, then run Vite Plus linting and TypeScript checks.  |
+| `check:spelling`        | Check spelling with CSpell.                                                  |
+| `test`                  | Build the package, prepare its fixtures, and run all current Bun tests once. |
+| `test:fixtures:prepare` | Run workspace-owned fixture preparation tasks.                               |
+| `test:shard`            | Build and run a test slice with `--shard=<index>/<total>`.                   |
+| `test:public`           | Run current public consumer contracts against source once.                   |
+| `test:breakage`         | Replay released public contracts with the pinned supervisor.                 |
+| `test:watch`            | Run all current Bun tests in watch mode.                                     |
+| `build`                 | Run workspace package build scripts when available.                          |
+| `dev`                   | Run workspace package development scripts when available.                    |
+| `change`                | Author pending release notes for publishable packages.                       |
+| `release:version`       | Prepare package versions and release metadata.                               |
+| `release:publish`       | Build and publish packages through Changesets.                               |
+| `staged`                | Format and check staged files.                                               |
+| `workflows:update`      | Update pinned workflow action references and mise.                           |
 
 Vite Plus enables type-aware linting and TypeScript checking. Formatting is handled separately by dprint. Add package-specific checks as needed and include them in `check` and CI.
 
-`pnpm install` runs `test:fixtures:prepare` through the root `prepare` hook, including in CI's shared setup action. It installs the Minimatch fixture's peer environments from their own registry lock files and prepares a local npm cache for offline test execution. Run `pnpm run test:fixtures:prepare` after editing those manifests or lock files, or after installing with lifecycle scripts disabled. Preparation may use the registry; tests install from the copied cache with `--offline`. Frozen representative directories remain outside the pnpm workspace so their npm lock files remain authoritative. Tests copy neither installed dependency trees nor authoring build outputs.
+Fixture preparation belongs to the workspace package that needs it. The Minimatch fixture exposes `test:prepare`, which installs its exact peer environments with Bun from their committed `bun.lock` files and fills a local cache. Breakage's Vite Plus `suite` task depends on that preparation and its own build. The repository's full, sharded, and watch test commands use that task graph; installation, validation, packaging, and public-only tests do not prepare these private fixtures. `pnpm run test:fixtures:prepare` dispatches all workspace `test:prepare` tasks when preparation alone is useful. Preparation may use the registry; compatibility tests install from a disposable copy of the cache with `--offline`. Frozen representatives stay outside the pnpm workspace, keeping their own lock files authoritative.
 
-The `breakage` package builds with tsdown and generates its configuration schemas. `test` and `test:watch` dispatch to package scripts through Vite Plus. The test command builds first for integration tests that exercise the distributable entrypoint, then runs both private integration tests and current public contracts. The watch command covers both suites too. Fixture tests are run only inside their disposable Git repositories. The npm fixtures are complete miniature projects containing source, package manifests, Breakage configuration, contracts, and frozen peer environments. The shared project includes runnable released environments and a candidate template; cases that vary labels or versions clone their project's environments into an explicitly selected set. Tests copy a project, apply case-specific changes, and build its packages; runtime workspace dependencies become local tarball paths only in the disposable copy. Fixture compilation preserves bare peer imports for consumer resolution. Bun is a development dependency provided by mise; the published CLI runs on Node.js.
+The `breakage` package builds with tsdown and generates its configuration schemas. Its test task runs both private integration tests and current public contracts after the prerequisites finish; watch mode uses the same task with `--watch`. Fixture tests are run only inside their disposable Git repositories. The npm fixtures are complete miniature projects containing source, package manifests, Breakage configuration, contracts, and frozen peer environments. The shared project includes runnable released environments and a candidate template; cases that vary labels or versions clone their project's environments into an explicitly selected set. Tests copy a project, apply case-specific changes, and build its packages; runtime workspace dependencies become local tarball paths only in the disposable copy. Copies exclude installed dependency trees and authoring build outputs. Cached packages are copied separately with their contents intact and their links dereferenced, so Bun's absolute cache links cannot refer back to the checkout. Fixture compilation preserves bare peer imports for consumer resolution. Bun is a development dependency provided by mise; the published CLI runs on Node.js.
 
 Current fixture packages are private pnpm workspace members with ordinary package exports and `workspace:*` development dependencies. Their shared Vite Plus task configuration builds upstream packages before each fixture build. `pnpm run check:vp` invokes the root `validate` task, whose `dependsOn: ["build"]` lets Vite Plus schedule the workspace builds before `vp check --no-fmt`. That check validates every project's sources, configuration, and contracts against built declarations. The `tsc` build tasks emit fixture JavaScript and declarations; Vite Plus handles validation without a separate typecheck command. There are no fixture TypeScript path aliases or manually created typechecking links. The workspace's development dependency resolution serves authoring checks; runtime compatibility evidence always comes from each representative's exact pins and frozen installation. Historical source packages remain fixture data rather than duplicate workspace members.
 

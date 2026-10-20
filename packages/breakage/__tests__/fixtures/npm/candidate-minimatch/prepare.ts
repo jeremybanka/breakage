@@ -9,14 +9,15 @@ for (const manifest of globSync(`peer-environments/*/package.json`, {
 	const directory = path.dirname(manifest)
 	console.log(`Preparing Minimatch fixture: ${directory}`)
 	execFileSync(
-		`npm`,
+		`bun`,
 		[
-			`ci`,
+			`install`,
+			`--frozen-lockfile`,
 			`--ignore-scripts`,
-			`--cache`,
+			// Populate the cache even when node_modules already contains these packages.
+			`--force`,
+			`--cache-dir`,
 			path.join(import.meta.dirname, `.cache`),
-			`--no-audit`,
-			`--no-fund`,
 		],
 		{ cwd: path.join(import.meta.dirname, directory), stdio: `inherit` },
 	)
