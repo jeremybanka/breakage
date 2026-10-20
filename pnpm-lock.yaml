@@ -290,9 +290,6 @@ importers:
 
   packages/breakage/__tests__/fixtures/npm/coupled-peers:
     devDependencies:
-      breakage:
-        specifier: workspace:*
-        version: link:../../../..
       coupled-host:
         specifier: workspace:*
         version: link:local-host
@@ -306,9 +303,6 @@ importers:
 
   packages/breakage/__tests__/fixtures/npm/runtime-dependencies:
     devDependencies:
-      breakage:
-        specifier: workspace:*
-        version: link:../../../..
       runtime-host:
         specifier: workspace:*
         version: link:local-host

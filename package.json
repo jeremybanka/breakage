@@ -10,7 +10,6 @@
 		"check:fmt": "dprint check",
 		"check:spelling": "cspell .",
 		"check:vp": "vp run check:vp:run",
-		"dev": "vp run -r dev",
 		"fmt": "dprint fmt",
 		"prepare": "vp config --hooks --no-agent",
 		"release:publish": "vp run breakage#build && changeset publish",

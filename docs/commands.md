@@ -15,7 +15,6 @@ Run these commands from the repository root with `pnpm run <command>`. `mise.tom
 | `test:breakage`    | Replay released public contracts with the pinned supervisor.                 |
 | `test:watch`       | Run all current Bun tests in watch mode.                                     |
 | `build`            | Run workspace package build scripts when available.                          |
-| `dev`              | Run workspace package development scripts when available.                    |
 | `change`           | Author pending release notes for publishable packages.                       |
 | `release:version`  | Prepare package versions and release metadata.                               |
 | `release:publish`  | Build Breakage and publish through Changesets.                               |

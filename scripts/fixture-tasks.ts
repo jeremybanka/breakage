@@ -6,8 +6,6 @@ export const packageConfig: UserConfig = defineConfig({
 		// Emit entrypoint declarations; vp check handles project-wide typechecking.
 		dts: { generator: "oxc" },
 		fixedExtension: false,
-		format: "esm",
-		platform: "node",
 	},
 	run: {
 		tasks: {
