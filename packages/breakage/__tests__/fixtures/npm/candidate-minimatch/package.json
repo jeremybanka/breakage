@@ -15,7 +15,7 @@
 		"dist"
 	],
 	"scripts": {
-		"test:prepare": "bun prepare.ts"
+		"test:prepare": "node prepare.ts"
 	},
 	"devDependencies": {
 		"breakage": "workspace:*",

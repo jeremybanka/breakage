@@ -51,15 +51,8 @@ export function npmFixture(
 		cpSync(project, directory, {
 			recursive: true,
 			filter: (entry) =>
-				![`node_modules`, `dist`, `.cache`].includes(path.basename(entry)),
+				![`node_modules`, `dist`].includes(path.basename(entry)),
 		})
-		const cache = new URL(`.cache/`, project)
-		if (existsSync(cache))
-			cpSync(cache, path.join(directory, `.cache`), {
-				recursive: true,
-				// Preserve cached dist files and copy Bun's absolute links as owned data.
-				dereference: true,
-			})
 		const write = (filename: string, value: string | object): void => {
 			const destination = path.join(directory, filename)
 			mkdirSync(path.dirname(destination), { recursive: true })

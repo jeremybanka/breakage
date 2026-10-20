@@ -65,7 +65,7 @@ describe(`real minimatch major-version incompatibility`, () => {
 		const result = await npmCheck(f.config, { baseDirectory: f.directory })
 		assertStagesRemoved(f, result)
 		expect(result.exitCode).toBe(2)
-		expect(result.representatives[0]!.error).toContain(`error: --offline:`)
+		expect(result.representatives[0]!.error).toContain(`ENOTCACHED`)
 	}, 30_000)
 
 	it(`exposes the real import crash during focused exploration with minimatch 9`, async () => {

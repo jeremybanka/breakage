@@ -8,9 +8,9 @@ const config: { npm: NpmConfig } = {
 				: { status: `none` },
 		artifact: "artifacts/minimatch-integration-1.1.0.tgz",
 		representatives: "peer-environments/minimatch-8",
-		lockfile: "bun.lock",
+		lockfile: "package-lock.json",
 		prepareCommand:
-			"bun install --frozen-lockfile --ignore-scripts --offline --cache-dir ../../.cache",
+			"npm ci --ignore-scripts --offline --cache ../../.cache --no-audit --no-fund",
 		installCommand:
 			"npm install --ignore-scripts --legacy-peer-deps --package-lock=false --offline --cache ../../../.cache --no-audit --no-fund",
 		suites: {
