@@ -13,7 +13,7 @@
 		"dev": "vp run -r dev",
 		"fmt": "dprint fmt",
 		"prepare": "vp config --hooks --no-agent",
-		"release:publish": "pnpm build && changeset publish",
+		"release:publish": "vp run breakage#build && changeset publish",
 		"release:version": "changeset version",
 		"staged": "vp staged",
 		"test": "vp run -r test",

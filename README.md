@@ -43,7 +43,7 @@ The supervisor dependency is deliberately pinned independently of the candidate 
 
 The first release as `breakage` is **0.8.1**, continuing the version of the last `break-check` release. Its rename and migration notes are recorded directly in the [0.8.1 changelog entry](packages/breakage/CHANGELOG.md#081); there is no pending version bump for this first publication. Subsequent consumer-visible changes use `pnpm change`. Before 1.0.0, use patch changesets for features and fixes and minor changesets for breaking changes.
 
-The release workflow activates when `CHANGESETS_APP_CLIENT_ID` is set. Configure the matching `CHANGESETS_APP_PK_QXHA` secret, grant the app contents and pull request write permissions, and configure npm trusted publishing for `breakage` from this repository. `pnpm release:publish` builds the package before Changesets publishes it.
+The release workflow activates when `CHANGESETS_APP_CLIENT_ID` is set. Configure the matching `CHANGESETS_APP_PK_QXHA` secret, grant the app contents and pull request write permissions, and configure npm trusted publishing for `breakage` from this repository. `pnpm release:publish` builds only the publishable `breakage` package before Changesets publishes it.
 
 The optional Renovate workflow uses `RENOVATE_APP_CLIENT_ID` and `RENOVATE_APP_PK_K6TH`. Vite Plus upgrades follow the official migration path.
 

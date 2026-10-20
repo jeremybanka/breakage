@@ -18,7 +18,7 @@ Run these commands from the repository root with `pnpm run <command>`. `mise.tom
 | `dev`              | Run workspace package development scripts when available.                    |
 | `change`           | Author pending release notes for publishable packages.                       |
 | `release:version`  | Prepare package versions and release metadata.                               |
-| `release:publish`  | Build and publish packages through Changesets.                               |
+| `release:publish`  | Build Breakage and publish through Changesets.                               |
 | `staged`           | Format and check staged files.                                               |
 | `workflows:update` | Update pinned workflow action references and mise.                           |
 
@@ -27,6 +27,8 @@ Vite Plus enables type-aware linting and TypeScript checking. Formatting is hand
 Root workspace commands dispatch through `vp run -r <name>`. Each package owns its commands and prerequisites. Package scripts delegate to Vite Plus tasks with a `:run` suffix when they need dependency ordering: `check:vp` calls `check:vp:run`, and `test` calls `test:run`. The separate names let package scripts remain callable through pnpm without colliding with Vite Plus task definitions.
 
 The root `check:vp:run` task depends on the workspace build before running Vite Plus linting and typechecking. Packages emit JavaScript and declarations with `vp pack`; Breakage also generates its configuration schemas. Fixture packages share one build configuration, which builds upstream packages first without per-package build tsconfigs. Authoring checks resolve package exports through those declarations.
+
+Breakage's build configuration lives in its package's `vite.config.ts`. Release publishing and the CI packaging job target `vp run breakage#build`, so they build only the publishable package. Repository builds and validation still include every fixture package.
 
 Breakage's uncached `test:run` task depends on its own build and `minimatch-integration#test:prepare`, then runs private integration tests and current public contracts. Full, sharded, and watch runs share this task; watch mode adds `--watch`. Installation, checks, packaging, and public-only tests do not prepare private fixtures. `pnpm run test:prepare` dispatches workspace preparation tasks explicitly. The [fixture guide](../packages/breakage/__tests__/fixtures/npm/README.md) describes Bun preparation, offline installations, and disposable projects. Bun is provided by mise; the published CLI runs on Node.js.
 
