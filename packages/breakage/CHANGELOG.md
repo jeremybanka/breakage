@@ -2,6 +2,12 @@
 
 Breakage continues break-check's version sequence. Historical source and `break-check@` release tags are included in this repository; see the [history guide](../../docs/history/README.md) for provenance and commit mappings. Historical changelog commit IDs refer to the original [Wayforge](https://github.com/jeremybanka/wayforge) commits.
 
+## 0.8.5
+
+### Patch Changes
+
+- e66c8f6: Add an optional npm command family for empirical peer compatibility in complete representative environments, coordinated release-intent evidence and peer-declaration validation, and certified end-of-support changes, with in-place ignored test staging, focused CI commands, structured reports, and TypeScript configuration while preserving the agnostic public check.
+
 ## 0.8.4
 
 ### Patch Changes
