@@ -26,7 +26,7 @@ Vite Plus enables type-aware linting and TypeScript checking. Formatting is hand
 
 Root workspace commands dispatch through `vp run -r <name>`. Each package owns its commands and prerequisites. Package scripts delegate to Vite Plus tasks with a `:run` suffix when they need dependency ordering: `check:vp` calls `check:vp:run`, and `test` calls `test:run`. The separate names let package scripts remain callable through pnpm without colliding with Vite Plus task definitions.
 
-The root `check:vp:run` task depends on the workspace build before running Vite Plus linting and typechecking. Packages emit JavaScript and declarations with `vp pack`; Breakage also generates its configuration schemas. Fixture packages share one build configuration, which builds upstream packages first without per-package build tsconfigs. Authoring checks resolve package exports through those declarations.
+The root `check:vp:run` task depends on the workspace build before running Vite Plus linting and typechecking. Packages emit JavaScript and declarations with `vp pack`; Breakage also generates its configuration schemas. Fixture packages share one build configuration, which builds upstream packages first without per-fixture tsconfigs. The root TypeScript configuration covers all fixture sources, configuration, and contracts; authoring checks resolve package exports through their built declarations. Breakage retains its own TypeScript configuration for core compiler settings and its source alias.
 
 Breakage's build configuration lives in its package's `vite.config.ts`. Release publishing and the CI packaging job target `vp run breakage#build`, so they build only the publishable package. Repository builds and validation still include every fixture package.
 
