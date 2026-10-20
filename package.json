@@ -6,10 +6,9 @@
 	"scripts": {
 		"build": "vp run -r build",
 		"change": "changeset",
-		"check": "pnpm run --sequential \"/^check:.*/\"",
+		"check": "pnpm run \"/^check:.*/\"",
 		"check:fmt": "dprint check",
 		"check:spelling": "cspell .",
-		"check:tsc": "vp run -r check:tsc",
 		"check:vp": "vp run -r build && vp check --no-fmt",
 		"dev": "vp run -r dev",
 		"fmt": "dprint fmt",

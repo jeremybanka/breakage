@@ -1,1 +1,1 @@
-export { projectConfig as default } from "../../../../../../scripts/fixture-tasks.ts"
+export { packageConfig as default } from "../../../../../../scripts/fixture-tasks.ts"

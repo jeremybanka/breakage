@@ -15,15 +15,3 @@ export const packageConfig: UserConfig = defineConfig({
 		},
 	},
 })
-
-export const projectConfig: UserConfig = defineConfig({
-	run: {
-		tasks: {
-			...packageConfig.run?.tasks,
-			"check:tsc": {
-				command: "tsc --project tsconfig.json",
-				dependsOn: ["build"],
-			},
-		},
-	},
-})

@@ -27,8 +27,7 @@
 	],
 	"scripts": {
 		"build": "vp pack && pnpm run schema",
-		"check": "pnpm run check:tsc",
-		"check:tsc": "tsc --noEmit",
+		"check": "pnpm --dir ../.. run check",
 		"postversion": "dprint fmt package.json",
 		"schema": "bun src/breakage.x.ts --outdir=dist -- schema",
 		"pretest": "pnpm run build",
