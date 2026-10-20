@@ -6,6 +6,7 @@
 	],
 	"words": [
 		"ASKPASS",
+		"ENOTCACHED",
 		"Fium",
 		"Wayforge",
 		"arktype",
@@ -16,6 +17,7 @@
 		"flightdeck",
 		"jeremybanka",
 		"libexec",
+		"minimatch",
 		"oxlint",
 		"pathspecs",
 		"renovatebot",

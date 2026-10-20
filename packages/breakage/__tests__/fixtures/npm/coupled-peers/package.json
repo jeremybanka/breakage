@@ -1,13 +1,25 @@
 {
-	"name": "integration",
+	"name": "coupled-integration",
 	"version": "1.1.0",
+	"private": true,
 	"type": "module",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"default": "./dist/index.js"
+		}
+	},
 	"main": "dist/index.js",
+	"types": "dist/index.d.ts",
 	"files": [
 		"dist"
 	],
+	"devDependencies": {
+		"coupled-host": "workspace:*",
+		"coupled-renderer": "workspace:*"
+	},
 	"peerDependencies": {
-		"host": "^1",
-		"renderer": "^19"
+		"coupled-host": "^1",
+		"coupled-renderer": "^19"
 	}
 }

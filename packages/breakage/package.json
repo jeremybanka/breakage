@@ -26,15 +26,13 @@
 		"src"
 	],
 	"scripts": {
-		"build": "vp pack && pnpm run schema",
-		"check": "pnpm run check:tsc",
-		"check:tsc": "tsc --noEmit && tsc --project tests/public/fixtures/npm && tsc --project __tests__/fixtures/npm/candidate-minimatch && tsc --project __tests__/fixtures/npm/candidate-peer-ranges && tsc --project __tests__/fixtures/npm/runtime-dependencies && tsc --project __tests__/fixtures/npm/coupled-peers",
+		"build": "vp pack && vp run schema",
+		"check": "vp run -w check",
 		"postversion": "dprint fmt package.json",
 		"schema": "bun src/breakage.x.ts --outdir=dist -- schema",
-		"pretest": "pnpm run build",
-		"test": "BREAKAGE_CLI_ENTRYPOINT=./src/breakage.x.ts bun test ./__tests__ ./tests/public",
+		"test": "vp run test:run",
 		"test:public": "BREAKAGE_CLI_ENTRYPOINT=./src/breakage.x.ts bun test -- ./tests/public",
-		"test:watch": "BREAKAGE_CLI_ENTRYPOINT=./src/breakage.x.ts bun test --watch -- ./__tests__ ./tests/public"
+		"test:watch": "vp run test:run --watch"
 	},
 	"dependencies": {
 		"arktype": "2.2.8",
@@ -47,8 +45,6 @@
 	"devDependencies": {
 		"@types/bun": "npm:bun-types@1.4.3",
 		"@types/semver": "7.8.0",
-		"minimatch-v8": "npm:minimatch@8.0.7",
-		"minimatch-v9": "npm:minimatch@9.0.9",
 		"typescript": "7.0.2"
 	},
 	"publishConfig": {

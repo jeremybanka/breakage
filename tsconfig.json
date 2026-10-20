@@ -22,14 +22,11 @@
 		]
 	},
 	"include": [
-		"**/*.ts",
-		"*.d.ts"
+		"**/*.ts"
 	],
 	"exclude": [
-		"node_modules",
-		"dist",
-		"coverage",
-		"packages/breakage/__tests__/fixtures/npm",
-		"packages/breakage/tests/public/fixtures/npm"
+		"**/node_modules",
+		"**/dist",
+		"**/coverage"
 	]
 }

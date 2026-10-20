@@ -1,2 +1,2 @@
-import host from "host"
+import host from "runtime-host"
 export default host

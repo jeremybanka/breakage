@@ -6,7 +6,7 @@
 	"dependencies": {},
 	"breakage": {
 		"candidates": [
-			"host"
+			"runtime-host"
 		]
 	}
 }

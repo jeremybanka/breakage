@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert"
 import { renderer } from "renderer"
-import { renderer as hostRenderer } from "host"
-import { renderer as integrationRenderer, render } from "integration"
+import { renderer as hostRenderer } from "ranges-host"
+import { renderer as integrationRenderer, render } from "ranges-integration"
 
 assert.equal(hostRenderer, renderer)
 assert.equal(integrationRenderer, renderer)

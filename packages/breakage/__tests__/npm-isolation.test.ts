@@ -35,8 +35,8 @@ describe(`runtime installation boundaries`, () => {
 			}
 			f.copy(`helper`, `node_modules/helper`)
 			symlinkSync(
-				`../environments/released-1/node_modules/host`,
-				path.join(f.directory, `node_modules/host`),
+				`../environments/released-1/node_modules/runtime-host`,
+				path.join(f.directory, `node_modules/runtime-host`),
 			)
 			f.config.installCommand += optional
 				? ` --omit=optional`
@@ -69,8 +69,11 @@ describe(`runtime installation boundaries`, () => {
 			f.copy(`released-host`, leaf)
 			f.update(`${leaf}/package.json`, { name: `leaf` })
 			symlinkSync(
-				path.join(f.directory, `environments/released-1/node_modules/host`),
-				path.join(f.directory, store, `host`),
+				path.join(
+					f.directory,
+					`environments/released-1/node_modules/runtime-host`,
+				),
+				path.join(f.directory, store, `runtime-host`),
 			)
 			f.config.installCommand += ` --omit=optional && ln -s ../../../../${store}/helper node_modules/helper`
 			const result = await npmTest(
@@ -93,8 +96,11 @@ describe(`runtime installation boundaries`, () => {
 		const f = setup()
 		f.copy(`helper`, `.store/node_modules/helper`)
 		symlinkSync(
-			path.join(f.directory, `environments/released-1/node_modules/host`),
-			path.join(f.directory, `.store/node_modules/host`),
+			path.join(
+				f.directory,
+				`environments/released-1/node_modules/runtime-host`,
+			),
+			path.join(f.directory, `.store/node_modules/runtime-host`),
 		)
 		mkdirSync(path.join(f.directory, `environments/released-1/node_modules`), {
 			recursive: true,

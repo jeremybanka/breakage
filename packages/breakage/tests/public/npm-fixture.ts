@@ -34,7 +34,6 @@ export type NpmFixture = {
 	copy: (source: string | URL, destination: string) => void
 	build: (source: string) => string
 	pack: (source: string) => string
-	packPublished: (manifest: string) => void
 	representative: (label: string, version: string, candidate?: boolean) => void
 	baseline: (peers: Record<string, string>) => void
 	clean: () => void
@@ -47,7 +46,13 @@ export function npmFixture(
 	const directory = mkdtempSync(path.join(tmpdir(), `breakage-npm-`))
 	const clean = (): void => rmSync(directory, { recursive: true, force: true })
 	try {
-		cpSync(project, directory, { recursive: true })
+		// Copy authored inputs and the prepared cache. Rebuild case-specific source
+		// and install afresh, independent of workspace links and prior authoring builds.
+		cpSync(project, directory, {
+			recursive: true,
+			filter: (entry) =>
+				![`node_modules`, `dist`].includes(path.basename(entry)),
+		})
 		const write = (filename: string, value: string | object): void => {
 			const destination = path.join(directory, filename)
 			mkdirSync(path.dirname(destination), { recursive: true })
@@ -103,33 +108,6 @@ export function npmFixture(
 			)
 			return pack(source)
 		}
-		const published = new Set<string>()
-		const packPublished = (filename: string): void => {
-			if (published.has(filename)) return
-			published.add(filename)
-			const manifest = JSON.parse(readFileSync(filename, `utf8`)) as {
-				name: string
-				version: string
-				dependencies?: Record<string, string>
-			}
-			const source = path.dirname(filename)
-			const destination = `published/${manifest.name}-${manifest.version}`
-			// Repack installed releases unchanged, including their transitive dependencies.
-			cpSync(source, path.join(directory, destination), {
-				recursive: true,
-				filter: (entry) =>
-					!path
-						.relative(source, entry)
-						.split(path.sep)
-						.includes(`node_modules`),
-			})
-			pack(destination)
-			for (const dependency of Object.keys(manifest.dependencies ?? {})) {
-				packPublished(
-					createRequire(filename).resolve(`${dependency}/package.json`),
-				)
-			}
-		}
 		git(directory, `init`, `--initial-branch=main`)
 		git(directory, `config`, `user.name`, `Npm Tests`)
 		git(directory, `config`, `user.email`, `tests@example.invalid`)
@@ -142,6 +120,7 @@ export function npmFixture(
 					) as { default: { npm: NpmConfig } }
 				).default.npm
 			: JSON.parse(read(`breakage.config.json`)).npm
+		const hostName: string = JSON.parse(read(`local-host/package.json`)).name
 		const representative = (
 			label: string,
 			version: string,
@@ -153,7 +132,7 @@ export function npmFixture(
 			copy(
 				new URL(
 					`environments/${candidate ? `candidate` : `released-1`}/`,
-					sharedProject,
+					project,
 				),
 				location,
 			)
@@ -165,12 +144,12 @@ export function npmFixture(
 			lock.packages[``].name = name
 			if (!candidate) {
 				const source = `peer-source-${label}`
-				copy(new URL(`local-host/`, sharedProject), source)
+				copy(new URL(`local-host/`, project), source)
 				update(`${source}/package.json`, { version })
 				const archive = build(source)
-				manifest.dependencies.host = version
-				lock.packages[``].dependencies.host = version
-				Object.assign(lock.packages[`node_modules/host`], {
+				manifest.dependencies[hostName] = version
+				lock.packages[``].dependencies[hostName] = version
+				Object.assign(lock.packages[`node_modules/${hostName}`], {
 					version,
 					resolved: `file:../../${archive}`,
 				})
@@ -180,16 +159,17 @@ export function npmFixture(
 		}
 		const baseline = (peers: Record<string, string>): void => {
 			const current = read(`package.json`)
+			const tag = `${JSON.parse(current).name}@1.0.0`
 			update(`package.json`, { version: `1.0.0`, peerDependencies: peers })
 			git(directory, `add`, `.`)
 			git(directory, `commit`, `-m`, `Released baseline`)
 			const commit = git(directory, `rev-parse`, `HEAD`).trim()
-			git(directory, `tag`, `integration@1.0.0`)
+			git(directory, `tag`, tag)
 			write(`.breakage/baseline.json`, {
 				version: 1,
 				tagPattern: null,
 				packageDirectory: ``,
-				ref: `refs/tags/integration@1.0.0`,
+				ref: `refs/tags/${tag}`,
 				commit,
 			})
 			write(`package.json`, current)
@@ -204,16 +184,20 @@ export function npmFixture(
 			copy,
 			build,
 			pack,
-			packPublished,
 			representative,
 			baseline,
 			clean,
 		}
 		customize?.(fixture)
-		for (const entrypoint of globSync(`**/src/index.ts`, { cwd: directory })) {
+		const packages = globSync(`**/src/index.ts`, {
+			cwd: directory,
+			exclude: [`.cache/**`],
+		}).map((entrypoint) => {
 			const source = path.dirname(path.dirname(entrypoint))
+			return { source, manifest: JSON.parse(read(`${source}/package.json`)) }
+		})
+		for (const { source, manifest } of packages) {
 			const filename = `${source}/package.json`
-			const manifest = JSON.parse(read(filename))
 			// npm must find fixture tarballs from inside an installed candidate. Only
 			// the disposable manifest gets absolute paths into this test's artifacts.
 			for (const section of [`dependencies`, `optionalDependencies`]) {
@@ -222,10 +206,15 @@ export function npmFixture(
 				)) {
 					if (
 						typeof specifier === `string` &&
-						specifier.startsWith(`file:./artifacts/`)
+						specifier.startsWith(`workspace:`)
 					) {
+						const dependency = packages.find(
+							(entry) => entry.manifest.name === name,
+						)
+						if (!dependency) throw new Error(`Missing fixture package ${name}.`)
+						const archive = `${name.replace(/^@/, ``).replaceAll(`/`, `-`)}-${dependency.manifest.version}.tgz`
 						manifest[section][name] =
-							`file:${path.join(directory, specifier.slice(7))}`
+							`file:${path.join(directory, `artifacts`, archive)}`
 					}
 				}
 			}
