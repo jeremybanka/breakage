@@ -3,7 +3,7 @@ import { defineConfig } from "vite-plus"
 export default defineConfig({
 	run: {
 		tasks: {
-			validate: {
+			"check:vp:run": {
 				command: "vp check --no-fmt",
 				dependsOn: ["build"],
 			},

@@ -6,7 +6,7 @@ const config: UserConfig = defineConfig({
 	pack: tsdownConfig,
 	run: {
 		tasks: {
-			suite: {
+			"test:run": {
 				command:
 					"BREAKAGE_CLI_ENTRYPOINT=./src/breakage.x.ts bun test ./__tests__ ./tests/public",
 				dependsOn: ["build", "minimatch-integration#test:prepare"],
