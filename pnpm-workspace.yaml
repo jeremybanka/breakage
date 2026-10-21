@@ -23,7 +23,7 @@ allowBuilds:
 blockExoticSubdeps: true
 minimumReleaseAge: 1440
 minimumReleaseAgeExclude:
-  # Permit the verified eMudhra security patch before the usual release-age delay.
+  # Permit the verified certificate security patch before the usual release-age delay.
   - dprint@0.64.1
   - "@dprint/android-arm64@0.64.1"
   - "@dprint/android-x64@0.64.1"
