@@ -35,7 +35,7 @@
 		"test:watch": "vp run test:run --watch"
 	},
 	"dependencies": {
-		"arktype": "2.2.8",
+		"arktype": "2.2.9",
 		"comline": "0.9.0",
 		"minimatch": "10.2.6",
 		"semver": "7.8.5",
