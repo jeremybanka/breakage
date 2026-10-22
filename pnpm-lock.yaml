@@ -240,8 +240,8 @@ importers:
         version: 0.2.3
     devDependencies:
       '@types/bun':
-        specifier: npm:bun-types@1.4.3
-        version: bun-types@1.4.3
+        specifier: npm:bun-types@1.4.4
+        version: bun-types@1.4.4
       '@types/semver':
         specifier: 7.8.0
         version: 7.8.0
@@ -1564,8 +1564,8 @@ packages:
     resolution: {integrity: sha512-3/2UbTqcec8daCHPjKVvQ82ImHr2IW6n3OYn2ztLW+GYsSv2aZiF9BU0wPsNyzwqVsik7mWPtywgE9zhD0O1zQ==}
     hasBin: true
 
-  bun-types@1.4.3:
-    resolution: {integrity: sha512-tinRJNGOmUN+tEAsn2y2e942n9JHRHR42iUYzDH75NmhJqVBokGSQkkfSFdNWwsANIdrK6ACH9t01M452YyTwg==}
+  bun-types@1.4.4:
+    resolution: {integrity: sha512-yjrJh5oGX7mMPKGd19YXyIjmEuj4G4zNC30bs7PM9Az7NQ3ndF3j6hbeRdvJTRQEhJ/FYQwW0a2moweEi2hMxQ==}
 
   cac@7.1.0:
     resolution: {integrity: sha512-LMDU/U2yA4IPIY8KT0NsNPWEYZvAMkbgyspxJ6btJaYV+WMDOHAZCmB0lsTObiHaRS1V/ztKAl7+TSkTqXyeoA==}
@@ -3097,7 +3097,7 @@ snapshots:
       - supports-color
       - zod
 
-  bun-types@1.4.3:
+  bun-types@1.4.4:
     dependencies:
       '@types/node': 26.6.5
       undici-types: 8.9.0
