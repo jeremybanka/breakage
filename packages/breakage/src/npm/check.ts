@@ -1,6 +1,11 @@
 import path from "node:path"
 
-import { versionDelta, type ReleaseVersionContext } from "../release.ts"
+import {
+	resolveReleaseDelta,
+	versionDelta,
+	type ReleaseDeltaContext,
+	type VersionTransition,
+} from "../release.ts"
 import { command, errorMessage } from "../task.ts"
 import { validateConfig, validatePeerRanges } from "./config.ts"
 import {
@@ -42,11 +47,14 @@ async function checkSupport(
 		const changes = supportChanges(previous, manifest)
 		if (!changes.length)
 			return { status: `unchanged`, previousVersion: previous.version, changes }
-		const evidence = await releaseVersion(config, {
-			packageName: manifest.name,
-			packageDirectory: base,
-			currentVersion: manifest.version,
-		})
+		const evidence = config.release
+			? await resolveReleaseDelta(config.release, {
+					packageName: manifest.name,
+					packageDirectory: base,
+					currentVersion: manifest.version,
+					baseline: { version: previous.version },
+				})
+			: undefined
 		if (evidence === undefined)
 			return {
 				status: `end-of-support`,
@@ -54,8 +62,8 @@ async function checkSupport(
 				changes,
 			}
 		const release = versionDelta(
-			previous.version,
-			evidence,
+			evidence.previousVersion,
+			evidence.version,
 			config.release?.policy,
 		)
 
@@ -284,21 +292,28 @@ async function run(
 				)
 			eras(selection.range)
 		}
-		// One piece of release evidence per package per invocation, including failures.
-		const releases = new Map<string, Promise<string | undefined>>()
-		const version = (
-			context: ReleaseVersionContext,
-		): Promise<string | undefined> => {
-			let pending = releases.get(context.packageDirectory)
+		// One piece of release evidence per package and baseline per invocation, including failures.
+		const releases = new Map<string, Promise<VersionTransition | undefined>>()
+		const resolveDelta = (
+			context: ReleaseDeltaContext,
+		): Promise<VersionTransition | undefined> => {
+			const key = JSON.stringify([
+				context.packageDirectory,
+				context.currentVersion,
+				context.baseline,
+			])
+			let pending = releases.get(key)
 			if (!pending) {
-				pending = releaseVersion(config, context)
-				releases.set(context.packageDirectory, pending)
+				pending = resolveReleaseDelta(config.release!, context)
+				releases.set(key, pending)
 			}
 			return pending
 		}
 		const effective: NpmConfig = {
 			...config,
-			...(config.release ? { release: { ...config.release, version } } : {}),
+			...(config.release
+				? { release: { ...config.release, resolveDelta } }
+				: {}),
 		}
 
 		const directories = await discover(config, base)

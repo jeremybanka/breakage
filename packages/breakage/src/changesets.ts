@@ -4,7 +4,11 @@ import { readPreState } from "@changesets/pre"
 import { readChangesets } from "@changesets/read"
 import { getPackages } from "@manypkg/get-packages"
 
-import type { ReleaseVersionContext } from "./release.ts"
+import {
+	versionTransition,
+	type ReleaseDeltaContext,
+	type VersionTransition,
+} from "./release.ts"
 
 /** Read the actual Changesets plan, including dependent bumps and prerelease state. */
 export async function readChangesetsReleasePlan(
@@ -26,12 +30,22 @@ export async function readChangesetsReleasePlan(
 	)
 }
 
-/** Resolve pending release intent, or the manifest version after Changesets versioning. */
-export function changesetsRelease({ directory }: { directory?: string } = {}): (
-	context: ReleaseVersionContext,
-) => Promise<string> {
-	return async ({ packageName, packageDirectory, currentVersion }) =>
-		(await readChangesetsReleasePlan(directory ?? packageDirectory)).get(
-			packageName,
-		) ?? currentVersion
+/** Compare the selected baseline (or current manifest) with the planned or versioned release. */
+export function changesetsReleaseDelta({
+	directory,
+}: { directory?: string } = {}): (
+	context: ReleaseDeltaContext,
+) => Promise<VersionTransition> {
+	return async ({
+		packageName,
+		packageDirectory,
+		currentVersion,
+		baseline,
+	}) => {
+		const version =
+			(await readChangesetsReleasePlan(directory ?? packageDirectory)).get(
+				packageName,
+			) ?? currentVersion
+		return versionTransition(baseline?.version ?? currentVersion, version)
+	}
 }

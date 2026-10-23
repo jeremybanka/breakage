@@ -1,3 +1,4 @@
+import { versionTransition } from "breakage"
 import assert from "node:assert/strict"
 import { execFileSync } from "node:child_process"
 import { existsSync, rmSync, symlinkSync } from "node:fs"
@@ -103,7 +104,11 @@ describe(`authored support eras`, () => {
 			...JSON.parse(f.read(`local-host/package.json`)),
 			peerDependencies: { helper: `workspace:^` },
 		})
-		f.config.release = { version: () => `2.0.0` }
+		f.config.release = {
+			resolveDelta: ({ baseline, currentVersion }) => {
+				return versionTransition(baseline?.version ?? currentVersion, `2.0.0`)
+			},
+		}
 		const result = await npmTest(
 			f.config,
 			{ peer: `host`, range: `2` },
@@ -129,7 +134,11 @@ describe(`authored support eras`, () => {
 			...authored,
 			peerDependencies: { helper: `workspace:^1` },
 		})
-		f.config.release = { version: () => `2.0.0` }
+		f.config.release = {
+			resolveDelta: ({ baseline, currentVersion }) => {
+				return versionTransition(baseline?.version ?? currentVersion, `2.0.0`)
+			},
+		}
 		const selected = { peer: `host`, range: `2` }
 		const options = { baseDirectory: f.directory }
 		const result = await npmTest(f.config, selected, options)
@@ -162,7 +171,7 @@ describe(`historical workspace declarations`, () => {
 			rmSync(path.join(f.directory, `legacy-local`), { recursive: true })
 			const inspected: string[] = []
 			f.config.release = {
-				version: ({ packageName }) => {
+				resolveDelta: ({ packageName }) => {
 					inspected.push(packageName)
 					return undefined
 				},
@@ -257,7 +266,7 @@ describe(`historical workspace declarations`, () => {
 			f.baseline({ host: range })
 			f.write(`local-host/package.json`, { name: `host`, version: `0.99.0` })
 			f.config.release = {
-				version: () => {
+				resolveDelta: () => {
 					throw new Error(
 						`Historical resolution must not consult release intent`,
 					)
@@ -284,8 +293,16 @@ describe(`historical workspace declarations`, () => {
 		})
 		f.representative(`three`, `3.0.0`)
 		f.config.release = {
-			version: ({ packageName }) =>
-				packageName === `integration` ? `1.1.0` : undefined,
+			resolveDelta: ({ packageName, baseline, currentVersion }) => {
+				const intendedVersion =
+					packageName === `integration` ? `1.1.0` : undefined
+				return intendedVersion === undefined
+					? undefined
+					: versionTransition(
+							baseline?.version ?? currentVersion,
+							intendedVersion,
+						)
+			},
 		}
 		const options = { baseDirectory: f.directory, coverageOnly: true }
 		const result = await npmCheck(f.config, options)
@@ -299,8 +316,14 @@ describe(`historical workspace declarations`, () => {
 				current: `^3`,
 			},
 		])
-		f.config.release!.version = ({ packageName }) =>
-			packageName === `integration` ? `2.0.0` : undefined
+		f.config.release!.resolveDelta = ({
+			packageName,
+			baseline,
+			currentVersion,
+		}) =>
+			packageName === `integration`
+				? versionTransition(baseline?.version ?? currentVersion, `2.0.0`)
+				: undefined
 		const approved = await npmCheck(f.config, options)
 		expect(approved.exitCode, JSON.stringify(approved)).toBe(0)
 		expect(approved.support.status).toBe(`breaking-release`)

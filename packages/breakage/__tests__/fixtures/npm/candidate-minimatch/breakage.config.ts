@@ -3,8 +3,10 @@ import type { NpmConfig } from "breakage"
 const config: { npm: NpmConfig } = {
 	npm: {
 		release: {
-			version: ({ packageName }) =>
-				packageName === `minimatch-host` ? `2.0.0` : undefined,
+			resolveDelta: ({ packageName }) =>
+				packageName === `minimatch-host`
+					? { previousVersion: `2.0.0`, version: `2.0.0`, delta: `none` }
+					: undefined,
 		},
 		artifact: "artifacts/minimatch-integration-1.1.0.tgz",
 		representatives: "peer-environments/minimatch-8",

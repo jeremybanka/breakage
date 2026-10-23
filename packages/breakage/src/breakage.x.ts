@@ -174,7 +174,7 @@ if (completion !== undefined) {
 				)
 		)
 			throw new Error(
-				`certifyCommand was removed. Configure release.version and release.policy instead.`,
+				`certifyCommand was removed. Configure release.resolveDelta and release.policy instead.`,
 			)
 		if (process.argv.slice(2).some((arg) => /^--release(?:=|$)/.test(arg)))
 			throw new Error(

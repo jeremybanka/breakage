@@ -3,10 +3,7 @@ import path from "node:path"
 import semver from "semver"
 import { simpleGit } from "simple-git"
 
-import {
-	resolveReleaseVersion,
-	type ReleaseVersionContext,
-} from "../release.ts"
+import { resolveReleaseDelta, type ReleaseDeltaContext } from "../release.ts"
 import { readBaseline } from "../baseline.ts"
 import { withDirectoryLock } from "../directory-lock.ts"
 import { latestReleaseTag } from "../release-tag.ts"
@@ -17,10 +14,10 @@ import type { NpmConfig, SupportChange } from "./types.ts"
 
 export async function releaseVersion(
 	config: NpmConfig,
-	context: ReleaseVersionContext,
+	context: ReleaseDeltaContext,
 ): Promise<string | undefined> {
 	return config.release
-		? await resolveReleaseVersion(config.release, context)
+		? (await resolveReleaseDelta(config.release, context))?.version
 		: undefined
 }
 

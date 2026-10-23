@@ -1,5 +1,5 @@
 import { afterEach, expect, it } from "bun:test"
-import { npmCheck, npmTest } from "breakage"
+import { versionTransition, npmCheck, npmTest } from "breakage"
 
 import type { NpmFixture } from "./npm-fixture.ts"
 import { assertStagesRemoved, npmFixture } from "./npm-fixture.ts"
@@ -38,8 +38,16 @@ it(`cannot excuse a failure against a still-supported peer`, async () => {
 	project.copy(`src/broken.ts`, `src/index.ts`)
 	project.config.artifact = project.build(`.`)
 	project.config.release = {
-		version: ({ packageName }) =>
-			packageName === `integration` ? `3.0.0` : undefined,
+		resolveDelta: ({ packageName, baseline, currentVersion }) => {
+			const intendedVersion =
+				packageName === `integration` ? `3.0.0` : undefined
+			return intendedVersion === undefined
+				? undefined
+				: versionTransition(
+						baseline?.version ?? currentVersion,
+						intendedVersion,
+					)
+		},
 	}
 
 	const report = await npmCheck(project.config, {
@@ -59,8 +67,15 @@ it(`requires support and coordinated evidence for a planned local peer release`,
 	project.representative(`oldest`, `1.0.0`)
 	project.representative(`current`, `2.0.0`)
 	project.config.release = {
-		version: ({ packageName }) =>
-			packageName === `host` ? `3.0.0` : undefined,
+		resolveDelta: ({ packageName, baseline, currentVersion }) => {
+			const intendedVersion = packageName === `host` ? `3.0.0` : undefined
+			return intendedVersion === undefined
+				? undefined
+				: versionTransition(
+						baseline?.version ?? currentVersion,
+						intendedVersion,
+					)
+		},
 	}
 	const options = { baseDirectory: project.directory }
 	const unsupported = await npmCheck(project.config, options)
@@ -99,7 +114,11 @@ it(`validates a coordinated peer's requirement on the package under test`, async
 		peerDependencies: { host: `^2` },
 	})
 	project.config.artifact = project.pack(`.`)
-	project.config.release = { version: () => `2.0.0` }
+	project.config.release = {
+		resolveDelta: ({ baseline, currentVersion }) => {
+			return versionTransition(baseline?.version ?? currentVersion, `2.0.0`)
+		},
+	}
 	const host = JSON.parse(project.read(`local-host/package.json`))
 	for (const range of [`^1`, `^2`]) {
 		project.write(`local-host/package.json`, {

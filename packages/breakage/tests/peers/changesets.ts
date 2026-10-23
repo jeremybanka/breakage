@@ -12,10 +12,10 @@ import { tmpdir } from "node:os"
 import path from "node:path"
 
 import {
-	changesetsRelease,
+	changesetsReleaseDelta,
 	readChangesetsReleasePlan,
 } from "breakage/changesets"
-import { semverPolicy, versionDelta } from "breakage"
+import { semverPolicy, versionDelta, versionTransition } from "breakage"
 
 const require = createRequire(import.meta.url)
 const cli = path.join(
@@ -53,13 +53,17 @@ for (const prerelease of [false, true]) {
 			plan.get(`peer-integration`),
 			prerelease ? `1.0.1-next.0` : `1.0.1`,
 		)
-		const resolver = changesetsRelease()
+		const resolver = changesetsReleaseDelta()
 		const context = {
 			packageName: `peer-core`,
 			packageDirectory: path.join(directory, `packages/core`),
 			currentVersion: `0.53.3`,
+			baseline: { version: `0.53.3` },
 		}
-		assert.equal(await resolver(context), target)
+		assert.deepEqual(
+			await resolver(context),
+			versionTransition(`0.53.3`, target),
+		)
 		assert.equal(
 			versionDelta(`0.53.3`, target, semverPolicy({ beforeV1: `minor` }))
 				.breaking,
@@ -70,9 +74,9 @@ for (const prerelease of [false, true]) {
 			readFileSync(path.join(context.packageDirectory, `package.json`), `utf8`),
 		) as { version: string }
 		assert.equal(current.version, target)
-		assert.equal(
+		assert.deepEqual(
 			await resolver({ ...context, currentVersion: current.version }),
-			target,
+			versionTransition(`0.53.3`, target),
 		)
 		if (!prerelease)
 			assert.equal((await readChangesetsReleasePlan(directory)).size, 0)

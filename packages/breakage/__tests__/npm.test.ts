@@ -1,3 +1,4 @@
+import { versionTransition } from "breakage"
 import { existsSync, mkdirSync, symlinkSync } from "node:fs"
 import path from "node:path"
 
@@ -42,8 +43,16 @@ describe(`npm release compatibility`, () => {
 		f.representative(`one`, `1.0.0`)
 		f.representative(`two`, `2.0.0`)
 		f.config.release = {
-			version: ({ packageName }) =>
-				packageName === `integration` ? `3.0.0` : undefined,
+			resolveDelta: ({ packageName, baseline, currentVersion }) => {
+				const intendedVersion =
+					packageName === `integration` ? `3.0.0` : undefined
+				return intendedVersion === undefined
+					? undefined
+					: versionTransition(
+							baseline?.version ?? currentVersion,
+							intendedVersion,
+						)
+			},
 		}
 
 		f.copy(`contracts/check-released-host-failure.ts`, `contracts/check.ts`)
@@ -79,7 +88,11 @@ describe(`npm release compatibility`, () => {
 		)
 		expect(result.exitCode).toBe(2)
 		expect(result.representatives[0]!.error).toContain(`no release version`)
-		f.config.release = { version: () => `3.0.0` }
+		f.config.release = {
+			resolveDelta: ({ baseline, currentVersion }) => {
+				return versionTransition(baseline?.version ?? currentVersion, `3.0.0`)
+			},
+		}
 		result = await npmTest(
 			f.config,
 			{ peer: `host`, range: `3` },
@@ -102,7 +115,7 @@ describe(`npm release compatibility`, () => {
 		f.representative(`next`, `2.0.0`, true)
 		f.representative(`released`, `1.0.0`)
 		f.config.release = {
-			version: () => {
+			resolveDelta: () => {
 				throw new Error(`release plan unavailable`)
 			},
 		}
@@ -129,8 +142,16 @@ describe(`npm release compatibility`, () => {
 		expect(result.exitCode).toBe(1)
 		expect(result.support.status).toBe(`end-of-support`)
 		f.config.release = {
-			version: ({ packageName }) =>
-				packageName === `integration` ? `2.0.0` : undefined,
+			resolveDelta: ({ packageName, baseline, currentVersion }) => {
+				const intendedVersion =
+					packageName === `integration` ? `2.0.0` : undefined
+				return intendedVersion === undefined
+					? undefined
+					: versionTransition(
+							baseline?.version ?? currentVersion,
+							intendedVersion,
+						)
+			},
 		}
 		f.config.release!.policy = ({ delta }) => delta === `major`
 		result = await npmCheck(f.config, {

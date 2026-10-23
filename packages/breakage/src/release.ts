@@ -1,28 +1,37 @@
+// cspell:words premajor preminor prepatch
 import semver from "semver"
 
-export type ReleaseVersionContext = {
+export type ReleaseDeltaContext = {
 	packageName: string
 	packageDirectory: string
 	currentVersion: string
+	/** The selected historical release, when checking compatibility. */
 	baseline?: { version: string; ref?: string; commit?: string }
 }
-export type ReleaseVersion = (
-	context: ReleaseVersionContext,
-) => string | undefined | Promise<string | undefined>
-export type VersionDelta = {
+export type VersionTransition = {
 	previousVersion: string
 	version: string
-	delta: string
-	breaking: boolean
+	delta:
+		| `major`
+		| `premajor`
+		| `minor`
+		| `preminor`
+		| `patch`
+		| `prepatch`
+		| `prerelease`
+		| `release`
+		| `none`
 }
+export type ReleaseDeltaResolver = (
+	context: ReleaseDeltaContext,
+) => VersionTransition | undefined | Promise<VersionTransition | undefined>
+export type VersionDelta = VersionTransition & { breaking: boolean }
 export type SemverPolicyOptions = { beforeV1?: `major` | `minor` | `patch` }
-export type ReleasePolicyFunction = (
-	delta: Omit<VersionDelta, `breaking`>,
-) => boolean
+export type ReleasePolicyFunction = (delta: VersionTransition) => boolean
 export type ReleasePolicy = ReleasePolicyFunction
 export type ReleaseConfig = {
-	/** Defaults to the current package manifest version. */
-	version?: ReleaseVersion
+	/** Defaults to comparing the selected baseline with the current manifest. */
+	resolveDelta?: ReleaseDeltaResolver
 	/** Defaults to major releases, including before v1. */
 	policy?: ReleasePolicy
 }
@@ -45,19 +54,27 @@ export function semverPolicy({
 	}
 }
 
+/** Describe a version transition without deciding whether it permits breakage. */
+export function versionTransition(
+	previousVersion: string,
+	version: string,
+): VersionTransition {
+	if (!semver.valid(previousVersion) || !semver.valid(version))
+		throw new Error(`Expected exact semantic versions.`)
+	return {
+		previousVersion,
+		version,
+		delta: semver.diff(previousVersion, version) ?? `none`,
+	}
+}
+
 /** Pure comparison; equal and older versions never permit breaking changes. */
 export function versionDelta(
 	previousVersion: string,
 	version: string,
 	policy: ReleasePolicy = semverPolicy(),
 ): VersionDelta {
-	if (!semver.valid(previousVersion) || !semver.valid(version))
-		throw new Error(`Expected exact semantic versions.`)
-	const evidence = {
-		previousVersion,
-		version,
-		delta: semver.diff(previousVersion, version) ?? `none`,
-	}
+	const evidence = versionTransition(previousVersion, version)
 	const breaking = semver.gt(version, previousVersion)
 		? policy(evidence)
 		: false
@@ -71,10 +88,17 @@ export function validateRelease(
 ): asserts value is ReleaseConfig {
 	if (typeof value !== `object` || value === null || Array.isArray(value))
 		throw new Error(`release must be an object.`)
-	const config = value as ReleaseConfig
-	if (config.version !== undefined && typeof config.version !== `function`)
+	if (`version` in value)
 		throw new Error(
-			`release.version must be a function returning an exact version or undefined.`,
+			`release.version was removed. Use release.resolveDelta to return a version transition.`,
+		)
+	const config = value as ReleaseConfig
+	if (
+		config.resolveDelta !== undefined &&
+		typeof config.resolveDelta !== `function`
+	)
+		throw new Error(
+			`release.resolveDelta must be a function returning a version transition or undefined.`,
 		)
 	if (config.policy !== undefined && typeof config.policy !== `function`)
 		throw new Error(
@@ -82,32 +106,58 @@ export function validateRelease(
 		)
 }
 
-export async function resolveReleaseVersion(
+/** Resolve and validate release evidence; policy is applied separately. */
+export async function resolveReleaseDelta(
 	config: ReleaseConfig,
-	context: ReleaseVersionContext,
-): Promise<string | undefined> {
+	context: ReleaseDeltaContext,
+): Promise<VersionTransition | undefined> {
 	validateRelease(config)
-	const version = config.version
-		? await config.version(context)
-		: context.currentVersion
-	if (version === undefined) return undefined
+	const transition = config.resolveDelta
+		? await config.resolveDelta(context)
+		: versionTransition(
+				context.baseline?.version ?? context.currentVersion,
+				context.currentVersion,
+			)
+	if (transition === undefined) return undefined
 	if (
-		typeof version !== `string` ||
-		!semver.valid(version) ||
-		semver.lt(version, context.currentVersion)
+		typeof transition !== `object` ||
+		transition === null ||
+		Array.isArray(transition) ||
+		typeof transition.previousVersion !== `string` ||
+		!semver.valid(transition.previousVersion) ||
+		typeof transition.version !== `string` ||
+		!semver.valid(transition.version) ||
+		!semver.valid(context.currentVersion) ||
+		semver.lt(transition.version, context.currentVersion)
 	)
 		throw new Error(
-			`Invalid release version for ${context.packageName}; expected a current/newer exact version.`,
+			`Invalid release transition for ${context.packageName}; expected exact versions and a current/newer target.`,
 		)
-	return version
+	if (
+		context.baseline &&
+		transition.previousVersion !== context.baseline.version
+	)
+		throw new Error(
+			`Release transition for ${context.packageName} does not match the selected baseline.`,
+		)
+	const evidence = versionTransition(
+		transition.previousVersion,
+		transition.version,
+	)
+	if (transition.delta !== evidence.delta)
+		throw new Error(
+			`Release transition for ${context.packageName} has an inconsistent semver delta.`,
+		)
+	// Only evidence crosses this boundary; resolver-supplied policy decisions are ignored.
+	return evidence
 }
 
-/** Removed hooks must fail explicitly, including in untyped JSON configurations. */
+/** Removed hooks must fail explicitly, including in untyped configurations. */
 export function rejectCertificationOptions(value: object): void {
 	for (const key of [`certifyCommand`, `releaseIntent`, `certifyBreaking`]) {
 		if (key in value)
 			throw new Error(
-				`${key} was removed. Use release.version and release.policy instead.`,
+				`${key} was removed. Use release.resolveDelta and release.policy instead.`,
 			)
 	}
 }

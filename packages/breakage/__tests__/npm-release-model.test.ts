@@ -1,5 +1,10 @@
 import { afterEach, expect, it } from "bun:test"
-import { defineConfig, npmCheck, semverPolicy } from "breakage"
+import {
+	versionTransition,
+	defineConfig,
+	npmCheck,
+	semverPolicy,
+} from "breakage"
 
 import {
 	assertStagesRemoved,
@@ -27,12 +32,18 @@ it.each([
 		let calls = 0
 		const config = defineConfig({
 			release: {
-				version: ({ packageName, packageDirectory, currentVersion }) => {
+				resolveDelta: ({
+					packageName,
+					packageDirectory,
+					currentVersion,
+					baseline,
+				}) => {
 					expect(packageName).toBe(`integration`)
 					expect(packageDirectory).toBe(f.directory)
 					expect(currentVersion).toBe(`1.1.0`)
+					expect(baseline?.version).toBe(`1.0.0`)
 					calls++
-					return target
+					return versionTransition(baseline?.version ?? currentVersion, target)
 				},
 				policy: semverPolicy({ beforeV1: `minor` }),
 			},
@@ -67,7 +78,11 @@ it(`preserves shell suite failures despite a breaking release`, async () => {
 	f.representative(`one`, `1.0.0`)
 	f.representative(`two`, `2.0.0`)
 	f.baseline({ host: `^1 || ^2 || ^3` })
-	f.config.release = { version: () => `2.0.0` }
+	f.config.release = {
+		resolveDelta: ({ baseline, currentVersion }) => {
+			return versionTransition(baseline?.version ?? currentVersion, `2.0.0`)
+		},
+	}
 	f.copy(`contracts/check-released-host-failure.ts`, `contracts/check.ts`)
 	const result = await npmCheck(f.config, { baseDirectory: f.directory })
 	expect(result.support.status).toBe(`breaking-release`)
@@ -85,12 +100,39 @@ it(`reports invalid release evidence as a setup error`, async () => {
 	f.representative(`one`, `1.0.0`)
 	f.representative(`two`, `2.0.0`)
 	f.baseline({ host: `^1 || ^2 || ^3` })
-	f.config.release = { version: () => `invalid` }
+	f.config.release = {
+		resolveDelta: ({ baseline, currentVersion }) => {
+			return versionTransition(baseline?.version ?? currentVersion, `invalid`)
+		},
+	}
 	const result = await npmCheck(f.config, {
 		baseDirectory: f.directory,
 		coverageOnly: true,
 	})
 	expect(result.exitCode).toBe(2)
 	expect(result.support.status).toBe(`setup-error`)
+	assertStagesRemoved(f, result)
+}, 30_000)
+
+it(`rejects an npm support transition against a different baseline`, async () => {
+	const f = (fixture = npmFixture())
+	delete f.config.localPeers
+	f.representative(`one`, `1.0.0`)
+	f.representative(`two`, `2.0.0`)
+	f.baseline({ host: `^1 || ^2 || ^3` })
+	f.config.release = {
+		resolveDelta: () => versionTransition(`0.1.0`, `2.0.0`),
+		policy: () => true,
+	}
+	const result = await npmCheck(f.config, {
+		baseDirectory: f.directory,
+		coverageOnly: true,
+	})
+	expect(result.exitCode).toBe(2)
+	expect(result.support).toMatchObject({ status: `setup-error` })
+	if (result.support.status === `setup-error`)
+		expect(result.support.error).toContain(
+			`does not match the selected baseline`,
+		)
 	assertStagesRemoved(f, result)
 }, 30_000)

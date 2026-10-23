@@ -1,12 +1,12 @@
 import { defineConfig, semverPolicy } from "breakage"
-import { changesetsRelease } from "breakage/changesets"
+import { changesetsReleaseDelta } from "breakage/changesets"
 
 export default defineConfig({
 	tagPattern: `refs/tags/release-library@`,
 	testPattern: `public/*.ts`,
 	test: `node public/contract.ts`,
 	release: {
-		version: changesetsRelease(),
+		resolveDelta: changesetsReleaseDelta(),
 		policy: semverPolicy({ beforeV1: `minor` }),
 	},
 })

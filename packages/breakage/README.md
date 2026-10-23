@@ -34,30 +34,57 @@ Create `breakage.config.ts` with a default export. Public checks, `prelude`, and
 
 ```ts
 import { defineConfig, semverPolicy } from "breakage"
-import { changesetsRelease } from "breakage/changesets"
+import { changesetsReleaseDelta } from "breakage/changesets"
 
 export default defineConfig({
 	tagPattern: "refs/tags/my-library@",
 	testPattern: "tests/public/**/*",
 	test: "npm run test:public",
 	release: {
-		version: changesetsRelease(),
+		resolveDelta: changesetsReleaseDelta(),
 		policy: semverPolicy({ beforeV1: "minor" }),
 	},
 })
 ```
 
-`release.version` supplies the package's intended version. It is a synchronous/asynchronous function returning an exact version string or `undefined` and receiving `packageName`, `packageDirectory`, and `currentVersion`. Public checks also supply `baseline: { version, ref, commit }` from the exact commit selected for replay. Omit `version` to use the current manifest, or return `undefined` to supply no release evidence. Invalid versions, versions older than the current manifest, and resolver errors fail setup. Release resolution happens before historical tests replace current tests.
+`release.resolveDelta` is a synchronous/asynchronous function returning a `VersionTransition`: `{ previousVersion, version, delta }`, or `undefined` for no release evidence. The resolver receives `packageName`, `packageDirectory`, and `currentVersion`. Public checks also supply `baseline: { version, ref, commit }` from the exact commit selected for replay; npm support checks supply the historical manifest's baseline version. Omit `resolveDelta` to compare that baseline with the current manifest. For candidate identity checks without a historical baseline, the default comparison starts at the current manifest version.
 
-Breakage compares that version with the manifest at the selected release commit. For example, a pending Changesets minor release from `0.53.3` resolves to `0.54.0`. After `changeset version` removes the changeset, the manifest's `0.54.0` supplies the same evidence against the pinned `0.53.3` baseline. A patch release to `0.53.4` does not permit a break with `beforeV1: "minor"`.
+For example, a pending Changesets minor release from `0.53.3` returns `{ previousVersion: "0.53.3", version: "0.54.0", delta: "minor" }`. After `changeset version` removes the changeset, the manifest's `0.54.0` supplies the same transition against the pinned `0.53.3` baseline. The resolver reports the transition; `release.policy` decides whether it permits breaking changes. A patch release to `0.53.4` does not permit a break with `beforeV1: "minor"`.
+
+Breakage validates both versions, requires the target to be at least the current manifest version, checks `previousVersion` against any supplied baseline, and verifies that `delta` matches the actual semver difference. Invalid evidence and resolver errors fail setup. Release resolution happens before historical tests replace current tests. A resolver cannot override policy by returning a `breaking` field.
 
 `semverPolicy()` permits major increments by default. `beforeV1: "minor"` additionally permits minor increments while the baseline major is zero; `beforeV1: "patch"` also permits patch increments there. A prerelease identifier change alone does not permit a break. At and after 1.0, the policy always requires a major increment. Equal and older versions never permit breaking changes.
 
-Use `versionDelta(previousVersion, version, policy?)` independently to obtain `{ previousVersion, version, delta, breaking }`. A custom policy receives `{ previousVersion, version, delta }` and returns a boolean; `versionDelta` calls it only for advancing versions. `resolveReleaseVersion(release, context)` is also exported for consumers that want to reuse version resolution without running a compatibility check.
+Use `versionTransition(previousVersion, version)` to construct evidence without applying policy. Its `delta` is a semver release type or `"none"` for equal versions. `resolveReleaseDelta(release, context)` invokes and validates the resolver without applying policy. `versionDelta(previousVersion, version, policy?)` independently obtains `{ previousVersion, version, delta, breaking }`; a custom policy receives the transition and returns a boolean, and is called only for advancing versions.
+
+A custom resolver can compose the plan reader with the transition helper:
+
+```ts
+import { defineConfig, semverPolicy, versionTransition } from "breakage"
+import { readChangesetsReleasePlan } from "breakage/changesets"
+
+export default defineConfig({
+	release: {
+		resolveDelta: async ({
+			packageName,
+			packageDirectory,
+			currentVersion,
+			baseline,
+		}) => {
+			const plan = await readChangesetsReleasePlan(packageDirectory)
+			return versionTransition(
+				baseline?.version ?? currentVersion,
+				plan.get(packageName) ?? currentVersion,
+			)
+		},
+		policy: semverPolicy({ beforeV1: "minor" }),
+	},
+})
+```
 
 `test` is a nonempty shell-command string. Breakage runs it in the configured directory and captures stdout and stderr as diagnostics. Exit 0 succeeds, exit 1 reports incompatibility, and other nonzero exits or process failures report setup errors. A breaking release can permit incompatibility, but cannot permit setup errors. Runners using exit 1 for infrastructure failures need a wrapper that distinguishes those failures. Test functions are rejected; there is no implicit-success return convention. `testCommand` remains a string alias; configure only one.
 
-`release.version` and `release.policy` are functions whose return values carry evidence and decisions; stdout is never parsed as release information. `semverPolicy({ beforeV1: "minor" })` creates a policy function. If a resolver invokes an external program, it owns parsing and validating that program's output.
+`release.resolveDelta` and `release.policy` are functions whose return values carry transitions and policy decisions; stdout is never parsed as release information. `semverPolicy({ beforeV1: "minor" })` creates a policy function. If a resolver invokes an external program, it owns parsing and validating that program's output.
 
 Relative `baseDirname` values resolve from the configuration file's directory, which is also the default base directory when loading a config. CLI `--base-dir` values resolve from the caller's directory. CLI options override config fields, including `--test-command` overriding `test`. Test patterns, `baselineFile`, and prelude `out` are relative to the resulting base directory. Imports and additional filesystem work in callbacks should use `import.meta.url` or the supplied directory rather than assuming a process working directory.
 
@@ -65,7 +92,7 @@ Omitting `release` leaves detected breaks unapproved. Configure `release: { poli
 
 ### Optional Changesets helpers
 
-The `breakage/changesets` subpath provides two independent helpers: `readChangesetsReleasePlan(directory?)` returns a map of package names to planned versions, and `changesetsRelease({ directory? })` returns a release-version resolver. The resolver discovers the workspace from each package directory unless given an explicit directory, reads a fresh plan, and falls back to the supplied current manifest version. The plan uses Changesets' own assembly logic, configuration, dependency propagation, and prerelease state. Errors reading the plan fail setup instead of silently falling back to the manifest.
+The `breakage/changesets` subpath provides two independent helpers: `readChangesetsReleasePlan(directory?)` returns a map of package names to planned versions, and `changesetsReleaseDelta({ directory? })` returns a release-delta resolver. The resolver discovers the workspace from each package directory unless given an explicit directory, reads a fresh plan, and compares its intended version (or the current manifest after versioning) with the supplied baseline. Without a baseline it compares against the current manifest, which supplies candidate identity without claiming a historical compatibility decision. The plan uses Changesets' own assembly logic, configuration, dependency propagation, and prerelease state. Errors reading the plan fail setup instead of silently falling back to the manifest.
 
 These helpers use optional peer dependencies. Install them alongside Breakage when using the subpath:
 
@@ -73,7 +100,7 @@ These helpers use optional peer dependencies. Install them alongside Breakage wh
 npm install --save-dev @changesets/assemble-release-plan@^7 @changesets/config@^4 @changesets/pre@^3 @changesets/read@^1 @manypkg/get-packages@^3
 ```
 
-The main `breakage` export and commands do not import these dependencies. You can compose the plan reader with your own version resolver or use the core release model with any other release process.
+The main `breakage` export and commands do not import these dependencies. You can compose the plan reader with your own delta resolver or use the core release model with any other release process.
 
 `defineConfig` shares a top-level `release` with `npm` checks unless `npm.release` is explicitly configured. Both workflows apply the same version comparison and policy to their own historical manifests. npm preparation, installation, and suite commands are shell strings; see the [npm guide](npm.md#shared-release-configuration).
 
@@ -304,11 +331,11 @@ Finish active break-check runs and recover any interrupted runs before switching
 
 This is a breaking minor release before 1.0. Configuration is TypeScript-only; shell-command strings and the `testCommand` alias remain supported. There is one task executor and one release decision model.
 
-- Remove `certifyCommand` and its CLI flags (`--certifyCommand`, `--certify-command`, `-c`). Configure `release.version` and `release.policy` instead. Removed hooks fail explicitly.
-- Replace npm `releaseIntent` with `release.version`. Return an exact version string or `undefined`, rather than `{ status: "release", version }` or `{ status: "none" }`. Throw when inspection fails.
+- Remove `certifyCommand` and its CLI flags (`--certifyCommand`, `--certify-command`, `-c`). Configure `release.resolveDelta` and `release.policy` instead. Removed hooks fail explicitly.
+- Replace npm `releaseIntent` with `release.resolveDelta`. Return `{ previousVersion, version, delta }` or `undefined`, rather than `{ status: "release", version }` or `{ status: "none" }`. Throw when inspection fails.
 - Replace npm `certifyBreaking` with `release.policy`. Use `semverPolicy({ beforeV1: "minor" })` for this pre-1.0 convention, or a function receiving `{ previousVersion, version, delta }`. Support findings remain in the npm report; the policy receives version evidence only.
-- Replace the removed `ReleaseIntent`, `ReleaseContext`, and `ReleaseEvidence` types with `ReleaseVersion`, `ReleaseVersionContext`, and `VersionDelta` as appropriate.
+- Replace the removed `ReleaseIntent`, `ReleaseContext`, and `ReleaseEvidence` types with `ReleaseDeltaResolver`, `ReleaseDeltaContext`, `VersionTransition`, and `VersionDelta` as appropriate.
 - Public outcomes expose `release?: VersionDelta`; use `outcome.release?.breaking` to check release approval. `breakingChangesCertified`, `certificationStdout`, and `certificationStderr` are removed. npm support status `certified` becomes `breaking-release`, with the full version delta in `support.release`.
 - Tests, npm setup, and npm suite commands must be shell strings. Exit 0 succeeds, 1 detects incompatibility for tests, and other nonzero statuses or process errors fail setup. Release intent never approves setup errors. `test` and `testCommand` cannot both be configured.
-- Convert JSON configuration to `breakage.config.ts` with a default export. JSON config, JSON schema generation, and the `--release` JSON flag are removed. Express `release.version` as a function, such as `() => "2.0.0"`, and `release.policy` as a function or `semverPolicy(...)`.
+- Convert JSON configuration to `breakage.config.ts` with a default export. JSON config, JSON schema generation, and the `--release` JSON flag are removed. Express `release.resolveDelta` as a function returning a transition, using `versionTransition(previousVersion, version)` if helpful, and `release.policy` as a function or `semverPolicy(...)`.
 - Relative config directories now resolve from the config file. Check filesystem paths when migrating configurations previously loaded from another working directory.

@@ -1,10 +1,10 @@
 import { defineConfig, semverPolicy } from "./src/breakage.ts"
-import { changesetsRelease } from "./src/changesets.ts"
+import { changesetsReleaseDelta } from "./src/changesets.ts"
 import manifest from "./package.json" with { type: "json" }
 
 export default defineConfig({
 	release: {
-		version: changesetsRelease(),
+		resolveDelta: changesetsReleaseDelta(),
 		policy: semverPolicy({ beforeV1: `minor` }),
 	},
 	npm: {

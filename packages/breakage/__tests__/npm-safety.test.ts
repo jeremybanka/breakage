@@ -1,4 +1,4 @@
-import { semverPolicy } from "breakage"
+import { versionTransition, semverPolicy } from "breakage"
 import { execFileSync } from "node:child_process"
 import { existsSync, linkSync, readFileSync } from "node:fs"
 import path from "node:path"
@@ -52,7 +52,11 @@ describe(`npm environment safety`, () => {
 			)
 			const originalArchive = readFileSync(archive)
 			f.config.installCommand += ` && rm node_modules/host/package.json && ln ../../../.cache/host-manifest.json node_modules/host/package.json`
-			f.config.release = { version: () => version }
+			f.config.release = {
+				resolveDelta: ({ baseline, currentVersion }) => {
+					return versionTransition(baseline?.version ?? currentVersion, version)
+				},
+			}
 			f.copy(`contracts/check-manifest-storage.ts`, `contracts/check.ts`)
 			f.config.suites.host!.command = `node contracts/check.ts ${version}`
 			const result = await npmTest(
@@ -158,7 +162,11 @@ describe(`npm environment safety`, () => {
 		async (shadow) => {
 			const f = setup(`runtime-dependencies`)
 			f.representative(`next`, `2.0.0`, true)
-			f.config.release = { version: () => `2.0.0` }
+			f.config.release = {
+				resolveDelta: ({ baseline, currentVersion }) => {
+					return versionTransition(baseline?.version ?? currentVersion, `2.0.0`)
+				},
+			}
 			// Confirm npm installed the optional package; its branch must be audited
 			// even when the current contract does not happen to execute that branch.
 			f.config.installCommand += ` && test -f node_modules/helper/package.json`
@@ -296,8 +304,16 @@ describe(`npm environment safety`, () => {
 		snapshot.commit = git(f.directory, `rev-parse`, `HEAD`).trim()
 		f.write(`.breakage/baseline.json`, snapshot)
 		f.config.release = {
-			version: ({ packageName }) =>
-				packageName === `integration` ? `0.6.0` : undefined,
+			resolveDelta: ({ packageName, baseline, currentVersion }) => {
+				const intendedVersion =
+					packageName === `integration` ? `0.6.0` : undefined
+				return intendedVersion === undefined
+					? undefined
+					: versionTransition(
+							baseline?.version ?? currentVersion,
+							intendedVersion,
+						)
+			},
 		}
 		f.config.release!.policy = semverPolicy({ beforeV1: `minor` })
 		const result = await npmCheck(f.config, {

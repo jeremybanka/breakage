@@ -1,3 +1,4 @@
+import { versionTransition } from "breakage"
 import { existsSync, rmSync } from "node:fs"
 import path from "node:path"
 
@@ -146,9 +147,9 @@ describe(`focused peer selection`, () => {
 		f.config.representatives = `environments/*`
 		let inspections = 0
 		f.config.release = {
-			version: () => {
+			resolveDelta: ({ baseline, currentVersion }) => {
 				inspections++
-				return `3.0.0`
+				return versionTransition(baseline?.version ?? currentVersion, `3.0.0`)
 			},
 		}
 		for (const name of [`released-1`, `released-2`])
@@ -175,7 +176,11 @@ describe(`focused peer selection`, () => {
 	it(`skips a disjoint candidate before requiring its lockfile`, async () => {
 		const f = (fixture = npmFixture())
 		f.config.representatives = `environments/*`
-		f.config.release = { version: () => `3.0.0` }
+		f.config.release = {
+			resolveDelta: ({ baseline, currentVersion }) => {
+				return versionTransition(baseline?.version ?? currentVersion, `3.0.0`)
+			},
+		}
 		rmSync(path.join(f.directory, `environments/candidate/package-lock.json`))
 		const result = await npmTest(
 			f.config,

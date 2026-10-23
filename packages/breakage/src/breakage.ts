@@ -8,7 +8,7 @@ import logger from "takua"
 import { command, errorMessage } from "./task.ts"
 import { readManifest, parseManifest } from "./npm/manifest.ts"
 import {
-	resolveReleaseVersion,
+	resolveReleaseDelta,
 	versionDelta,
 	validateRelease,
 	rejectCertificationOptions,
@@ -21,14 +21,20 @@ import { withTestFileState } from "./test-file-state.ts"
 
 export { defineConfig, loadConfig } from "./config.ts"
 export type { BreakageConfig } from "./config.ts"
-export { semverPolicy, versionDelta, resolveReleaseVersion } from "./release.ts"
+export {
+	semverPolicy,
+	versionTransition,
+	versionDelta,
+	resolveReleaseDelta,
+} from "./release.ts"
 export type {
 	ReleaseConfig,
 	ReleasePolicy,
 	ReleasePolicyFunction,
 	SemverPolicyOptions,
-	ReleaseVersion,
-	ReleaseVersionContext,
+	VersionTransition,
+	ReleaseDeltaResolver,
+	ReleaseDeltaContext,
 	VersionDelta,
 } from "./release.ts"
 export type { CommandResult } from "./task.ts"
@@ -229,7 +235,7 @@ export async function breakage(
 		)
 		if (previous.name !== current.name)
 			throw new Error(`Release baseline belongs to another package.`)
-		const version = await resolveReleaseVersion(release, {
+		const transition = await resolveReleaseDelta(release, {
 			packageName: current.name,
 			packageDirectory: path.resolve(baseDirname),
 			currentVersion: current.version,
@@ -239,8 +245,12 @@ export async function breakage(
 				commit: releaseCommit,
 			},
 		})
-		if (version !== undefined)
-			releaseEvidence = versionDelta(previous.version, version, release.policy)
+		if (transition !== undefined)
+			releaseEvidence = versionDelta(
+				transition.previousVersion,
+				transition.version,
+				release.policy,
+			)
 	}
 
 	const prepared = await withTestFileState(git, baseDirname, async (state) => {

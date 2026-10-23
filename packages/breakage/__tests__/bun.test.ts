@@ -1,3 +1,4 @@
+import { versionTransition } from "breakage"
 import { mkdtempSync, rmSync } from "node:fs"
 import { mkdir } from "node:fs/promises"
 import { tmpdir } from "node:os"
@@ -93,7 +94,14 @@ describe(`breakage`, () => {
 				tagPattern: `my-library`,
 				testPattern: `*__public.test.ts`,
 				testCommand: `bun test *__public.test.ts`,
-				release: { version: () => `2.0.0` },
+				release: {
+					resolveDelta: ({ baseline, currentVersion }) => {
+						return versionTransition(
+							baseline?.version ?? currentVersion,
+							`2.0.0`,
+						)
+					},
+				},
 				baseDirname: localRepoDirname,
 				verbose: true,
 			})

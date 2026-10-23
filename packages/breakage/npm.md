@@ -122,25 +122,25 @@ Create a separate representative that explicitly names candidate peers. Leave an
 }
 ```
 
-Set `release.version` to a synchronous/asynchronous resolver receiving `packageName`, `packageDirectory`, and `currentVersion`. For Changesets, use the optional helper:
+Set `release.resolveDelta` to a synchronous/asynchronous resolver receiving `packageName`, `packageDirectory`, and `currentVersion`. For Changesets, use the optional helper:
 
 ```ts
-import { changesetsRelease } from "breakage/changesets"
+import { changesetsReleaseDelta } from "breakage/changesets"
 import { semverPolicy } from "breakage"
 
 const release = {
-	version: changesetsRelease(),
+	resolveDelta: changesetsReleaseDelta(),
 	policy: semverPolicy({ beforeV1: "minor" }),
 }
 ```
 
-Assign this object to `npm.release`, or share it at the top level with `defineConfig`. A custom resolver returns an exact version or `undefined`; errors must throw. Missing intent blocks that candidate environment. Inspection errors and invalid evidence are setup errors, not absent intent. Intended versions must be exact and at least the current workspace version. The candidate archive may have its workspace version or the intended version. Breakage reports both versions. If they differ, it substitutes the intended version in the installed peer's disposable manifest using a fresh file and atomic replacement, preserving shared cache files, other environments, the archive, and the workspace. Archives already carrying their intended version need no substitution.
+Assign this object to `npm.release`, or share it at the top level with `defineConfig`. A custom resolver returns `{ previousVersion, version, delta }` or `undefined`; errors must throw. Missing intent blocks that candidate environment. Inspection errors and invalid evidence are setup errors, not absent intent. Both transition versions must be exact, the target must be at least the current workspace version, and the delta must match the versions. Candidate identity uses the transition's `version`; no breaking-change policy is applied to candidate enrollment. The candidate archive may have its workspace version or the intended version. Breakage reports both versions. If they differ, it substitutes the intended version in the installed peer's disposable manifest using a fresh file and atomic replacement, preserving shared cache files, other environments, the archive, and the workspace. Archives already carrying their intended version need no substitution.
 
 That substitution simulates release metadata; it does not rebuild the package or change version constants embedded in executable code. Your build owns those constants. To exercise the final version metadata directly, supply a peer archive already built with the resolved intended version.
 
-Both `npm check` and its coverage-only audit inspect each currently declared `localPeers` package's release intent, even if you omitted its candidate environment. A resolved intended version must be included in the integration's peer range and covered by a coordinated representative. Missing either fails with exit 2; an installed peer at the same version does not substitute for testing the local candidate. Optional local peers have the same obligation when declared. Resolver errors and invalid evidence fail setup. Resolvers are evaluated once per package per invocation, and must return that package's own release intent.
+Both `npm check` and its coverage-only audit inspect each currently declared `localPeers` package's release intent, even if you omitted its candidate environment. A resolved intended version must be included in the integration's peer range and covered by a coordinated representative. Missing either fails with exit 2; an installed peer at the same version does not substitute for testing the local candidate. Optional local peers have the same obligation when declared. Resolver errors and invalid evidence fail setup. Resolvers are evaluated once per package and baseline context per invocation, and must return that package's own release intent.
 
-For a core still labeled `0.53.3` with a planned `0.54.0` release, an integration declaring only `^0.53.3` fails. Adding `|| ^0.54.0` is recommended when retaining the older era. Admission uses version membership: `0.54.0`, `*`, and other ranges containing that version qualify too. Exact-preview enrollment, coverage of other declared eras, and breaking release evidence for dropping old support still apply. Your version resolver supplies the intended version before a versioning PR is merged; Breakage does not infer it from an open PR.
+For a core still labeled `0.53.3` with a planned `0.54.0` release, an integration declaring only `^0.53.3` fails. Adding `|| ^0.54.0` is recommended when retaining the older era. Admission uses version membership: `0.54.0`, `*`, and other ranges containing that version qualify too. Exact-preview enrollment, coverage of other declared eras, and breaking release evidence for dropping old support still apply. Your delta resolver supplies the intended transition before a versioning PR is merged; Breakage does not infer it from an open PR.
 
 Candidate results are conditional on publication. They can cover a new era, but cannot excuse an incompatible released version that the integration still advertises. Unreleased local edits with no release intent create no new coordination obligation. Registering a currently declared local peer means the integration must accommodate its planned releases. Registrations retained only for historical resolution do not impose this obligation after the peer declaration is removed. The repository owns publication order.
 
@@ -154,13 +154,13 @@ Use `defineConfig` to share a release resolver and policy with public checks:
 
 ```ts
 import { defineConfig, semverPolicy } from "breakage"
-import { changesetsRelease } from "breakage/changesets"
+import { changesetsReleaseDelta } from "breakage/changesets"
 
 export default defineConfig({
 	testPattern: "tests/public/**/*",
 	test: "npm run test:public",
 	release: {
-		version: changesetsRelease(),
+		resolveDelta: changesetsReleaseDelta(),
 		policy: semverPolicy({ beforeV1: "minor" }),
 	},
 	npm: {
@@ -181,11 +181,11 @@ export default defineConfig({
 
 `defineConfig` inherits the top-level `release` into `npm.release`; an explicit `npm.release` overrides it. Programmatic callers can pass the resulting `config.npm` to `npmCheck` or `npmTest`. Both npm and public CLI commands use the same config loader. npm paths remain relative to the config file's directory, or to `npm.packageDirectory` resolved from it.
 
-`npm.release.version` replaces `releaseIntent` and returns an exact version or `undefined`. The resolver is evaluated once per package per npm invocation. The integration's version is compared with its historical manifest to decide whether support may be dropped; a local peer's version supplies candidate identity and the existing coordination obligations. `changesetsRelease()` returns planned versions before Changesets versioning and manifest versions afterward. Because this fallback also supplies the current version for an unchanged registered local peer, using it opts those peers into candidate coverage too. A custom resolver can return `undefined` for packages that should have no local release intent. See the [release configuration guide](README.md#typescript-configuration-and-release-intent) for optional Changesets dependencies and standalone helpers.
+`npm.release.resolveDelta` replaces `releaseIntent` and returns `{ previousVersion, version, delta }` or `undefined`. Resolution is cached per package and baseline context for each npm invocation. Support checks supply `baseline: { version }` from the integration's historical manifest; Breakage rejects a transition whose `previousVersion` disagrees with that baseline. Local-peer candidate checks have no historical baseline and use the transition's target version for candidate identity and coordination obligations. `changesetsReleaseDelta()` is a factory that returns the resolver, comparing the supplied baseline (or current manifest) with the planned version before Changesets versioning and the manifest version afterward. Because the manifest fallback also supplies a target for an unchanged registered local peer, using it opts those peers into candidate coverage too. A custom resolver can return `undefined` for packages that should have no local release intent. See the [release configuration guide](README.md#typescript-configuration-and-release-intent) for optional Changesets dependencies and standalone helpers.
 
 `npm.release.policy` replaces `certifyBreaking`. The default requires a major increment; `semverPolicy({ beforeV1: "minor" })` permits pre-1.0 minor increments too. Missing evidence or a compatible version delta leaves a support drop unapproved. Invalid evidence and resolver/policy errors fail setup. Compatibility failures against still-declared peers remain failures even when the integration has a breaking release. The old `releaseIntent` and `certifyBreaking` hooks are removed and fail with migration guidance. Policies must be functions and receive `{ previousVersion, version, delta }`.
 
-`prepareCommand`, `installCommand`, and each suite's `command` are nonempty shell strings. Preparation runs in the representative directory; installation and suites run in its disposable `test/` directory. Breakage captures stdout and stderr for reporting. All nonzero preparation/installation results fail setup; suite exit 1 denotes incompatibility and other nonzero exits denote setup failure. Functions are reserved for the release-version resolver and policy.
+`prepareCommand`, `installCommand`, and each suite's `command` are nonempty shell strings. Preparation runs in the representative directory; installation and suites run in its disposable `test/` directory. Breakage captures stdout and stderr for reporting. All nonzero preparation/installation results fail setup; suite exit 1 denotes incompatibility and other nonzero exits denote setup failure. Functions are reserved for the release-delta resolver and policy.
 
 ## Removing support
 

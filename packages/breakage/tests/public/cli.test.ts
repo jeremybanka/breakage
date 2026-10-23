@@ -1,3 +1,4 @@
+import { versionTransition } from "breakage"
 import { readdirSync } from "node:fs"
 import path from "node:path"
 
@@ -40,7 +41,10 @@ it.each([
 			`config-data.json`,
 			JSON.stringify({
 				options: project.options,
-				version: breakingRelease ? `2.0.0` : `1.0.0`,
+				transition: versionTransition(
+					`1.0.0`,
+					breakingRelease ? `2.0.0` : `1.0.0`,
+				),
 			}),
 		)
 		// Configuration is committed because checking requires a clean repository.

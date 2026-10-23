@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs"
 import path from "node:path"
 
 import { afterEach, expect, it } from "bun:test"
-import { breakage, breakagePrelude } from "breakage"
+import { versionTransition, breakage, breakagePrelude } from "breakage"
 
 import { fixture, git, shellQuote } from "./fixture.ts"
 
@@ -31,7 +31,14 @@ it.each([false, true])(
 		expect(current.exitCode).toBe(0)
 		const result = await breakage({
 			...project.options,
-			release: { version: () => (breakingRelease ? `2.0.0` : `1.0.0`) },
+			release: {
+				resolveDelta: ({ baseline, currentVersion }) => {
+					return versionTransition(
+						baseline?.version ?? currentVersion,
+						breakingRelease ? `2.0.0` : `1.0.0`,
+					)
+				},
+			},
 		})
 		expect(result).toMatchObject({
 			gitWasClean: true,
@@ -82,7 +89,7 @@ it(`refuses a dirty checkout without running commands or replacing files`, async
 		...project.options,
 		testCommand: `touch should-not-run`,
 		release: {
-			version: () => {
+			resolveDelta: () => {
 				throw new Error(`Release resolver must not run for a dirty checkout`)
 			},
 		},

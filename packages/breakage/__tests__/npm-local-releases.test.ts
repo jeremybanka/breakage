@@ -1,3 +1,4 @@
+import { versionTransition } from "breakage"
 import { afterEach, describe, expect, it } from "bun:test"
 
 import { npmCheck, npmTest } from "../src/npm/check.ts"
@@ -23,8 +24,15 @@ function setup(range: string): NpmFixture {
 	f.config.artifact = f.pack(`.`)
 	f.config.localPeers!.host!.artifact = f.pack(`local-host`)
 	f.config.release = {
-		version: ({ packageName }) =>
-			packageName === `host` ? `0.54.0` : undefined,
+		resolveDelta: ({ packageName, baseline, currentVersion }) => {
+			const intendedVersion = packageName === `host` ? `0.54.0` : undefined
+			return intendedVersion === undefined
+				? undefined
+				: versionTransition(
+						baseline?.version ?? currentVersion,
+						intendedVersion,
+					)
+		},
 	}
 	return f
 }
@@ -38,11 +46,14 @@ for (const coverageOnly of [false, true]) {
 				f.representative(`next`, `0.53.3`, true)
 				let calls = 0
 				f.config.release = {
-					version: ({ packageName, currentVersion }) => {
+					resolveDelta: ({ packageName, currentVersion, baseline }) => {
 						expect(packageName).toBe(`host`)
 						expect(currentVersion).toBe(`0.53.3`)
 						calls++
-						return `0.54.0`
+						return versionTransition(
+							baseline?.version ?? currentVersion,
+							`0.54.0`,
+						)
 					},
 				}
 				if (coverageOnly) f.config.artifact = `not-built.tgz`
@@ -113,14 +124,21 @@ it.each([`none`, `throws`, `invalid`, `older`])(
 		f.representative(`released`, `0.53.3`)
 		let calls = 0
 		f.config.release = {
-			version: () => {
+			resolveDelta: ({ baseline, currentVersion }) => {
 				calls++
 				if (scenario === `throws`) throw new Error(`release plan unavailable`)
-				return scenario === `none`
+				const intendedVersion =
+					scenario === `none`
+						? undefined
+						: scenario === `older`
+							? `0.52.0`
+							: `invalid`
+				return intendedVersion === undefined
 					? undefined
-					: scenario === `older`
-						? `0.52.0`
-						: `invalid`
+					: versionTransition(
+							baseline?.version ?? currentVersion,
+							intendedVersion,
+						)
 			},
 		}
 		const result = await npmCheck(f.config, {
@@ -171,9 +189,9 @@ it(`only inspects currently declared registered local peers, including optional 
 	})
 	const inspected: string[] = []
 	f.config.release = {
-		version: ({ packageName }) => {
+		resolveDelta: ({ packageName, baseline, currentVersion }) => {
 			inspected.push(packageName)
-			return `0.54.0`
+			return versionTransition(baseline?.version ?? currentVersion, `0.54.0`)
 		},
 	}
 	const result = await npmCheck(f.config, {
@@ -192,7 +210,12 @@ it(`requires planned-version coverage even when a breaking release permits dropp
 	f.representative(`released`, `0.53.3`)
 	f.baseline({ host: `^0.52.0 || ^0.53.3` })
 	f.config.release = {
-		version: ({ packageName }) => (packageName === `host` ? `0.54.0` : `2.0.0`),
+		resolveDelta: ({ packageName, baseline, currentVersion }) => {
+			return versionTransition(
+				baseline?.version ?? currentVersion,
+				packageName === `host` ? `0.54.0` : `2.0.0`,
+			)
+		},
 	}
 
 	const result = await npmCheck(f.config, {

@@ -3,8 +3,10 @@ import type { NpmConfig } from "breakage"
 const config: { npm: NpmConfig } = {
 	npm: {
 		release: {
-			version: ({ packageName }) =>
-				packageName === `ranges-host` ? `2.0.0` : undefined,
+			resolveDelta: ({ packageName }) =>
+				packageName === `ranges-host`
+					? { previousVersion: `2.0.0`, version: `2.0.0`, delta: `none` }
+					: undefined,
 		},
 		artifact: "artifacts/ranges-integration-1.1.0.tgz",
 		representatives: "peer-environments/*",

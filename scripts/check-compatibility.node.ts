@@ -5,7 +5,7 @@ import { appendFile } from "node:fs/promises"
 import type { BreakageBaseline, BreakageOutcome } from "breakage-supervisor"
 import { breakage, breakagePrelude } from "breakage-supervisor"
 
-import { changesetsRelease } from "../packages/breakage/src/changesets.ts"
+import { changesetsReleaseDelta } from "../packages/breakage/src/changesets.ts"
 import {
 	semverPolicy,
 	versionDelta,
@@ -77,7 +77,7 @@ if (import.meta.main) {
 	) as { name: string; version: string }
 	if (previous.name !== manifest.name || typeof previous.version !== `string`)
 		throw new Error(`Baseline package identity or version is invalid.`)
-	const version = await changesetsRelease()({
+	const transition = await changesetsReleaseDelta()({
 		packageName: manifest.name,
 		packageDirectory,
 		currentVersion: manifest.version,
@@ -88,8 +88,8 @@ if (import.meta.main) {
 		},
 	})
 	const release = versionDelta(
-		previous.version,
-		version,
+		transition.previousVersion,
+		transition.version,
 		semverPolicy({ beforeV1: `minor` }),
 	)
 	console.log(

@@ -1,10 +1,17 @@
+import { rejects } from "node:assert/strict"
 import { existsSync } from "node:fs"
 import path from "node:path"
 
 import { afterEach, expect, it } from "bun:test"
-import { breakage, defineConfig, semverPolicy, versionDelta } from "breakage"
 import {
-	changesetsRelease,
+	versionTransition,
+	breakage,
+	defineConfig,
+	semverPolicy,
+	versionDelta,
+} from "breakage"
+import {
+	changesetsReleaseDelta,
 	readChangesetsReleasePlan,
 } from "breakage/changesets"
 
@@ -51,7 +58,7 @@ it.each([
 		project = releaseFixture(version, bump)
 		const prelude = project.run(`prelude`, configPath)
 		expect(prelude.status, prelude.stderr).toBe(0)
-		const resolver = changesetsRelease()
+		const resolver = changesetsReleaseDelta()
 		const check = async (): Promise<void> => {
 			const manifest = JSON.parse(
 				project!.read(`packages/library/package.json`),
@@ -61,8 +68,9 @@ it.each([
 					packageName: `release-library`,
 					packageDirectory: project!.library,
 					currentVersion: manifest.version,
+					baseline: { version },
 				}),
-			).toBe(target)
+			).toEqual(versionTransition(version, target))
 			const result = project!.run(
 				configPath,
 				`--baseline-file=.breakage/baseline.json`,
@@ -113,16 +121,31 @@ it(`does not permit unchanged releases, missing evidence, or task setup errors`,
 		release: { breaking: false },
 	})
 	expect(
-		await breakage({ ...options, release: { version: () => undefined } }),
+		await breakage({
+			...options,
+			release: {
+				resolveDelta: () => {
+					return undefined
+				},
+			},
+		}),
 	).not.toHaveProperty(`release`)
 	expect(
 		await breakage({ ...options, test: `echo setup failed; exit 2` }),
 	).toMatchObject({ setupError: `setup failed\n` })
 
 	expect(
-		await breakage({ ...options, release: { version: () => `invalid` } }).catch(
-			(error: unknown) => error,
-		),
+		await breakage({
+			...options,
+			release: {
+				resolveDelta: ({ baseline, currentVersion }) => {
+					return versionTransition(
+						baseline?.version ?? currentVersion,
+						`invalid`,
+					)
+				},
+			},
+		}).catch((error: unknown) => error),
 	).toBeInstanceOf(Error)
 	expect(project.git(`status`, `--porcelain`)).toBe(``)
 })
@@ -135,12 +158,15 @@ it(`passes package and pinned baseline context to the release resolver`, async (
 		baseDirname: project.library,
 		testPattern: fixtureConfig.testPattern!,
 		release: {
-			version: (context) => {
+			resolveDelta: (context) => {
 				expect(context.packageDirectory).toBe(project!.library)
 				expect(context.baseline?.ref).toBe(`refs/tags/release-library@0.53.3`)
 				expect(context.baseline?.commit).toMatch(/^[a-f0-9]{40}$/)
 				expect(process.cwd()).toBe(cwd)
-				return `0.54.0`
+				return versionTransition(
+					context.baseline?.version ?? context.currentVersion,
+					`0.54.0`,
+				)
 			},
 			policy: semverPolicy({ beforeV1: `minor` }),
 		},
@@ -164,7 +190,11 @@ it(`shares a release object with npm while preserving explicit overrides`, () =>
 		baseline: { firstRelease: true as const },
 	}
 	expect(defineConfig({ release, npm }).npm!.release).toBe(release)
-	const override = { version: () => `3.0.0` }
+	const override: import("breakage").ReleaseConfig = {
+		resolveDelta: ({ baseline, currentVersion }) => {
+			return versionTransition(baseline?.version ?? currentVersion, `3.0.0`)
+		},
+	}
 	expect(
 		defineConfig({ release, npm: { ...npm, release: override } }).npm!.release,
 	).toBe(override)
@@ -271,7 +301,7 @@ it.each([`certifyCommand`, `releaseIntent`, `certifyBreaking`])(
 		expect(
 			await breakage(config).catch((error: unknown) => error),
 		).toMatchObject({
-			message: `${key} was removed. Use release.version and release.policy instead.`,
+			message: `${key} was removed. Use release.resolveDelta and release.policy instead.`,
 		})
 	},
 )
@@ -317,7 +347,35 @@ it(`rejects release CLI flags and function test hooks`, async () => {
 	).toMatchObject({ message: `test must be a nonempty shell command string.` })
 	expect(() =>
 		defineConfig({
-			release: { version: `2.0.0` },
+			release: { resolveDelta: `2.0.0` },
 		} as unknown as import("breakage").BreakageConfig),
-	).toThrow(`release.version must be a function`)
+	).toThrow(`release.resolveDelta must be a function`)
+})
+
+it(`rejects a resolver's different baseline before replacing historical tests`, async () => {
+	project = releaseFixture()
+	const result = breakage({
+		...fixtureConfig,
+		baseDirname: project.library,
+		testPattern: fixtureConfig.testPattern!,
+		release: {
+			resolveDelta: () => versionTransition(`0.1.0`, `0.54.0`),
+			policy: () => true,
+		},
+	})
+	await rejects(result, /does not match the selected baseline/)
+	expect(project.git(`status`, `--porcelain`)).toBe(``)
+})
+
+it(`supports an explicit Changesets directory through the resolver factory`, async () => {
+	project = releaseFixture()
+	const resolver = changesetsReleaseDelta({ directory: project.directory })
+	expect(
+		await resolver({
+			packageName: `release-library`,
+			packageDirectory: path.join(project.directory, `nonexistent`),
+			currentVersion: `0.53.3`,
+			baseline: { version: `0.53.3` },
+		}),
+	).toEqual({ previousVersion: `0.53.3`, version: `0.54.0`, delta: `minor` })
 })

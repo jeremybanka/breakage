@@ -1,3 +1,4 @@
+import { versionTransition } from "breakage"
 import { rejects } from "node:assert/strict"
 import * as filesystem from "node:fs/promises"
 import {
@@ -163,7 +164,14 @@ it.each([false, true])(
 			await breakage({
 				...options,
 				testCommand: `exit 1`,
-				release: { version: () => (breakingRelease ? `2.0.0` : `1.0.0`) },
+				release: {
+					resolveDelta: ({ baseline, currentVersion }) => {
+						return versionTransition(
+							baseline?.version ?? currentVersion,
+							breakingRelease ? `2.0.0` : `1.0.0`,
+						)
+					},
+				},
 			}),
 		).toMatchObject({
 			breakingChangesFound: true,
