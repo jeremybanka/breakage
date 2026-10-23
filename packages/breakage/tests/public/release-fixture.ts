@@ -19,7 +19,10 @@ import { fileURLToPath } from "node:url"
 
 const require = createRequire(import.meta.url)
 const packageRoot = path.dirname(require.resolve(`breakage/package.json`))
-const cli = path.join(packageRoot, `dist/breakage.x.js`)
+const configuredEntrypoint = process.env.BREAKAGE_CLI_ENTRYPOINT
+if (!configuredEntrypoint)
+	throw new Error(`BREAKAGE_CLI_ENTRYPOINT is required`)
+const cli = path.resolve(configuredEntrypoint)
 const changesets = path.join(
 	path.dirname(require.resolve(`@changesets/cli/package.json`)),
 	`bin.js`,
@@ -89,7 +92,17 @@ export function releaseFixture(
 		read,
 		commit,
 		run: (...args) =>
-			spawnSync(`node`, [cli, ...args], { cwd: directory, encoding: `utf8` }),
+			spawnSync(
+				process.execPath,
+				[
+					`--tsconfig-override`,
+					path.join(packageRoot, `tsconfig.json`),
+					cli,
+					`--`,
+					...args,
+				],
+				{ cwd: directory, encoding: `utf8` },
+			),
 		version: () => {
 			execFileSync(`node`, [changesets, `version`], {
 				cwd: directory,

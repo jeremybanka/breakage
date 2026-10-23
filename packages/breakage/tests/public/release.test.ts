@@ -2,19 +2,14 @@ import { existsSync } from "node:fs"
 import path from "node:path"
 
 import { afterEach, expect, it } from "bun:test"
-import {
-	breakage,
-	defineConfig,
-	loadConfig,
-	semverPolicy,
-	versionDelta,
-} from "breakage"
+import { breakage, defineConfig, semverPolicy, versionDelta } from "breakage"
 import {
 	changesetsRelease,
 	readChangesetsReleasePlan,
 } from "breakage/changesets"
 
 import { releaseFixture } from "./release-fixture.ts"
+import fixtureConfig from "./fixtures/release/packages/library/breakage.config.ts"
 
 let project: ReturnType<typeof releaseFixture> | undefined
 afterEach(() => project?.clean())
@@ -98,7 +93,7 @@ it(`uses the manifest version and pinned commit without needing origin`, async (
 	project.commit()
 	project.git(`tag`, `release-library@0.54.0`)
 	project.git(`remote`, `remove`, `origin`)
-	const config = await loadConfig(path.join(project.directory, configPath))
+	const config = { ...fixtureConfig, baseDirname: project.library }
 	const result = await breakage({
 		...config,
 		testPattern: config.testPattern!,
@@ -113,7 +108,7 @@ it(`uses the manifest version and pinned commit without needing origin`, async (
 
 it(`does not permit unchanged releases, missing evidence, or task setup errors`, async () => {
 	project = releaseFixture()
-	const config = await loadConfig(path.join(project.directory, configPath))
+	const config = { ...fixtureConfig, baseDirname: project.library }
 	const options = { ...config, testPattern: config.testPattern! }
 	expect(await breakage({ ...options, release: {} })).toMatchObject({
 		breakingChangesCertified: false,
@@ -142,7 +137,7 @@ it(`does not permit unchanged releases, missing evidence, or task setup errors`,
 
 it(`passes pinned context to inline tasks without changing process cwd`, async () => {
 	project = releaseFixture()
-	const config = await loadConfig(path.join(project.directory, configPath))
+	const config = { ...fixtureConfig, baseDirname: project.library }
 	const cwd = process.cwd()
 	const result = await breakage({
 		...config,
