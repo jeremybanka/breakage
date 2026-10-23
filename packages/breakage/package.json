@@ -37,10 +37,9 @@
 		"src"
 	],
 	"scripts": {
-		"build": "vp pack && vp run schema",
+		"build": "vp pack",
 		"check": "vp run -w check",
 		"postversion": "dprint fmt package.json",
-		"schema": "bun src/breakage.x.ts --outdir=dist -- schema",
 		"test": "vp run test:run",
 		"test:public": "BREAKAGE_CLI_ENTRYPOINT=./src/breakage.x.ts bun test -- ./tests/public",
 		"test:watch": "vp run test:run --watch"

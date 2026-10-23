@@ -5,10 +5,6 @@ import { validateRelease, rejectCertificationOptions } from "../release.ts"
 import { eras, packageName, record } from "./manifest.ts"
 import type { NpmConfig } from "./types.ts"
 
-function task(value: unknown): boolean {
-	return typeof value === `function` || nonempty(value)
-}
-
 function nonempty(value: unknown): value is string {
 	return typeof value === `string` && value.trim().length > 0
 }
@@ -25,9 +21,11 @@ export function validateConfig(value: unknown): asserts value is NpmConfig {
 	) {
 		throw new Error(`npm.lockfile must stay inside each representative.`)
 	}
-	if (!task(value.prepareCommand))
-		throw new Error(`npm.prepareCommand must be a command or function.`)
-	if (value.installCommand !== undefined && !task(value.installCommand))
+	if (!nonempty(value.prepareCommand))
+		throw new Error(
+			`npm.prepareCommand must be a nonempty shell command string.`,
+		)
+	if (value.installCommand !== undefined && !nonempty(value.installCommand))
 		throw new Error(`Invalid npm.installCommand.`)
 	rejectCertificationOptions(value)
 	if (value.release !== undefined) validateRelease(value.release)
@@ -52,7 +50,7 @@ export function validateConfig(value: unknown): asserts value is NpmConfig {
 		if (
 			!packageName(peer) ||
 			!record(suite) ||
-			!task(suite.command) ||
+			!nonempty(suite.command) ||
 			!Array.isArray(suite.files) ||
 			!suite.files.length ||
 			suite.files.some((file: unknown) => !nonempty(file))

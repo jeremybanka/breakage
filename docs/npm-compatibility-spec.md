@@ -8,7 +8,7 @@ An atom.io integration and its local core can change together while only the int
 
 ## The agnostic core
 
-The existing four adoption conditions remain: semantic versioning, separate source and tests, Git release tags, and command-line tests. Ordinary `breakage` and `breakage prelude` retain their behavior and JSON configuration. They do not inspect npm manifests, require representatives, or depend on a release-management vendor. TypeScript configuration is additionally supported; an explicit config path wins, otherwise `breakage.config.ts` precedes `breakage.config.json`.
+The four adoption conditions remain: semantic versioning, separate source and tests, Git release tags, and command-line tests. Public and npm checks share TypeScript configuration and release hooks. An explicit `.ts` configuration path wins; otherwise Breakage loads `breakage.config.ts`. Public release-policy checks read the package manifest at the selected baseline, but do not require peer representatives or a release-management vendor. JSON configuration is removed.
 
 The npm implementation lives behind the central CLI's `npm` namespace. It is package scoped, and does not orchestrate repository releases. A plugin framework is deferred.
 
@@ -36,10 +36,10 @@ Exit statuses are 0 for successful requested work (including approved support ch
 
 ## Configuration
 
-`breakage.config.ts` exports an object with an `npm` property typed as `NpmConfig`. Existing public options may coexist at the top level. Paths in npm configuration resolve relative to `packageDirectory`, which defaults to the configuration file's directory. Programmatic `npmCheck` and `npmTest` take the same config and a base directory. JSON supports the data-only subset; executable release hooks require TypeScript. Node must support native erasable TypeScript when loading `.ts` configurations.
+`breakage.config.ts` exports an object with an `npm` property typed as `NpmConfig`. Existing public options may coexist at the top level. Paths in npm configuration resolve relative to `packageDirectory`, which defaults to the configuration file's directory. Programmatic `npmCheck` and `npmTest` take the same config and a base directory. Configuration is TypeScript-only. Test, preparation, and installation commands are shell strings; information-producing release hooks are functions. Node must support native erasable TypeScript when loading `.ts` configurations.
 
 ```ts
-import type { NpmConfig } from "breakage"
+import { semverPolicy, type NpmConfig } from "breakage"
 
 export default {
 	npm: {
@@ -65,7 +65,7 @@ export default {
 				// Inspect the release plan. Return an exact version or undefined; throw on errors.
 				return undefined
 			},
-			policy: { beforeV1: "minor" },
+			policy: semverPolicy({ beforeV1: "minor" }),
 		},
 	} satisfies NpmConfig,
 }
@@ -128,7 +128,7 @@ A prerelease can cover only its exact explicitly declared alternative; it cannot
 
 ## Release intent and support changes
 
-`release.version` is an exact version string or a resolver receiving `{ packageName, packageDirectory, currentVersion }` and returning a version or `undefined`. Omitted `version` uses the package manifest when `release` is configured. Exceptions and invalid evidence are setup errors. The intended version must be at least the current version. The optional `changesetsRelease()` resolver supplies planned versions before versioning and manifest versions afterward. Candidate representatives require a version for every named local peer. Candidate peers may be omitted from frozen dependencies, so preparation never needs an unpublished registry version. Any declared pin for a candidate must match its intended version. Results remain conditional on publication; publication order remains repository policy.
+`release.version` is a resolver receiving `{ packageName, packageDirectory, currentVersion }` and returning a version or `undefined`. Omitted `version` uses the package manifest when `release` is configured. Exceptions and invalid evidence are setup errors. The intended version must be at least the current version. The optional `changesetsRelease()` resolver supplies planned versions before versioning and manifest versions afterward. Candidate representatives require a version for every named local peer. Candidate peers may be omitted from frozen dependencies, so preparation never needs an unpublished registry version. Any declared pin for a candidate must match its intended version. Results remain conditional on publication; publication order remains repository policy.
 
 Both `npm check` modes inspect release intent for every currently declared peer registered in `localPeers`, including optional peers, even when no candidate representative names it. Verify the registered package identity and inspect each package's release intent once per invocation, sharing evidence and failures with candidate preparation and support approval. A registration retained only for historical baseline resolution creates no current obligation after the peer declaration is removed. A local peer with no release intent creates no new obligation; inspection failures and invalid evidence fail setup.
 
@@ -140,7 +140,7 @@ For example, a local core whose manifest still says `0.53.3` but whose version r
 
 The previous release manifest comes from the latest matching Git release tag, or an existing validated core `baselineFile`. Missing or invalid baseline evidence is an error. A first publication must explicitly declare `baseline: { firstRelease: true }`; no baseline failure silently becomes bootstrap success.
 
-When support narrows, resolve the package's own release version and compare it with the previous release using `versionDelta`. `release.policy` accepts a function over `{ previousVersion, version, delta }` or `{ beforeV1: "major" | "minor" | "patch" }`. Major increments permit breaks by default; `beforeV1: "minor"` also permits pre-1.0 minor increments. Equal and older versions never permit breaks. A breaking delta produces support status `breaking-release` and full version evidence. Missing evidence leaves the change unapproved; inspection or policy failures are setup errors. Support changes are checked across all declared peers, even without configured suites. Top-level `release` is shared through `defineConfig` unless `npm.release` overrides it. The old `releaseIntent` and `certifyBreaking` hooks are removed.
+When support narrows, resolve the package's own release version and compare it with the previous release using `versionDelta`. `release.policy` is a function over `{ previousVersion, version, delta }`; `semverPolicy({ beforeV1: "major" | "minor" | "patch" })` constructs the standard policy. Major increments permit breaks by default; `beforeV1: "minor"` also permits pre-1.0 minor increments. Equal and older versions never permit breaks. A breaking delta produces support status `breaking-release` and full version evidence. Missing evidence leaves the change unapproved; inspection or policy failures are setup errors. Support changes are checked across all declared peers, even without configured suites. Top-level `release` is shared through `defineConfig` unless `npm.release` overrides it. The old `releaseIntent` and `certifyBreaking` hooks are removed.
 
 ## Task inputs and deferred work
 

@@ -7,11 +7,12 @@ import { breakage, breakagePrelude } from "breakage-supervisor"
 
 import { changesetsRelease } from "../packages/breakage/src/changesets.ts"
 import {
+	semverPolicy,
 	versionDelta,
 	type VersionDelta,
 } from "../packages/breakage/src/release.ts"
 import manifest from "../packages/breakage/package.json" with { type: "json" }
-import configuration from "../breakage.config.json" with { type: "json" }
+import configuration from "../breakage.config.ts"
 
 // These releases predate the consumer suite. Never allow arbitrary missing tests.
 const bootstrapReleases = new Map([
@@ -86,7 +87,11 @@ if (import.meta.main) {
 			commit: baseline.commit,
 		},
 	})
-	const release = versionDelta(previous.version, version, { beforeV1: `minor` })
+	const release = versionDelta(
+		previous.version,
+		version,
+		semverPolicy({ beforeV1: `minor` }),
+	)
 	console.log(
 		`Release intent: ${release.previousVersion} → ${release.version} (${release.delta})`,
 	)

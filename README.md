@@ -2,7 +2,7 @@
 
 Run yesterday’s tests against tomorrow’s release.
 
-Breakage runs the public tests from your latest release against your current implementation to detect breaking changes before you ship them. A shared TypeScript release model acknowledges intentional breaks by comparing intended versions with the released baseline, including before and after Changesets versioning. JSON config and shell commands remain supported.
+Breakage runs the public tests from your latest release against your current implementation to detect breaking changes before you ship them. A shared TypeScript release model acknowledges intentional breaks by comparing intended versions with the released baseline, including before and after Changesets versioning. Configuration is TypeScript-only, with function release hooks and string test commands.
 
 ```sh
 npx breakage \
@@ -37,6 +37,8 @@ The publishable package lives in `packages/breakage`. The private root contains 
 **Baseline bootstrap:** releases 0.8.1, 0.8.2, and 0.8.3 predate these contracts. Only their exact recorded tag/commit pairs may finish with a `BOOTSTRAP ONLY` notice and CI job summary saying historical compatibility was not established. The patch changeset accompanying this suite creates the first release baseline when published. From that release onward, a missing suite fails; missing tags, discovery errors, dirty checkouts, and other inconclusive results also fail. The bootstrap exception is never a compatibility claim. Remove the three-entry allowlist after the first contract-bearing release is published. The pinned supervisor's legacy hook stays disabled in its adapter. Before replay, the gate resolves the candidate's Changesets version (or versioned manifest) and compares it with the exact baseline manifest using `beforeV1: "minor"`. A breaking delta permits released contract failures with an explicit notice that compatibility was not established; it cannot turn missing baselines, missing tests, or inconclusive checks into success.
 
 The supervisor dependency is deliberately pinned independently of the candidate and excluded from automatic Renovate updates. Review supervisor upgrades separately, retaining the bootstrap policy and validating historical replay and restoration.
+
+`pnpm test:breakage:npm` builds and packs Breakage, then runs its own `npm check` against locked Changesets CLI 3.0.0 and 3.0.3 environments. Both pin the five direct peers at their currently advertised minimum versions, which are also the current releases. Contracts exercise the packed helpers, dependency propagation, prerelease state, real versioning, and malformed configuration. A separate packed consumer verifies core imports, CLI help, and TypeScript configuration without any Changesets peers. CI requires these checks in the Package job. The environments are authored explicitly; there is no workflow matrix generation.
 
 ## Releases
 

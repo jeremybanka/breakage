@@ -1,3 +1,4 @@
+import { semverPolicy } from "breakage"
 import { execFileSync } from "node:child_process"
 import { existsSync, linkSync, readFileSync } from "node:fs"
 import path from "node:path"
@@ -51,7 +52,7 @@ describe(`npm environment safety`, () => {
 			)
 			const originalArchive = readFileSync(archive)
 			f.config.installCommand += ` && rm node_modules/host/package.json && ln ../../../.cache/host-manifest.json node_modules/host/package.json`
-			f.config.release = { version }
+			f.config.release = { version: () => version }
 			f.copy(`contracts/check-manifest-storage.ts`, `contracts/check.ts`)
 			f.config.suites.host!.command = `node contracts/check.ts ${version}`
 			const result = await npmTest(
@@ -298,7 +299,7 @@ describe(`npm environment safety`, () => {
 			version: ({ packageName }) =>
 				packageName === `integration` ? `0.6.0` : undefined,
 		}
-		f.config.release!.policy = { beforeV1: `minor` }
+		f.config.release!.policy = semverPolicy({ beforeV1: `minor` })
 		const result = await npmCheck(f.config, {
 			baseDirectory: f.directory,
 			coverageOnly: true,

@@ -51,6 +51,9 @@ jobs:
         working-directory: packages/breakage
         run: pnpm pack --pack-destination /tmp
 
+      - name: Check Changesets peer environments and optional installation
+        run: pnpm run test:breakage:npm
+
   Tests:
     if: ${{ always() }}
     needs: [TestShards, Package]

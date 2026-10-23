@@ -163,7 +163,7 @@ it.each([false, true])(
 			await breakage({
 				...options,
 				testCommand: `exit 1`,
-				release: { version: breakingRelease ? `2.0.0` : `1.0.0` },
+				release: { version: () => (breakingRelease ? `2.0.0` : `1.0.0`) },
 			}),
 		).toMatchObject({
 			breakingChangesFound: true,
@@ -283,8 +283,17 @@ it.each([
 
 it(`supports explicit config paths, base directories, and the baseline-file CLI alias`, async () => {
 	const entrypoint = path.resolve(import.meta.dirname, `../dist/breakage.x.js`)
-	const config = path.join(directory, `check.json`)
-	await writeFile(config, JSON.stringify(options))
+	const config = path.join(directory, `check.ts`)
+	await writeFile(
+		config,
+		await readFile(
+			new URL(`./fixtures/config/breakage.config.ts`, import.meta.url),
+		),
+	)
+	await writeFile(
+		path.join(directory, `config-data.json`),
+		JSON.stringify({ options }),
+	)
 	function cli(args: string[]) {
 		const result = Bun.spawnSync([`node`, entrypoint, ...args], {
 			cwd: directory,
@@ -349,8 +358,14 @@ it(`keeps package snapshots separate and supports parallel pinned checks`, async
 it(`discovers a minimal default config for prelude without requiring check commands`, async () => {
 	const entrypoint = path.resolve(import.meta.dirname, `../dist/breakage.x.js`)
 	await writeFile(
-		path.join(repository, `breakage.config.json`),
-		JSON.stringify({ tagPattern: options.tagPattern }),
+		path.join(repository, `config-data.json`),
+		JSON.stringify({ options: { tagPattern: options.tagPattern } }),
+	)
+	await writeFile(
+		path.join(repository, `breakage.config.ts`),
+		await readFile(
+			new URL(`./fixtures/config/breakage.config.ts`, import.meta.url),
+		),
 	)
 	await simpleGit(repository).add(`.`).commit(`Default config`)
 	const result = Bun.spawnSync([`node`, entrypoint, `prelude`], {
@@ -402,12 +417,20 @@ it(`runs a fresh prelude on Turbo cache hits and misses on new releases and move
 		}),
 	)
 	await writeFile(
-		path.join(repository, `breakage.config.json`),
+		path.join(repository, `config-data.json`),
 		JSON.stringify({
-			...options,
-			baseDirname: `.`,
-			testCommand: `cat tests/public.txt > .breakage/observed.txt; grep -q '^released-' tests/public.txt`,
+			options: {
+				...options,
+				baseDirname: `.`,
+				testCommand: `cat tests/public.txt > .breakage/observed.txt; grep -q '^released-' tests/public.txt`,
+			},
 		}),
+	)
+	await writeFile(
+		path.join(repository, `breakage.config.ts`),
+		await readFile(
+			new URL(`./fixtures/config/breakage.config.ts`, import.meta.url),
+		),
 	)
 	await simpleGit(repository).add(`.`).commit(`Turbo fixture`)
 	function runTurbo() {

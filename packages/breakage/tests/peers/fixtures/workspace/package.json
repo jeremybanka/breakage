@@ -1,0 +1,8 @@
+{
+	"name": "changesets-contract",
+	"private": true,
+	"type": "module",
+	"workspaces": [
+		"packages/*"
+	]
+}

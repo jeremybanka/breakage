@@ -1,5 +1,3 @@
-import path from "node:path"
-
 import { afterEach, expect, it } from "bun:test"
 import { defineConfig, npmCheck, semverPolicy } from "breakage"
 
@@ -63,40 +61,13 @@ it.each([
 	30_000,
 )
 
-it(`runs inline npm preparation and suites in their own directories and preserves failures`, async () => {
+it(`preserves shell suite failures despite a breaking release`, async () => {
 	const f = (fixture = npmFixture())
 	delete f.config.localPeers
 	f.representative(`one`, `1.0.0`)
 	f.representative(`two`, `2.0.0`)
 	f.baseline({ host: `^1 || ^2 || ^3` })
-	f.config.release = { version: `2.0.0` }
-	const prepare = f.config.prepareCommand
-	const install = f.config.installCommand!
-	const suite = f.config.suites.host!.command
-	if (
-		typeof prepare !== `string` ||
-		typeof install !== `string` ||
-		typeof suite !== `string`
-	)
-		throw new Error(`Expected fixture commands.`)
-	const calls: string[] = []
-	const originalCwd = process.cwd()
-	f.config.prepareCommand = async ({ cwd, run }) => {
-		expect(path.basename(path.dirname(cwd))).toBe(`peer-environments`)
-		calls.push(`prepare`)
-		return await run(prepare)
-	}
-	f.config.installCommand = async ({ cwd, run }) => {
-		expect(path.basename(cwd)).toBe(`test`)
-		calls.push(`install`)
-		return await run(install)
-	}
-	f.config.suites.host!.command = async ({ cwd, run }) => {
-		expect(path.basename(cwd)).toBe(`test`)
-		expect(process.cwd()).toBe(originalCwd)
-		calls.push(`test`)
-		return await run(suite)
-	}
+	f.config.release = { version: () => `2.0.0` }
 	f.copy(`contracts/check-released-host-failure.ts`, `contracts/check.ts`)
 	const result = await npmCheck(f.config, { baseDirectory: f.directory })
 	expect(result.support.status).toBe(`breaking-release`)
@@ -105,9 +76,6 @@ it(`runs inline npm preparation and suites in their own directories and preserve
 		`compatibility-failure`,
 		`passed`,
 	])
-	expect(calls.filter((entry) => entry === `test`)).toHaveLength(2)
-	expect(calls).toContain(`prepare`)
-	expect(calls).toContain(`install`)
 	assertStagesRemoved(f, result)
 }, 30_000)
 

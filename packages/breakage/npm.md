@@ -122,14 +122,15 @@ Create a separate representative that explicitly names candidate peers. Leave an
 }
 ```
 
-Set `release.version` to a string or a synchronous/asynchronous resolver receiving `packageName`, `packageDirectory`, and `currentVersion`. For Changesets, use the optional helper:
+Set `release.version` to a synchronous/asynchronous resolver receiving `packageName`, `packageDirectory`, and `currentVersion`. For Changesets, use the optional helper:
 
 ```ts
 import { changesetsRelease } from "breakage/changesets"
+import { semverPolicy } from "breakage"
 
 const release = {
 	version: changesetsRelease(),
-	policy: { beforeV1: "minor" as const },
+	policy: semverPolicy({ beforeV1: "minor" }),
 }
 ```
 
@@ -157,7 +158,7 @@ import { changesetsRelease } from "breakage/changesets"
 
 export default defineConfig({
 	testPattern: "tests/public/**/*",
-	test: ({ run }) => run("npm run test:public"),
+	test: "npm run test:public",
 	release: {
 		version: changesetsRelease(),
 		policy: semverPolicy({ beforeV1: "minor" }),
@@ -166,12 +167,11 @@ export default defineConfig({
 		artifact: "artifacts/integration.tgz",
 		representatives: "peer-environments/*",
 		lockfile: "package-lock.json",
-		prepareCommand: ({ run }) =>
-			run("npm ci --ignore-scripts --workspaces=false"),
+		prepareCommand: "npm ci --ignore-scripts --workspaces=false",
 		suites: {
 			"atom.io": {
 				files: ["contracts/core/**/*.ts"],
-				command: ({ run }) => run("node --test contracts/core/*.test.ts"),
+				command: "node --test contracts/core/*.test.ts",
 			},
 		},
 		baseline: { tagPattern: "refs/tags/my-integration@" },
@@ -183,9 +183,9 @@ export default defineConfig({
 
 `npm.release.version` replaces `releaseIntent` and returns an exact version or `undefined`. The resolver is evaluated once per package per npm invocation. The integration's version is compared with its historical manifest to decide whether support may be dropped; a local peer's version supplies candidate identity and the existing coordination obligations. `changesetsRelease()` returns planned versions before Changesets versioning and manifest versions afterward. Because this fallback also supplies the current version for an unchanged registered local peer, using it opts those peers into candidate coverage too. A custom resolver can return `undefined` for packages that should have no local release intent. See the [release configuration guide](README.md#typescript-configuration-and-release-intent) for optional Changesets dependencies and standalone helpers.
 
-`npm.release.policy` replaces `certifyBreaking`. The default requires a major increment; `semverPolicy({ beforeV1: "minor" })` permits pre-1.0 minor increments too. Missing evidence or a compatible version delta leaves a support drop unapproved. Invalid evidence and resolver/policy errors fail setup. Compatibility failures against still-declared peers remain failures even when the integration has a breaking release. The old `releaseIntent` and `certifyBreaking` hooks are removed and fail with migration guidance. JSON can use `release.policy: { "beforeV1": "minor" }`; function policies receive `{ previousVersion, version, delta }`.
+`npm.release.policy` replaces `certifyBreaking`. The default requires a major increment; `semverPolicy({ beforeV1: "minor" })` permits pre-1.0 minor increments too. Missing evidence or a compatible version delta leaves a support drop unapproved. Invalid evidence and resolver/policy errors fail setup. Compatibility failures against still-declared peers remain failures even when the integration has a breaking release. The old `releaseIntent` and `certifyBreaking` hooks are removed and fail with migration guidance. Policies must be functions and receive `{ previousVersion, version, delta }`.
 
-`prepareCommand`, `installCommand`, and each suite's `command` accept strings or functions receiving `{ cwd, run }`. Preparation runs in the representative directory; installation and suites run in its disposable `test/` directory. Return `run(command)` to preserve exit status and captured output. Returning nothing succeeds; throwing fails setup. All nonzero preparation/installation results fail setup; suite exit 1 denotes incompatibility and other nonzero exits denote setup failure. The process working directory is never changed. Existing frozen-input, artifact, resolution, and cleanup checks surround function tasks just as they surround shell commands.
+`prepareCommand`, `installCommand`, and each suite's `command` are nonempty shell strings. Preparation runs in the representative directory; installation and suites run in its disposable `test/` directory. Breakage captures stdout and stderr for reporting. All nonzero preparation/installation results fail setup; suite exit 1 denotes incompatibility and other nonzero exits denote setup failure. Functions are reserved for the release-version resolver and policy.
 
 ## Removing support
 

@@ -24,11 +24,6 @@ import { breakage, breakagePrelude } from "./breakage.ts"
 import { errorMessage } from "./task.ts"
 import { npmCheckManual, npmTestManual, runNpmCli } from "./npm/cli.ts"
 
-const releaseSchema = type({
-	"version?": "string",
-	"policy?": { "beforeV1?": '"major" | "minor" | "patch"' },
-})
-
 const BREAKAGE_MANUAL = options(
 	`Check for breaking changes in a package.`,
 	type({
@@ -37,7 +32,6 @@ const BREAKAGE_MANUAL = options(
 		"testPattern?": `string`,
 		"testCommand?": `string`,
 		"test?": `string`,
-		"release?": releaseSchema,
 		"baseDirname?": `string`,
 		"verbose?": `boolean`,
 	}),
@@ -79,13 +73,6 @@ const BREAKAGE_MANUAL = options(
 			description: `Shell command running the restored public contracts.`,
 			example: `--test="npm run test:public"`,
 		},
-		release: {
-			completion: { repeatable: false },
-			required: false,
-			description: `Release version and policy as JSON; omitted version uses the package manifest.`,
-			example: `--release='{"policy":{"beforeV1":"minor"}}'`,
-			parse: (input) => releaseSchema.assert(JSON.parse(input)),
-		},
 		baseDirname: {
 			aliases: [`base-dir`, `base-dirname`],
 			completion: { repeatable: false, fileSystem: `directories` },
@@ -114,7 +101,6 @@ const PRELUDE_MANUAL = options(
 		"testPattern?": `string`,
 		"testCommand?": `string`,
 		"test?": `string`,
-		"release?": releaseSchema,
 		"baselineFile?": `string`,
 		"verbose?": `boolean`,
 	}),
@@ -137,27 +123,11 @@ const PRELUDE_MANUAL = options(
 	},
 )
 
-const SCHEMA_MANUAL = options(
-	`Create a copy of the schema for configuring breakage.`,
-	type({ "outdir?": `string` }),
-	{
-		outdir: {
-			aliases: [`out-dir`],
-			completion: { repeatable: false, fileSystem: `directories` },
-			flag: `o`,
-			required: false,
-			description: `Directory to write the schema to.`,
-			example: `--outdir=./dist`,
-		},
-	},
-)
-
 const parse = cli(
 	{
 		cliName: `breakage`,
 		routes: optional({
 			help: null,
-			schema: null,
 			npm: optional({
 				help: null,
 				check: null,
@@ -170,7 +140,6 @@ const parse = cli(
 			"": BREAKAGE_MANUAL,
 			$configPath: BREAKAGE_MANUAL,
 			help: noOptions(`Show usage.`),
-			schema: SCHEMA_MANUAL,
 			npm: noOptions(`Show npm compatibility commands.`),
 			"npm/help": noOptions(`Show npm compatibility commands.`),
 			"npm/check": npmCheckManual,
@@ -195,7 +164,7 @@ if (completion !== undefined) {
 	process.stdout.write(completion)
 } else {
 	try {
-		const { inputs, warnings, writeJsonSchema } = parse(process.argv)
+		const { inputs, warnings } = parse(process.argv)
 		logWarnings(warnings)
 		if (
 			process.argv
@@ -206,6 +175,10 @@ if (completion !== undefined) {
 		)
 			throw new Error(
 				`certifyCommand was removed. Configure release.version and release.policy instead.`,
+			)
+		if (process.argv.slice(2).some((arg) => /^--release(?:=|$)/.test(arg)))
+			throw new Error(
+				`--release was removed. Define release hooks in breakage.config.ts.`,
 			)
 		switch (inputs.case) {
 			case `npm`:
@@ -221,13 +194,6 @@ if (completion !== undefined) {
 				break
 			case `npm/test/$peer/$range`:
 				process.exitCode = await runNpmCli(`test`, inputs.opts, inputs.params)
-				break
-			case `schema`:
-				{
-					const { outdir } = inputs.opts
-					writeJsonSchema(outdir ?? `.`)
-					process.stdout.write(`📝 Wrote json.schema.`)
-				}
 				break
 			case `prelude`:
 			case `prelude/$configPath`: {

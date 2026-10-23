@@ -18,7 +18,7 @@ type TestOptions = CommonOptions & { representative?: string | undefined }
 const common = {
 	config: {
 		required: false,
-		description: `Configuration file (defaults to breakage.config.ts, then .json).`,
+		description: `Configuration file (defaults to breakage.config.ts).`,
 		example: `--config ./breakage.config.ts`,
 		completion: { fileSystem: `files` as const, repeatable: false },
 	},

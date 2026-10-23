@@ -6,7 +6,6 @@ import type { Chronicle } from "takua"
 import logger from "takua"
 
 import { command, errorMessage } from "./task.ts"
-import type { Task, TaskContext } from "./task.ts"
 import { readManifest, parseManifest } from "./npm/manifest.ts"
 import {
 	resolveReleaseVersion,
@@ -32,11 +31,7 @@ export type {
 	ReleaseVersionContext,
 	VersionDelta,
 } from "./release.ts"
-export type { Task, TaskContext, CommandResult } from "./task.ts"
-
-export type PublicTestContext = TaskContext & {
-	baseline: { ref: string; commit: string }
-}
+export type { CommandResult } from "./task.ts"
 
 export type { BreakageBaseline, BreakagePreludeOptions } from "./baseline.ts"
 export { breakagePrelude } from "./baseline.ts"
@@ -57,8 +52,8 @@ export type BreakageOptions = {
 	baselineFile?: string | undefined
 	testPattern: string
 	testCommand?: string
-	/** String command or inline task. Do not combine with testCommand. */
-	test?: Task<PublicTestContext>
+	/** Shell command. Do not combine with testCommand. */
+	test?: string
 	release?: ReleaseConfig
 	baseDirname?: string
 	verbose?: boolean | undefined
@@ -117,6 +112,11 @@ export async function breakage(
 		)
 	if (test !== undefined && testCommand !== undefined)
 		throw new Error(`Choose test or testCommand, not both.`)
+	if (
+		typeof (test ?? testCommand) !== `string` ||
+		!(test ?? testCommand)!.trim()
+	)
+		throw new Error(`test must be a nonempty shell command string.`)
 	if (release !== undefined) validateRelease(release)
 	let mark: Chronicle[`mark`] | undefined
 	let logMarks: Chronicle[`logMarks`] | undefined
@@ -268,11 +268,7 @@ export async function breakage(
 	const { restore } = prepared
 
 	try {
-		const result = await command(test ?? testCommand!, baseDirname, {
-			cwd: path.resolve(baseDirname),
-			baseline: { ref: latestReleaseTag, commit: releaseCommit },
-			run: (line: string) => command(line, baseDirname),
-		})
+		const result = await command(test ?? testCommand!, baseDirname)
 		if (result.code > 1)
 			return {
 				gitWasClean: true,

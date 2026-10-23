@@ -2,30 +2,31 @@
 
 Run these commands from the repository root with `pnpm run <command>`. `mise.toml` pins Node.js and pnpm and adds the root's `node_modules/.bin` to `PATH`.
 
-| Command            | Contract                                                                     |
-| ------------------ | ---------------------------------------------------------------------------- |
-| `fmt`              | Apply the repository formatting policy.                                      |
-| `check`            | Run all `check:*` validators.                                                |
-| `check:fmt`        | Check formatting with dprint.                                                |
-| `check:vp`         | Build workspace packages, then run Vite Plus linting and TypeScript checks.  |
-| `check:spelling`   | Check spelling with CSpell.                                                  |
-| `test`             | Build the package, prepare its fixtures, and run all current Bun tests once. |
-| `test:prepare`     | Run workspace-owned fixture preparation tasks.                               |
-| `test:public`      | Run current public consumer contracts against source once.                   |
-| `test:breakage`    | Replay released public contracts with the pinned supervisor.                 |
-| `test:watch`       | Run all current Bun tests in watch mode.                                     |
-| `build`            | Run workspace package build scripts when available.                          |
-| `change`           | Author pending release notes for publishable packages.                       |
-| `release:version`  | Prepare package versions and release metadata.                               |
-| `release:publish`  | Build Breakage and publish through Changesets.                               |
-| `staged`           | Format and check staged files.                                               |
-| `workflows:update` | Update pinned workflow action references and mise.                           |
+| Command             | Contract                                                                                     |
+| ------------------- | -------------------------------------------------------------------------------------------- |
+| `fmt`               | Apply the repository formatting policy.                                                      |
+| `check`             | Run all `check:*` validators.                                                                |
+| `check:fmt`         | Check formatting with dprint.                                                                |
+| `check:vp`          | Build workspace packages, then run Vite Plus linting and TypeScript checks.                  |
+| `check:spelling`    | Check spelling with CSpell.                                                                  |
+| `test`              | Build the package, prepare its fixtures, and run all current Bun tests once.                 |
+| `test:prepare`      | Run workspace-owned fixture preparation tasks.                                               |
+| `test:public`       | Run current public consumer contracts against source once.                                   |
+| `test:breakage:npm` | Test the packed package in authored Changesets peer environments and without optional peers. |
+| `test:breakage`     | Replay released public contracts with the pinned supervisor.                                 |
+| `test:watch`        | Run all current Bun tests in watch mode.                                                     |
+| `build`             | Run workspace package build scripts when available.                                          |
+| `change`            | Author pending release notes for publishable packages.                                       |
+| `release:version`   | Prepare package versions and release metadata.                                               |
+| `release:publish`   | Build Breakage and publish through Changesets.                                               |
+| `staged`            | Format and check staged files.                                                               |
+| `workflows:update`  | Update pinned workflow action references and mise.                                           |
 
 Vite Plus enables type-aware linting and TypeScript checking. Formatting is handled separately by dprint. Add package-specific checks as needed and include them in `check` and CI.
 
 Root workspace commands dispatch through `vp run -r <name>`. Each package owns its commands and prerequisites. Package scripts delegate to Vite Plus tasks with a `:run` suffix when they need dependency ordering: `check:vp` calls `check:vp:run`, and `test` calls `test:run`. The separate names let package scripts remain callable through pnpm without colliding with Vite Plus task definitions.
 
-The root `check:vp:run` task depends on the workspace build before running Vite Plus linting and typechecking. Packages emit JavaScript and declarations with `vp pack`; Breakage also generates its configuration schemas. Fixture packages share one build configuration, which builds upstream packages first without per-fixture tsconfigs. The root TypeScript configuration covers all fixture sources, configuration, and contracts; authoring checks resolve package exports through their built declarations. Breakage retains its own TypeScript configuration for core compiler settings and its source alias.
+The root `check:vp:run` task depends on the workspace build before running Vite Plus linting and typechecking. Packages emit JavaScript and declarations with `vp pack`. Breakage configuration is a TypeScript module; there is no JSON schema generation. Fixture packages share one build configuration, which builds upstream packages first without per-fixture tsconfigs. The root TypeScript configuration covers all fixture sources, configuration, and contracts; authoring checks resolve package exports through their built declarations. Breakage retains its own TypeScript configuration for core compiler settings and its source alias.
 
 Breakage's build configuration lives in its package's `vite.config.ts`. Release publishing and the CI packaging job target `vp run breakage#build`, so they build only the publishable package. Repository builds and validation still include every fixture package.
 

@@ -24,13 +24,13 @@ Identify the public tests with a glob pattern and provide a command that runs th
 
 ## help
 
-Run `breakage help` to show usage for the CLI, including the check options, `prelude`, and `schema` commands. Like `schema`, the `help` command skips configuration discovery; it works without required check options and even when `breakage.config.json` is malformed. It does not run checks or write schema files.
+Run `breakage help` to show usage for the CLI, including the check options, `prelude`, and npm commands. The `help` command skips configuration discovery; it works without required check options and even when `breakage.config.ts` is malformed. It does not run checks.
 
-Use `breakage help` instead of the former `--help` or `-h` options. Configuration no longer controls help. The empty route and a configuration path still run checks; if your configuration file is named `help` or `prelude`, pass an explicit path such as `./help` to select it explicitly.
+Use `breakage help` instead of the former `--help` or `-h` options. Configuration no longer controls help. The empty route and an explicit `.ts` configuration path run checks.
 
 ## TypeScript configuration and release intent
 
-Create `breakage.config.ts` with a default export. Public checks, `prelude`, and npm checks prefer this file over `breakage.config.json`; explicit configuration paths still work. Running TypeScript configuration on Node requires native erasable TypeScript support (Node 22.18 or newer). TypeScript functions let setup and test logic live alongside its configuration.
+Create `breakage.config.ts` with a default export. Public checks, `prelude`, and npm checks load this file by default; explicit `.ts` configuration paths still work. JSON configuration is no longer supported. Running TypeScript configuration on Node requires native erasable TypeScript support (Node 22.18 or newer). Information-producing hooks are functions, while tests and setup commands remain shell strings.
 
 ```ts
 import { defineConfig, semverPolicy } from "breakage"
@@ -39,7 +39,7 @@ import { changesetsRelease } from "breakage/changesets"
 export default defineConfig({
 	tagPattern: "refs/tags/my-library@",
 	testPattern: "tests/public/**/*",
-	test: ({ run }) => run("npm run test:public"),
+	test: "npm run test:public",
 	release: {
 		version: changesetsRelease(),
 		policy: semverPolicy({ beforeV1: "minor" }),
@@ -47,7 +47,7 @@ export default defineConfig({
 })
 ```
 
-`release.version` supplies the package's intended version. It can be an exact version string or a synchronous/asynchronous function receiving `packageName`, `packageDirectory`, and `currentVersion`. Public checks also supply `baseline: { version, ref, commit }` from the exact commit selected for replay. Omit `version` to use the current manifest, or return `undefined` to supply no release evidence. Invalid versions, versions older than the current manifest, and resolver errors fail setup. Release resolution happens before historical tests replace current tests.
+`release.version` supplies the package's intended version. It is a synchronous/asynchronous function returning an exact version string or `undefined` and receiving `packageName`, `packageDirectory`, and `currentVersion`. Public checks also supply `baseline: { version, ref, commit }` from the exact commit selected for replay. Omit `version` to use the current manifest, or return `undefined` to supply no release evidence. Invalid versions, versions older than the current manifest, and resolver errors fail setup. Release resolution happens before historical tests replace current tests.
 
 Breakage compares that version with the manifest at the selected release commit. For example, a pending Changesets minor release from `0.53.3` resolves to `0.54.0`. After `changeset version` removes the changeset, the manifest's `0.54.0` supplies the same evidence against the pinned `0.53.3` baseline. A patch release to `0.53.4` does not permit a break with `beforeV1: "minor"`.
 
@@ -55,22 +55,13 @@ Breakage compares that version with the manifest at the selected release commit.
 
 Use `versionDelta(previousVersion, version, policy?)` independently to obtain `{ previousVersion, version, delta, breaking }`. A custom policy receives `{ previousVersion, version, delta }` and returns a boolean; `versionDelta` calls it only for advancing versions. `resolveReleaseVersion(release, context)` is also exported for consumers that want to reuse version resolution without running a compatibility check.
 
-A `test` task may be a shell command or a function. Functions receive `cwd`, `baseline: { ref, commit }`, and `run(command)`, which executes in that directory and returns `{ code, output }`. Return that result to preserve the command's exit status. Returning nothing means success; throwing means a setup error. Exit 1 reports a compatibility failure; other nonzero exits report setup errors. A breaking release can permit compatibility failures, but cannot permit setup errors. Runners that use exit 1 for infrastructure failures need a wrapper that distinguishes those failures. Breakage does not change the process working directory for callbacks.
+`test` is a nonempty shell-command string. Breakage runs it in the configured directory and captures stdout and stderr as diagnostics. Exit 0 succeeds, exit 1 reports incompatibility, and other nonzero exits or process failures report setup errors. A breaking release can permit incompatibility, but cannot permit setup errors. Runners using exit 1 for infrastructure failures need a wrapper that distinguishes those failures. Test functions are rejected; there is no implicit-success return convention. `testCommand` remains a string alias; configure only one.
+
+`release.version` and `release.policy` are functions whose return values carry evidence and decisions; stdout is never parsed as release information. `semverPolicy({ beforeV1: "minor" })` creates a policy function. If a resolver invokes an external program, it owns parsing and validating that program's output.
 
 Relative `baseDirname` values resolve from the configuration file's directory, which is also the default base directory when loading a config. CLI `--base-dir` values resolve from the caller's directory. CLI options override config fields, including `--test-command` overriding `test`. Test patterns, `baselineFile`, and prelude `out` are relative to the resulting base directory. Imports and additional filesystem work in callbacks should use `import.meta.url` or the supplied directory rather than assuming a process working directory.
 
-JSON configurations and shell-command strings remain supported. `testCommand` remains a string alias for `test`; configure only one. Both use the same executor and release model. `release.policy` accepts `{ "beforeV1": "minor" }` as a data-only equivalent of `semverPolicy({ beforeV1: "minor" })`. Generated public-check schemas include `test`, `testCommand`, and `release`; TypeScript types describe function configuration. For example, after versioning has updated your manifest:
-
-```json
-{
-	"tagPattern": "refs/tags/my-library@",
-	"testPattern": "tests/public/**/*",
-	"test": "npm run test:public",
-	"release": { "policy": { "beforeV1": "minor" } }
-}
-```
-
-Before versioning, JSON can supply an exact `release.version`; TypeScript can resolve it dynamically from Changesets. Omitting `release` leaves detected breaks unapproved. See [migration to the release model](#migration-to-the-release-model) for removed certification hooks.
+Omitting `release` leaves detected breaks unapproved. Configure `release: { policy: semverPolicy({ beforeV1: "minor" }) }` to use a versioned manifest without a custom resolver. See [migration to the release model](#migration-to-the-release-model) for removed certification hooks and JSON configuration.
 
 ### Optional Changesets helpers
 
@@ -84,7 +75,7 @@ npm install --save-dev @changesets/assemble-release-plan@^7 @changesets/config@^
 
 The main `breakage` export and commands do not import these dependencies. You can compose the plan reader with your own version resolver or use the core release model with any other release process.
 
-`defineConfig` shares a top-level `release` with `npm` checks unless `npm.release` is explicitly configured. Both workflows apply the same version comparison and policy to their own historical manifests. npm preparation, installation, and suite commands also accept function tasks; see the [npm guide](npm.md#shared-release-configuration).
+`defineConfig` shares a top-level `release` with `npm` checks unless `npm.release` is explicitly configured. Both workflows apply the same version comparison and policy to their own historical manifests. npm preparation, installation, and suite commands are shell strings; see the [npm guide](npm.md#shared-release-configuration).
 
 ## examples
 
@@ -125,7 +116,7 @@ breakage prelude --out .breakage/baseline.json
 breakage --baseline-file .breakage/baseline.json
 ```
 
-Both commands discover `breakage.config.ts` before `breakage.config.json` and accept the same `--tag-pattern` and `--base-dir` options. An explicit configuration path works as `breakage prelude ./custom.config.json --out .breakage/baseline.json` and `breakage ./custom.config.json --baseline-file .breakage/baseline.json`. The prelude does not require test or release options, and never runs tasks, resolves release versions, or builds the package. Existing full check configurations can be reused. Output and baseline-file paths are relative to `baseDirname`, which defaults to the configuration file's directory, or the current working directory without a config. The default prelude output is `.breakage/baseline.json`.
+Both commands discover `breakage.config.ts` and accept the same `--tag-pattern` and `--base-dir` options. An explicit configuration path works as `breakage prelude ./custom.config.ts --out .breakage/baseline.json` and `breakage ./custom.config.ts --baseline-file .breakage/baseline.json`. The prelude does not require test or release options, and never runs tasks, resolves release versions, or builds the package. Existing full check configurations can be reused. Output and baseline-file paths are relative to `baseDirname`, which defaults to the configuration file's directory, or the current working directory without a config. The default prelude output is `.breakage/baseline.json`.
 
 The versioned JSON snapshot contains the selected tag ref, its resolved commit SHA, the tag pattern, and the package directory relative to the repository root. Annotated tags are peeled to commits. Contents are deterministic and written atomically, with no timestamp or nonce. Fetching uses the SHA from discovery rather than a mutable tag name. An unchanged baseline produces identical snapshot bytes; a newer release or a moved tag targeting another commit changes them. A failed discovery, fetch, or write fails the prelude and removes an older snapshot at the validated output path.
 
@@ -206,11 +197,11 @@ Released assertions need trustworthy readers. If today's writer and today's obse
 
 Mondrian publishes its independent inspection tools through its testing entrypoint and restores their source alongside the public tests:
 
-```json
-{
-	"tagPattern": "refs/tags/mondrian\\.pdf@",
-	"testPattern": "{tests/public,src/testing/inspection}/**/*",
-	"testCommand": "pnpm test:public"
+```ts
+export default {
+	tagPattern: "refs/tags/mondrian\\.pdf@",
+	testPattern: "{tests/public,src/testing/inspection}/**/*",
+	testCommand: "pnpm test:public",
 }
 ```
 
@@ -267,7 +258,7 @@ If a process is forcibly interrupted or restoration fails, breakage retains reco
 
 ## options
 
-The optional [`breakage npm` command family](./npm.md) checks peer compatibility and end-of-support changes for npm packages. Its representatives and packed candidates apply only to that namespace; the release model is shared with public checks. The ordinary public check retains the adoption conditions and behavior described above. Both commands can use `breakage.config.ts`; default discovery prefers it over `breakage.config.json`, and an explicit configuration path wins. TypeScript configuration uses the runtime's native support for erasable TypeScript.
+The optional [`breakage npm` command family](./npm.md) checks peer compatibility and end-of-support changes for npm packages. Its representatives and packed candidates apply only to that namespace; the release model is shared with public checks. The ordinary public check retains the adoption conditions and behavior described above. Both commands can use `breakage.config.ts`; default discovery uses it, and an explicit `.ts` configuration path wins. TypeScript configuration uses the runtime's native support for erasable TypeScript.
 
 | Check option     | Shorthand | Required           | Purpose                                           |
 | ---------------- | --------- | ------------------ | ------------------------------------------------- |
@@ -275,37 +266,35 @@ The optional [`breakage npm` command family](./npm.md) checks peer compatibility
 | `--testPattern`  | `-p`      | Yes                | Glob selecting released public tests and helpers. |
 | `--testCommand`  | `-t`      | Either task option | Shell alias for `test`.                           |
 | `--test`         |           | Either task option | Command running the restored public contracts.    |
-| `--release`      |           |                    | JSON release version and policy.                  |
 | `--baseDirname`  | `-d`      |                    | Working directory for Git and commands.           |
 | `--baselineFile` |           |                    | Prelude snapshot pinning the release commit.      |
 | `--verbose`      | `-v`      |                    | Print timing information for the check.           |
 
-`prelude --out` sets its gitignored snapshot path. `schema --outdir` sets the schema output directory. Run `breakage help` for the full option descriptions and examples.
+`prelude --out` sets its gitignored snapshot path. Run `breakage help` for the full option descriptions and examples.
 
 ## cli completion
 
 With `breakage` installed on PATH, run `breakage completion install bash` to install Bash completion. Replace `bash` with `zsh`, `fish`, `nushell`, or `carapace` for the other supported integrations. Installation uses the shell's existing completion setup and does not edit shell profiles; open a new shell afterward. `breakage completion bash` prints the integration for manual installation. See [Comline's shell setup requirements](https://github.com/jeremybanka/wayforge/tree/main/packages/comline#shell-integrations).
 
-Completion suggests commands, option names, config file paths, snapshot paths for `--baseline-file` and `prelude --out`, and directories for `--base-dir` and `schema --out-dir`. It works without a valid config file or required option values and does not run checks. Singleton options disappear from suggestions after use; parsing behavior is unchanged. The completion transport reserves its management and protocol command names; use an explicit path such as `./completion` for a config file whose name collides with a reserved command.
+Completion suggests commands, option names, config file paths, snapshot paths for `--baseline-file` and `prelude --out`, and directories for `--base-dir`. It works without a valid config file or required option values and does not run checks. Singleton options disappear from suggestions after use; parsing behavior is unchanged.
 
 ## cli option aliases and warnings
 
 These aliases work alongside the original option names. Removed certification options fail with migration guidance.
 
-| Original option             | Aliases                        |
-| --------------------------- | ------------------------------ |
-| `--tagPattern`              | `--tag-pattern`                |
-| `--testPattern`             | `--test-pattern`, `--pattern`  |
-| `--testCommand`             | `--test-command`               |
-| `--baseDirname`             | `--base-dir`, `--base-dirname` |
-| `--baselineFile`            | `--baseline-file`              |
-| `--outdir` (schema command) | `--out-dir`                    |
+| Original option  | Aliases                        |
+| ---------------- | ------------------------------ |
+| `--tagPattern`   | `--tag-pattern`                |
+| `--testPattern`  | `--test-pattern`, `--pattern`  |
+| `--testCommand`  | `--test-command`               |
+| `--baseDirname`  | `--base-dir`, `--base-dirname` |
+| `--baselineFile` | `--baseline-file`              |
 
 After successful parsing, breakage warns on stderr about unknown options and options that do not apply to the selected command. Warnings appear before check output is captured and do not change the command's exit status.
 
 ## migrating from break-check
 
-Breakage continues [break-check](https://github.com/jeremybanka/wayforge/tree/break-check%400.8.1/packages/break-check) in its own repository. Install `breakage`, replace the `break-check` command with `breakage`, and rename `break-check.config.json` to `breakage.config.json`. The original rename preserved configuration keys and outcomes; the release-model migration below applies when upgrading to this breaking minor release. Regenerate schemas with `breakage schema`; generated files now use the `breakage` prefix. Reinstall shell completions with `breakage completion install <shell>`.
+Breakage continues [break-check](https://github.com/jeremybanka/wayforge/tree/break-check%400.8.1/packages/break-check) in its own repository. Install `breakage`, replace the `break-check` command with `breakage`, and convert `break-check.config.json` to a default export in `breakage.config.ts`. The original rename preserved configuration keys and outcomes; the release-model migration below applies when upgrading to this breaking minor release. Reinstall shell completions with `breakage completion install <shell>`.
 
 For programmatic use, import `breakage`, `BreakageOptions`, and `BreakageOutcome` from `breakage` in place of `breakCheck`, `BreakCheckOptions`, and `BreakCheckOutcome` from `break-check`.
 
@@ -313,12 +302,13 @@ Finish active break-check runs and recover any interrupted runs before switching
 
 ## Migration to the release model
 
-This is a breaking minor release before 1.0. JSON config, shell-command strings, and the `testCommand` alias remain supported. There is one task executor and one release decision model.
+This is a breaking minor release before 1.0. Configuration is TypeScript-only; shell-command strings and the `testCommand` alias remain supported. There is one task executor and one release decision model.
 
-- Remove `certifyCommand` and its CLI flags (`--certifyCommand`, `--certify-command`, `-c`). Configure `release.version` and `release.policy` instead. Removed hooks fail explicitly, including in JSON.
+- Remove `certifyCommand` and its CLI flags (`--certifyCommand`, `--certify-command`, `-c`). Configure `release.version` and `release.policy` instead. Removed hooks fail explicitly.
 - Replace npm `releaseIntent` with `release.version`. Return an exact version string or `undefined`, rather than `{ status: "release", version }` or `{ status: "none" }`. Throw when inspection fails.
-- Replace npm `certifyBreaking` with `release.policy`. Use `{ beforeV1: "minor" }` for this pre-1.0 convention, or a function receiving `{ previousVersion, version, delta }`. Support findings remain in the npm report; the policy receives version evidence only.
+- Replace npm `certifyBreaking` with `release.policy`. Use `semverPolicy({ beforeV1: "minor" })` for this pre-1.0 convention, or a function receiving `{ previousVersion, version, delta }`. Support findings remain in the npm report; the policy receives version evidence only.
 - Replace the removed `ReleaseIntent`, `ReleaseContext`, and `ReleaseEvidence` types with `ReleaseVersion`, `ReleaseVersionContext`, and `VersionDelta` as appropriate.
 - Public outcomes expose `release?: VersionDelta`; use `outcome.release?.breaking` to check release approval. `breakingChangesCertified`, `certificationStdout`, and `certificationStderr` are removed. npm support status `certified` becomes `breaking-release`, with the full version delta in `support.release`.
-- Shell tasks and function tasks now share exit semantics: 0 succeeds, 1 detects incompatibility, and other nonzero statuses or exceptions fail setup. Release intent never approves setup errors. `test` and `testCommand` cannot both be configured.
+- Tests, npm setup, and npm suite commands must be shell strings. Exit 0 succeeds, 1 detects incompatibility for tests, and other nonzero statuses or process errors fail setup. Release intent never approves setup errors. `test` and `testCommand` cannot both be configured.
+- Convert JSON configuration to `breakage.config.ts` with a default export. JSON config, JSON schema generation, and the `--release` JSON flag are removed. Express `release.version` as a function, such as `() => "2.0.0"`, and `release.policy` as a function or `semverPolicy(...)`.
 - Relative config directories now resolve from the config file. Check filesystem paths when migrating configurations previously loaded from another working directory.

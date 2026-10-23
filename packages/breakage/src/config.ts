@@ -1,5 +1,4 @@
 import { existsSync } from "node:fs"
-import { readFile } from "node:fs/promises"
 import path from "node:path"
 import { pathToFileURL } from "node:url"
 
@@ -38,24 +37,27 @@ export function defineConfig<Config extends BreakageConfig>(
 }
 
 export function defaultConfig(directory: string): string {
-	return path.join(
-		directory,
-		existsSync(path.join(directory, `breakage.config.ts`))
-			? `breakage.config.ts`
-			: `breakage.config.json`,
+	const filename = path.join(directory, `breakage.config.ts`)
+	if (
+		!existsSync(filename) &&
+		existsSync(path.join(directory, `breakage.config.json`))
 	)
+		throw new Error(
+			`JSON configuration was removed. Migrate breakage.config.json to breakage.config.ts.`,
+		)
+	return filename
 }
 
 /** Relative directories are resolved from the config file, never the caller's cwd. */
 export async function loadConfig(filename: string): Promise<BreakageConfig> {
 	const absolute = path.resolve(filename)
-	const loaded = /\.(?:[cm]?[jt]s)$/.test(absolute)
-		? (
-				(await import(pathToFileURL(absolute).href)) as {
-					default: BreakageConfig
-				}
-			).default
-		: (JSON.parse(await readFile(absolute, `utf8`)) as BreakageConfig)
+	if (path.extname(absolute) !== `.ts`)
+		throw new Error(
+			`Configuration must be a .ts module with a default export; JSON configuration was removed.`,
+		)
+	const loaded = (
+		(await import(pathToFileURL(absolute).href)) as { default: BreakageConfig }
+	).default
 	const config = defineConfig(loaded)
 	return {
 		...config,

@@ -1,5 +1,4 @@
 import type { ReleaseConfig, VersionDelta } from "../release.ts"
-import type { Task } from "../task.ts"
 
 export type SupportChange = {
 	peer: string
@@ -12,7 +11,7 @@ export type NpmSuite = {
 	/** Package-relative globs; preserve relative paths inside the stage. */
 	files: string[]
 	/** Run once; 1 means assertion failure, other nonzero codes mean setup failure. */
-	command: Task
+	command: string
 }
 
 export type NpmConfig = {
@@ -21,8 +20,8 @@ export type NpmConfig = {
 	artifact: string
 	representatives: string | string[]
 	lockfile: string
-	prepareCommand: Task
-	installCommand?: Task
+	prepareCommand: string
+	installCommand?: string
 	suites: Record<string, NpmSuite>
 	/** Currently declared local peers must support and exercise each planned release. */
 	localPeers?: Record<string, { directory: string; artifact: string }>

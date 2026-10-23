@@ -1,8 +1,8 @@
 import { expect, it } from "bun:test"
 
-import { versionDelta } from "../src/release.ts"
+import { versionDelta, semverPolicy } from "../src/release.ts"
 
-import configuration from "../../../breakage.config.json" with { type: "json" }
+import configuration from "../../../breakage.config.ts"
 import { compatibilityResult } from "../../../scripts/check-compatibility.node.ts"
 
 const baseline = {
@@ -94,7 +94,11 @@ it.each([
 ] as const)(
 	`requires a breaking delta for historical failure: %s → %s`,
 	(previous, next, exitCode) => {
-		const release = versionDelta(previous, next, { beforeV1: `minor` })
+		const release = versionDelta(
+			previous,
+			next,
+			semverPolicy({ beforeV1: `minor` }),
+		)
 		const result = compatibilityResult(
 			baseline,
 			{
@@ -119,7 +123,11 @@ it.each([
 )
 
 it(`cannot cover inconclusive historical checks with a breaking release`, () => {
-	const release = versionDelta(`0.8.5`, `0.9.0`, { beforeV1: `minor` })
+	const release = versionDelta(
+		`0.8.5`,
+		`0.9.0`,
+		semverPolicy({ beforeV1: `minor` }),
+	)
 	const currentBaseline = {
 		ref: `refs/tags/breakage@0.8.5`,
 		commit: baseline.commit,

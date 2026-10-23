@@ -37,14 +37,14 @@ it.each([
 		project = fixture(changed)
 		const currentTests = project.read(`public/contract.ts`)
 		project.write(
-			`breakage.config.json`,
+			`config-data.json`,
 			JSON.stringify({
-				...project.options,
-				release: { version: breakingRelease ? `2.0.0` : `1.0.0` },
+				options: project.options,
+				version: breakingRelease ? `2.0.0` : `1.0.0`,
 			}),
 		)
 		// Configuration is committed because checking requires a clean repository.
-		git(project.repository, `add`, `breakage.config.json`)
+		git(project.repository, `add`, `config-data.json`)
 		git(project.repository, `commit`, `-m`, `Configure check`)
 		const result = run([])
 		expect(result.exitCode).toBe(exitCode)
@@ -65,7 +65,7 @@ it(`returns 2 when no release can establish compatibility`, () => {
 
 it(`shows help independently of malformed configuration without writing files`, () => {
 	project = fixture()
-	project.write(`breakage.config.json`, `{ malformed`)
+	project.write(`breakage.config.ts`, `{ malformed`)
 	const before = readdirSync(project.repository).sort()
 	const result = run([`help`])
 	expect(result.exitCode).toBe(0)

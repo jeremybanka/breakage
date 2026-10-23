@@ -31,7 +31,7 @@ it.each([false, true])(
 		expect(current.exitCode).toBe(0)
 		const result = await breakage({
 			...project.options,
-			release: { version: breakingRelease ? `2.0.0` : `1.0.0` },
+			release: { version: () => (breakingRelease ? `2.0.0` : `1.0.0`) },
 		})
 		expect(result).toMatchObject({
 			gitWasClean: true,

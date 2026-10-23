@@ -16,6 +16,11 @@ const config: UserConfig = defineConfig({
 	},
 	run: {
 		tasks: {
+			"test:breakage:npm": {
+				command: "node ../../scripts/check-peers.node.ts",
+				dependsOn: ["build"],
+				cache: false,
+			},
 			"test:run": {
 				command:
 					"BREAKAGE_CLI_ENTRYPOINT=./src/breakage.x.ts bun test ./__tests__ ./tests/public",
