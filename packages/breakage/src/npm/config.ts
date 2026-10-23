@@ -1,7 +1,13 @@
 import path from "node:path"
 
+import { validateRelease } from "../release.ts"
+
 import { eras, packageName, record } from "./manifest.ts"
 import type { NpmConfig } from "./types.ts"
+
+function task(value: unknown): boolean {
+	return typeof value === `function` || nonempty(value)
+}
 
 function nonempty(value: unknown): value is string {
 	return typeof value === `string` && value.trim().length > 0
@@ -9,7 +15,7 @@ function nonempty(value: unknown): value is string {
 
 export function validateConfig(value: unknown): asserts value is NpmConfig {
 	if (!record(value)) throw new Error(`Configuration must have an npm object.`)
-	for (const key of [`artifact`, `lockfile`, `prepareCommand`] as const) {
+	for (const key of [`artifact`, `lockfile`] as const) {
 		if (!nonempty(value[key]))
 			throw new Error(`npm.${key} must be a nonempty string.`)
 	}
@@ -19,7 +25,16 @@ export function validateConfig(value: unknown): asserts value is NpmConfig {
 	) {
 		throw new Error(`npm.lockfile must stay inside each representative.`)
 	}
-	for (const key of [`packageDirectory`, `installCommand`] as const) {
+	if (!task(value.prepareCommand))
+		throw new Error(`npm.prepareCommand must be a command or function.`)
+	if (value.installCommand !== undefined && !task(value.installCommand))
+		throw new Error(`Invalid npm.installCommand.`)
+	if (value.release !== undefined) {
+		validateRelease(value.release)
+		if (value.releaseIntent || value.certifyBreaking)
+			throw new Error(`Choose npm.release or legacy release hooks, not both.`)
+	}
+	for (const key of [`packageDirectory`] as const) {
 		if (value[key] !== undefined && !nonempty(value[key]))
 			throw new Error(`Invalid npm.${key}.`)
 	}
@@ -40,7 +55,7 @@ export function validateConfig(value: unknown): asserts value is NpmConfig {
 		if (
 			!packageName(peer) ||
 			!record(suite) ||
-			!nonempty(suite.command) ||
+			!task(suite.command) ||
 			!Array.isArray(suite.files) ||
 			!suite.files.length ||
 			suite.files.some((file: unknown) => !nonempty(file))

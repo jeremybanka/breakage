@@ -1,3 +1,6 @@
+import type { ReleaseConfig } from "../release.ts"
+import type { Task } from "./command.ts"
+
 export type ReleaseIntent =
 	| { status: `none` }
 	| { status: `release`; version: string }
@@ -24,16 +27,17 @@ export type NpmSuite = {
 	/** Package-relative globs; preserve relative paths inside the stage. */
 	files: string[]
 	/** Run once; 1 means assertion failure, other nonzero codes mean setup failure. */
-	command: string
+	command: Task
 }
 
 export type NpmConfig = {
+	release?: ReleaseConfig
 	packageDirectory?: string
 	artifact: string
 	representatives: string | string[]
 	lockfile: string
-	prepareCommand: string
-	installCommand?: string
+	prepareCommand: Task
+	installCommand?: Task
 	suites: Record<string, NpmSuite>
 	/** Currently declared local peers must support and exercise each planned release. */
 	localPeers?: Record<string, { directory: string; artifact: string }>

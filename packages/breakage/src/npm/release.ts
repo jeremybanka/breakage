@@ -3,6 +3,7 @@ import path from "node:path"
 import semver from "semver"
 import { simpleGit } from "simple-git"
 
+import { resolveReleaseVersion } from "../release.ts"
 import { readBaseline } from "../baseline.ts"
 import { withDirectoryLock } from "../directory-lock.ts"
 import { latestReleaseTag } from "../release-tag.ts"
@@ -20,6 +21,12 @@ export async function intent(
 	config: NpmConfig,
 	context: ReleaseContext,
 ): Promise<ReleaseIntent> {
+	if (config.release) {
+		const version = await resolveReleaseVersion(config.release, context)
+		return version === undefined
+			? { status: `none` }
+			: { status: `release`, version }
+	}
 	if (!config.releaseIntent) return { status: `none` }
 	const result: unknown = await config.releaseIntent(context)
 	if (record(result) && result.status === `none`) return { status: `none` }

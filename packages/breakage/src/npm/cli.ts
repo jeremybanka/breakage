@@ -1,16 +1,14 @@
-import { existsSync } from "node:fs"
-import { readFile } from "node:fs/promises"
 import path from "node:path"
-import { pathToFileURL } from "node:url"
 
 import { type } from "arktype"
 import type { OptionsGroup } from "comline"
 import { options, parseBooleanOption } from "comline"
 
+import { defaultConfig, loadConfig } from "../config.ts"
+
 import { formatNpmReport, npmCheck, npmTest } from "./check.ts"
 import { errorMessage } from "./command.ts"
 import { validateConfig } from "./config.ts"
-import { record } from "./manifest.ts"
 import type { NpmTestSelection } from "./types.ts"
 
 type CommonOptions = { config?: string | undefined; json?: boolean | undefined }
@@ -65,15 +63,6 @@ export const npmTestManual: OptionsGroup<TestOptions> = options(
 	},
 )
 
-export function defaultConfig(directory: string): string {
-	return path.join(
-		directory,
-		existsSync(path.join(directory, `breakage.config.ts`))
-			? `breakage.config.ts`
-			: `breakage.config.json`,
-	)
-}
-
 export async function runNpmCli(
 	action: `check` | `test`,
 	opts: CheckOptions & TestOptions,
@@ -81,11 +70,7 @@ export async function runNpmCli(
 ): Promise<number> {
 	try {
 		const filename = path.resolve(opts.config ?? defaultConfig(process.cwd()))
-		const loaded: unknown = filename.endsWith(`.json`)
-			? JSON.parse(await readFile(filename, `utf8`))
-			: ((await import(pathToFileURL(filename).href)) as { default: unknown })
-					.default
-		const config = record(loaded) ? loaded.npm : undefined
+		const config = (await loadConfig(filename)).npm
 		validateConfig(config)
 		let selection: NpmTestSelection | undefined
 		if (action === `test`) {

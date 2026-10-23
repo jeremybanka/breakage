@@ -28,6 +28,53 @@ Run `breakage help` to show usage for the CLI, including the check options, `pre
 
 Use `breakage help` instead of the former `--help` or `-h` options. Configuration no longer controls help. The empty route and a configuration path still run checks; if your configuration file is named `help` or `prelude`, pass an explicit path such as `./help` to select it explicitly.
 
+## TypeScript configuration and release intent
+
+Create `breakage.config.ts` with a default export. Public checks, `prelude`, and npm checks prefer this file over `breakage.config.json`; explicit configuration paths still work. Running TypeScript configuration on Node requires native erasable TypeScript support (Node 22.18 or newer). TypeScript functions let setup and test logic live alongside its configuration.
+
+```ts
+import { defineConfig, semverPolicy } from "breakage"
+import { changesetsRelease } from "breakage/changesets"
+
+export default defineConfig({
+	tagPattern: "refs/tags/my-library@",
+	testPattern: "tests/public/**/*",
+	test: ({ run }) => run("npm run test:public"),
+	release: {
+		version: changesetsRelease(),
+		policy: semverPolicy({ beforeV1: "minor" }),
+	},
+})
+```
+
+`release.version` supplies the package's intended version. It can be an exact version string or a synchronous/asynchronous function receiving `packageName`, `packageDirectory`, and `currentVersion`. Public checks also supply `baseline: { version, ref, commit }` from the exact commit selected for replay. Omit `version` to use the current manifest, or return `undefined` to supply no release evidence. Invalid versions, versions older than the current manifest, and resolver errors fail setup. Release resolution happens before historical tests replace current tests.
+
+Breakage compares that version with the manifest at the selected release commit. For example, a pending Changesets minor release from `0.53.3` resolves to `0.54.0`. After `changeset version` removes the changeset, the manifest's `0.54.0` supplies the same evidence against the pinned `0.53.3` baseline. A patch release to `0.53.4` does not permit a break with `beforeV1: "minor"`.
+
+`semverPolicy()` permits major increments by default. `beforeV1: "minor"` additionally permits minor increments while the baseline major is zero; `beforeV1: "patch"` also permits patch increments there. A prerelease identifier change alone does not permit a break. At and after 1.0, the policy always requires a major increment. Equal and older versions never permit breaking changes.
+
+Use `versionDelta(previousVersion, version, policy?)` independently to obtain `{ previousVersion, version, delta, breaking }`. A custom policy receives `{ previousVersion, version, delta }` and returns a boolean; `versionDelta` calls it only for advancing versions. `resolveReleaseVersion(release, context)` is also exported for consumers that want to reuse version resolution without running a compatibility check.
+
+A `test` task may be a shell command or a function. Functions receive `cwd`, `baseline: { ref, commit }`, and `run(command)`, which executes in that directory and returns `{ code, output }`. Return that result to preserve the command's exit status. Returning nothing means success; throwing means a setup error. Exit 1 reports a compatibility failure; other nonzero exits report setup errors. A breaking release can permit compatibility failures, but cannot permit setup errors. Runners that use exit 1 for infrastructure failures need a wrapper that distinguishes those failures. Breakage does not change the process working directory for callbacks.
+
+Relative `baseDirname` values resolve from the configuration file's directory, which is also the default base directory when loading a config. CLI `--base-dir` values resolve from the caller's directory. CLI options override config fields, including `--test-command` overriding `test`. Test patterns, `baselineFile`, and prelude `out` are relative to the resulting base directory. Imports and additional filesystem work in callbacks should use `import.meta.url` or the supplied directory rather than assuming a process working directory.
+
+Existing JSON configurations and `testCommand`/`certifyCommand` remain supported. For the new model, replace `certifyCommand` with `release` and optionally replace `testCommand` with `test`. Do not combine `test` and `testCommand`, `test` and `certifyCommand`, or `release` and `certifyCommand` in one configuration. The generated JSON schemas describe the legacy CLI fields; use the exported TypeScript types for function configuration.
+
+### Optional Changesets helpers
+
+The `breakage/changesets` subpath provides two independent helpers: `readChangesetsReleasePlan(directory?)` returns a map of package names to planned versions, and `changesetsRelease({ directory? })` returns a release-version resolver. The resolver discovers the workspace from each package directory unless given an explicit directory, reads a fresh plan, and falls back to the supplied current manifest version. The plan uses Changesets' own assembly logic, configuration, dependency propagation, and prerelease state. Errors reading the plan fail setup instead of silently falling back to the manifest.
+
+These helpers use optional peer dependencies. Install them alongside Breakage when using the subpath:
+
+```sh
+npm install --save-dev @changesets/assemble-release-plan@^7 @changesets/config@^4 @changesets/pre@^3 @changesets/read@^1 @manypkg/get-packages@^3
+```
+
+The main `breakage` export and commands do not import these dependencies. You can compose the plan reader with your own version resolver or use the core release model with any other release process.
+
+`defineConfig` shares a top-level `release` with `npm` checks unless `npm.release` is explicitly configured. Both workflows apply the same version comparison and policy to their own historical manifests. npm preparation, installation, and suite commands also accept function tasks; see the [npm guide](npm.md#shared-release-configuration).
+
 ## examples
 
 ### single-project repository
@@ -69,7 +116,7 @@ breakage prelude --out .breakage/baseline.json
 breakage --baseline-file .breakage/baseline.json
 ```
 
-Both commands discover `breakage.config.json` and accept the same `--tag-pattern` and `--base-dir` options. An explicit configuration path works as `breakage prelude ./custom.config.json --out .breakage/baseline.json` and `breakage ./custom.config.json --baseline-file .breakage/baseline.json`. The prelude does not require test or certification options, and never runs those commands or builds the package. Existing full check configurations can be reused. Output and baseline-file paths are relative to `baseDirname`, which defaults to the current working directory. The default prelude output is `.breakage/baseline.json`.
+Both commands discover `breakage.config.ts` before `breakage.config.json` and accept the same `--tag-pattern` and `--base-dir` options. An explicit configuration path works as `breakage prelude ./custom.config.json --out .breakage/baseline.json` and `breakage ./custom.config.json --baseline-file .breakage/baseline.json`. The prelude does not require test or certification options, and never runs those commands or builds the package. Existing full check configurations can be reused. Output and baseline-file paths are relative to `baseDirname`, which defaults to the configuration file's directory, or the current working directory without a config. The default prelude output is `.breakage/baseline.json`.
 
 The versioned JSON snapshot contains the selected tag ref, its resolved commit SHA, the tag pattern, and the package directory relative to the repository root. Annotated tags are peeled to commits. Contents are deterministic and written atomically, with no timestamp or nonce. Fetching uses the SHA from discovery rather than a mutable tag name. An unchanged baseline produces identical snapshot bytes; a newer release or a moved tag targeting another commit changes them. A failed discovery, fetch, or write fails the prelude and removes an older snapshot at the validated output path.
 

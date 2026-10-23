@@ -153,11 +153,51 @@ Every coordinated candidate must also accept the representative's peer versions 
 
 Focused `npm test` commands remain available for exploration before advertising an upcoming version. They warn about coordinated candidates' incompatible peer ranges and still execute, while missing required peers remain setup errors. They check release intent for the selected candidate environments but do not audit every planned local release; require the full check or coverage audit as part of the release gate.
 
+## Shared release configuration
+
+Use `defineConfig` to share a release resolver and policy with public checks:
+
+```ts
+import { defineConfig, semverPolicy } from "breakage"
+import { changesetsRelease } from "breakage/changesets"
+
+export default defineConfig({
+	testPattern: "tests/public/**/*",
+	test: ({ run }) => run("npm run test:public"),
+	release: {
+		version: changesetsRelease(),
+		policy: semverPolicy({ beforeV1: "minor" }),
+	},
+	npm: {
+		artifact: "artifacts/integration.tgz",
+		representatives: "peer-environments/*",
+		lockfile: "package-lock.json",
+		prepareCommand: ({ run }) =>
+			run("npm ci --ignore-scripts --workspaces=false"),
+		suites: {
+			"atom.io": {
+				files: ["contracts/core/**/*.ts"],
+				command: ({ run }) => run("node --test contracts/core/*.test.ts"),
+			},
+		},
+		baseline: { tagPattern: "refs/tags/my-integration@" },
+	},
+})
+```
+
+`defineConfig` inherits the top-level `release` into `npm.release`; an explicit `npm.release` overrides it. Programmatic callers can pass the resulting `config.npm` to `npmCheck` or `npmTest`. Both npm and public CLI commands use the same config loader. npm paths remain relative to the config file's directory, or to `npm.packageDirectory` resolved from it.
+
+`npm.release.version` replaces `releaseIntent` and returns an exact version or `undefined`. The resolver is evaluated once per package per npm invocation. The integration's version is compared with its historical manifest to decide whether support may be dropped; a local peer's version supplies candidate identity and the existing coordination obligations. `changesetsRelease()` returns planned versions before Changesets versioning and manifest versions afterward. Because this fallback also supplies the current version for an unchanged registered local peer, using it opts those peers into candidate coverage too. A custom resolver can return `undefined` for packages that should have no local release intent. See the [release configuration guide](README.md#typescript-configuration-and-release-intent) for optional Changesets dependencies and standalone helpers.
+
+`npm.release.policy` replaces `certifyBreaking`. The default requires a major increment; `semverPolicy({ beforeV1: "minor" })` permits pre-1.0 minor increments too. Missing evidence or a compatible version delta leaves a support drop unapproved. Invalid evidence and resolver/policy errors fail setup. Compatibility failures against still-declared peers remain failures even when the integration has a breaking release. The existing `releaseIntent` and `certifyBreaking` hooks remain available; do not combine them with `npm.release`.
+
+`prepareCommand`, `installCommand`, and each suite's `command` accept strings or functions receiving `{ cwd, run }`. Preparation runs in the representative directory; installation and suites run in its disposable `test/` directory. Return `run(command)` to preserve exit status and captured output. Returning nothing succeeds; throwing fails setup. All nonzero preparation/installation results fail setup; suite exit 1 denotes incompatibility and other nonzero exits denote setup failure. The process working directory is never changed. Existing frozen-input, artifact, resolution, and cleanup checks surround function tasks just as they surround shell commands.
+
 ## Removing support
 
 `npm check` compares semantic version sets with the previous release. Narrowing a supported range, adding a new required peer, or making an optional peer required produces an end-of-support finding. Equivalent range rewrites do not. Removing a peer requirement entirely relaxes consumer constraints. Preview support is compared too. Optional-peer absence testing is deferred; making an existing optional peer required is still detected as an installation-contract change.
 
-To accept intentional support changes, provide both release intent for the integration and an explicit breaking-release policy:
+The shared `release` model above accepts intentional support changes when the integration has a breaking version delta. For legacy configurations, provide both `releaseIntent` for the integration and `certifyBreaking`:
 
 ```ts
 const certifyBreaking: NonNullable<NpmConfig["certifyBreaking"]> = ({

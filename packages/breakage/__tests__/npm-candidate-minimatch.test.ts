@@ -100,7 +100,10 @@ describe(`real minimatch major-version incompatibility`, () => {
 			const version = JSON.parse(
 				f.read(`peer-environments/minimatch-9/package.json`),
 			).dependencies.minimatch
-			f.config.installCommand = `touch ../../../candidate-installed && ${f.config.installCommand}`
+			const installCommand = f.config.installCommand
+			if (typeof installCommand !== `string`)
+				throw new Error(`Expected fixture install command.`)
+			f.config.installCommand = `touch ../../../candidate-installed && ${installCommand}`
 			if (coverageOnly) {
 				f.config.artifact = `not-built.tgz`
 				f.config.localPeers![`minimatch-host`]!.artifact = `not-built-host.tgz`

@@ -2,6 +2,7 @@ import path from "node:path"
 
 import semver from "semver"
 
+import { versionDelta } from "../release.ts"
 import { command, errorMessage } from "./command.ts"
 import { validateConfig, validatePeerRanges } from "./config.ts"
 import {
@@ -55,7 +56,7 @@ async function checkSupport(
 				previousVersion: previous.version,
 				changes,
 			}
-		if (!semver.gt(evidence.version, previous.version))
+		if (!config.release && !semver.gt(evidence.version, previous.version))
 			throw new Error(
 				`The intended release must be newer than baseline ${previous.version}.`,
 			)
@@ -63,13 +64,16 @@ async function checkSupport(
 			version: evidence.version,
 			delta: semver.diff(previous.version, evidence.version) ?? `none`,
 		}
-		const certified = config.certifyBreaking
-			? await config.certifyBreaking({
-					previousVersion: previous.version,
-					release,
-					changes,
-				})
-			: false
+		const certified = config.release
+			? versionDelta(previous.version, evidence.version, config.release.policy)
+					.breaking
+			: config.certifyBreaking
+				? await config.certifyBreaking({
+						previousVersion: previous.version,
+						release,
+						changes,
+					})
+				: false
 		if (typeof certified !== `boolean`)
 			throw new Error(`certifyBreaking must return a boolean.`)
 		return {
@@ -299,22 +303,33 @@ async function run(
 		}
 		// One piece of release evidence per package per invocation, including failures.
 		const releases = new Map<string, Promise<ReleaseIntent>>()
-		const configuredHook = config.releaseIntent
+		const getIntent = (
+			context: Parameters<NonNullable<NpmConfig[`releaseIntent`]>>[0],
+		): Promise<ReleaseIntent> => {
+			let pending = releases.get(context.packageDirectory)
+			if (!pending) {
+				pending = intent(config, context)
+				releases.set(context.packageDirectory, pending)
+			}
+			return pending
+		}
 		const effective: NpmConfig = {
 			...config,
-			releaseIntent: (context) => {
-				let pending = releases.get(context.packageDirectory)
-				if (!pending) {
-					pending = Promise.resolve().then(() =>
-						configuredHook
-							? configuredHook(context)
-							: ({ status: `none` } as const),
-					)
-					releases.set(context.packageDirectory, pending)
-				}
-				return pending
-			},
+			...(config.release
+				? {
+						release: {
+							...config.release,
+							version: async (context) => {
+								const evidence = await getIntent(context)
+								return evidence.status === `release`
+									? evidence.version
+									: undefined
+							},
+						},
+					}
+				: { releaseIntent: getIntent }),
 		}
+
 		const directories = await discover(config, base)
 		const [support, representatives] = await Promise.all([
 			selection

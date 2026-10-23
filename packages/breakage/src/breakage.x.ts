@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 
+import { existsSync } from "node:fs"
+import path from "node:path"
 import { inspect } from "node:util"
 
 import { type } from "arktype"
-import type { OptionsGroup } from "comline"
 import {
 	cli,
 	completionResponse,
@@ -18,23 +19,19 @@ import {
 } from "comline"
 import logger from "takua"
 
-import type { BreakageOptions } from "./breakage.ts"
+import { defaultConfig, loadConfig } from "./config.ts"
 import { breakage, breakagePrelude } from "./breakage.ts"
-import {
-	defaultConfig,
-	npmCheckManual,
-	npmTestManual,
-	runNpmCli,
-} from "./npm/cli.ts"
+import { errorMessage } from "./npm/command.ts"
+import { npmCheckManual, npmTestManual, runNpmCli } from "./npm/cli.ts"
 
 const BREAKAGE_MANUAL = options(
 	`Check for breaking changes in a package.`,
 	type({
 		"tagPattern?": `string`,
 		"baselineFile?": `string`,
-		testPattern: `string`,
-		testCommand: `string`,
-		certifyCommand: `string`,
+		"testPattern?": `string`,
+		"testCommand?": `string`,
+		"certifyCommand?": `string`,
 		"baseDirname?": `string`,
 		"verbose?": `boolean`,
 	}),
@@ -58,7 +55,7 @@ const BREAKAGE_MANUAL = options(
 			aliases: [`test-pattern`, `pattern`],
 			completion: { repeatable: false },
 			flag: `p`,
-			required: true,
+			required: false,
 			description: `The pattern to match test files that test the public API of the library.`,
 			example: `--pattern="*__public.test.ts"`,
 		},
@@ -66,7 +63,7 @@ const BREAKAGE_MANUAL = options(
 			aliases: [`test-command`],
 			completion: { repeatable: false },
 			flag: `t`,
-			required: true,
+			required: false,
 			description: `Complete bash command that runs the tests for the library's public API.`,
 			example: `--testCommand="npm run test"`,
 		},
@@ -74,7 +71,7 @@ const BREAKAGE_MANUAL = options(
 			aliases: [`certify-command`],
 			completion: { repeatable: false },
 			flag: `c`,
-			required: true,
+			required: false,
 			description: `Complete bash command that determines whether a major version bump for your package is indicated in the workspace. Exit code 0 indicates that a major version bump is indicated, and exit code 1 indicates that no major version bump is indicated.`,
 			example: `--certifyCommand=\tsx scripts/certify-major-version-bump.node`,
 		},
@@ -95,7 +92,7 @@ const BREAKAGE_MANUAL = options(
 			parse: parseBooleanOption,
 		},
 	},
-) satisfies OptionsGroup<BreakageOptions>
+)
 
 const PRELUDE_MANUAL = options(
 	`Resolve and fetch the release baseline for a cacheable compatibility check.`,
@@ -178,15 +175,6 @@ const parse = cli(
 			$configPath: { fileSystem: `files` },
 			"prelude/$configPath": { fileSystem: `files` },
 		},
-		discoverConfigPath: (args: readonly string[]) => {
-			if (args[0] === `help` || args[0] === `schema` || args[0] === `npm`) {
-				return
-			}
-			const configPath =
-				(args[0] === `prelude` ? args[1] : args[0]) ??
-				defaultConfig(process.cwd())
-			return configPath
-		},
 	},
 	{
 		info: (message, ...data) => logger.info(`breakage`, message, data),
@@ -201,71 +189,120 @@ if (completion !== undefined) {
 	const { inputs, warnings, writeJsonSchema } = parse(process.argv)
 	logWarnings(warnings)
 
-	switch (inputs.case) {
-		case `npm`:
-		case `npm/help`:
-		case `help`:
-			console.log(help(parse.definition))
-			break
-		case `npm/check`:
-			process.exitCode = await runNpmCli(`check`, inputs.opts)
-			break
-		case `npm/test`:
-			process.exitCode = await runNpmCli(`test`, inputs.opts)
-			break
-		case `npm/test/$peer/$range`:
-			process.exitCode = await runNpmCli(`test`, inputs.opts, inputs.params)
-			break
-		case `schema`:
-			{
-				const { outdir } = inputs.opts
-				writeJsonSchema(outdir ?? `.`)
-				process.stdout.write(`📝 Wrote json.schema.`)
+	try {
+		switch (inputs.case) {
+			case `npm`:
+			case `npm/help`:
+			case `help`:
+				console.log(help(parse.definition))
+				break
+			case `npm/check`:
+				process.exitCode = await runNpmCli(`check`, inputs.opts)
+				break
+			case `npm/test`:
+				process.exitCode = await runNpmCli(`test`, inputs.opts)
+				break
+			case `npm/test/$peer/$range`:
+				process.exitCode = await runNpmCli(`test`, inputs.opts, inputs.params)
+				break
+			case `schema`:
+				{
+					const { outdir } = inputs.opts
+					writeJsonSchema(outdir ?? `.`)
+					process.stdout.write(`📝 Wrote json.schema.`)
+				}
+				break
+			case `prelude`:
+			case `prelude/$configPath`: {
+				const configPath =
+					inputs.case === `prelude/$configPath`
+						? inputs.params.configPath
+						: defaultConfig(process.cwd())
+				const config: Awaited<ReturnType<typeof loadConfig>> =
+					existsSync(configPath) || inputs.case === `prelude/$configPath`
+						? await loadConfig(configPath)
+						: {}
+				const baseline = await breakagePrelude({
+					...config,
+					...inputs.opts,
+					...(inputs.opts.baseDirname
+						? { baseDirname: path.resolve(inputs.opts.baseDirname) }
+						: {}),
+					out: inputs.opts.out ?? config.out ?? `.breakage/baseline.json`,
+				})
+				process.stdout.write(`Pinned ${baseline.ref} at ${baseline.commit}.\n`)
+				break
 			}
-			break
-		case `prelude`:
-		case `prelude/$configPath`: {
-			const baseline = await breakagePrelude({
-				...inputs.opts,
-				out: inputs.opts.out ?? `.breakage/baseline.json`,
-			})
-			process.stdout.write(`Pinned ${baseline.ref} at ${baseline.commit}.\n`)
-			break
-		}
-		case ``:
-		case `$configPath`: {
-			const { returnValue } = await encapsulate(() => breakage(inputs.opts), {
-				console: true,
-				stdout: true,
-			})
-			if (`testResult` in returnValue && returnValue.breakingChangesFound) {
-				process.stdout.write(returnValue.testResult)
-			}
-			if (`breakingChangesFound` in returnValue) {
-				if (returnValue.breakingChangesFound) {
-					if (returnValue.breakingChangesCertified) {
-						process.stdout.write(
-							`👷 Breaking changes were found and certified.`,
-						)
-						process.exit(0)
+			case ``:
+			case `$configPath`: {
+				const configPath =
+					inputs.case === `$configPath`
+						? inputs.params.configPath
+						: defaultConfig(process.cwd())
+				const config: Awaited<ReturnType<typeof loadConfig>> =
+					existsSync(configPath) || inputs.case === `$configPath`
+						? await loadConfig(configPath)
+						: {}
+				const merged = {
+					...config,
+					...inputs.opts,
+					...(inputs.opts.baseDirname
+						? { baseDirname: path.resolve(inputs.opts.baseDirname) }
+						: {}),
+				}
+				if (inputs.opts.testCommand) delete merged.test
+				if (!merged.testPattern)
+					throw new Error(`required arguments were not provided: testPattern.`)
+				const { returnValue } = await encapsulate(
+					() =>
+						breakage({
+							...merged,
+							testPattern: merged.testPattern!,
+						}),
+					{
+						console: true,
+						stdout: true,
+					},
+				)
+				if (`release` in returnValue && returnValue.release) {
+					const { previousVersion, version, delta, breaking } =
+						returnValue.release
+					process.stdout.write(
+						`Release: ${previousVersion} → ${version} (${delta}; ${breaking ? `breaking` : `compatible`}).\n`,
+					)
+				}
+				if (`testResult` in returnValue && returnValue.breakingChangesFound) {
+					process.stdout.write(returnValue.testResult)
+				}
+				if (`breakingChangesFound` in returnValue) {
+					if (returnValue.breakingChangesFound) {
+						if (returnValue.breakingChangesCertified) {
+							process.stdout.write(
+								`👷 Breaking changes were found and certified.`,
+							)
+							process.exit(0)
+						} else {
+							process.stdout.write(
+								`❌ Breaking changes were found, but not certified.`,
+							)
+							process.exit(1)
+						}
 					} else {
-						process.stdout.write(
-							`❌ Breaking changes were found, but not certified.`,
-						)
-						process.exit(1)
+						process.stdout.write(`✅ No breaking changes were found.`)
+						process.exit(0)
 					}
 				} else {
-					process.stdout.write(`✅ No breaking changes were found.`)
-					process.exit(0)
+					process.stdout.write(
+						`💥 Breakage failed to determine breaking changes.` +
+							`\n` +
+							inspect(returnValue),
+					)
+					process.exit(2)
 				}
-			} else {
-				process.stdout.write(
-					`💥 Breakage failed to determine breaking changes.` +
-						`\n` +
-						inspect(returnValue),
-				)
-				process.exit(2)
 			}
 		}
+	} catch (error) {
+		process.stderr.write(`Breakage setup error: ${errorMessage(error)}\n`)
+		process.exitCode = 2
 	}
 }

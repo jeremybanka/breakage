@@ -2,7 +2,7 @@
 
 Run yesterday’s tests against tomorrow’s release.
 
-Breakage runs the public tests from your latest release against your current implementation to detect breaking changes before you ship them. A project-defined certification command can acknowledge intentional breaks in your release plan.
+Breakage runs the public tests from your latest release against your current implementation to detect breaking changes before you ship them. A shared TypeScript release model acknowledges intentional breaks by comparing intended versions with the released baseline, including before and after Changesets versioning. Legacy certification commands remain supported.
 
 ```sh
 npx breakage \

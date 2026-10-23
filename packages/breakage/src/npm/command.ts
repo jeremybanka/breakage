@@ -1,13 +1,37 @@
 import { spawn } from "node:child_process"
 import path from "node:path"
 
+export type TaskContext = {
+	cwd: string
+	run: (commandLine: string) => Promise<CommandResult>
+}
+export type Task<Context extends TaskContext = TaskContext> =
+	| string
+	| ((context: Context) => void | CommandResult | Promise<void | CommandResult>)
+
 export type CommandResult = { code: number; output: string }
 
 /** Capture output per environment so parallel runs cannot interleave their reports. */
-export async function command(
-	commandLine: string,
+export async function command<Context extends TaskContext = TaskContext>(
+	commandLine: Task<Context>,
 	cwd: string,
+	context?: Context,
 ): Promise<CommandResult> {
+	if (typeof commandLine === `function`) {
+		const result = await commandLine(
+			context ??
+				({ cwd, run: (line: string) => command(line, cwd) } as Context),
+		)
+		if (result === undefined) return { code: 0, output: `` }
+		if (
+			!result ||
+			!Number.isInteger(result.code) ||
+			result.code < 0 ||
+			typeof result.output !== `string`
+		)
+			throw new Error(`Task must return void or { code, output }.`)
+		return result
+	}
 	return await new Promise((resolve, reject) => {
 		const child = spawn(commandLine, {
 			cwd,
@@ -37,11 +61,11 @@ export async function command(
 	})
 }
 
-export async function prepare(commandLine: string, cwd: string): Promise<void> {
+export async function prepare(commandLine: Task, cwd: string): Promise<void> {
 	const result = await command(commandLine, cwd)
 	if (result.code !== 0)
 		throw new Error(
-			`Command failed (${result.code}) in ${cwd}: ${commandLine}\n${result.output}`,
+			`Command failed (${result.code}) in ${cwd}: ${typeof commandLine === `string` ? commandLine : `inline task`}\n${result.output}`,
 		)
 }
 

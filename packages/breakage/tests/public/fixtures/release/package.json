@@ -1,0 +1,6 @@
+{
+	"name": "release-fixture",
+	"private": true,
+	"type": "module",
+	"workspaces": ["packages/*"]
+}
