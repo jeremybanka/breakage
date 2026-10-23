@@ -227,8 +227,8 @@ importers:
         specifier: 2.2.9
         version: 2.2.9
       comline:
-        specifier: 0.9.0
-        version: 0.9.0(arktype@2.2.9)
+        specifier: 0.9.1
+        version: 0.9.1(arktype@2.2.9)
       minimatch:
         specifier: 10.2.6
         version: 10.2.6
@@ -1601,6 +1601,17 @@ packages:
       zod:
         optional: true
 
+  comline@0.9.1:
+    resolution: {integrity: sha512-RbB0sJLMiTHe02VpHLK3RmXUk9Y/Jw5H35yx9X8rVWM7SQKDaSJ6AgIY1TbjhbduXhPrJEeiBbInvuYep5I9jw==}
+    peerDependencies:
+      arktype: ^2.1.28
+      zod: ^4.2.0
+    peerDependenciesMeta:
+      arktype:
+        optional: true
+      zod:
+        optional: true
+
   commander@15.0.0:
     resolution: {integrity: sha512-z67u4ZhzCL/Tydu1lJARtEZYWbWaN7oYLHbsuzocr6y4N6WZAagG3RQ4FW61V1/0+jImpj293XfrcYnd1qxtPg==}
     engines: {node: '>=22.12.0'}
@@ -2000,6 +2011,9 @@ packages:
 
   treetrunks@0.1.12:
     resolution: {integrity: sha512-x9XbZAus9Y4y7WRke6DwOrxmAxrwXNVv/wSmO9aNEfO92gu4Jau/4lmfXE1untxNle1WygPX2wriCtf+oYKMmg==}
+
+  treetrunks@0.1.13:
+    resolution: {integrity: sha512-mnGpuYAWH+EMci3E+4B9nd9K57mR4zSNmTrkzyJwTEmnN75TllJGgVb632unrp2AOfZ/ksgvombhwGH1bERhzw==}
 
   turbo@2.11.10:
     resolution: {integrity: sha512-3GJYwig8ygEI89oaOZdduJX8/aw6O9eRPYHoIt6T3FZl9hkKjiyIspufJoVgqXihPoJu8M5CSV0DlZvzfohBCw==}
@@ -3124,10 +3138,10 @@ snapshots:
     optionalDependencies:
       arktype: 2.2.8
 
-  comline@0.9.0(arktype@2.2.9):
+  comline@0.9.1(arktype@2.2.9):
     dependencies:
       '@standard-schema/spec': 1.1.0
-      treetrunks: 0.1.12
+      treetrunks: 0.1.13
     optionalDependencies:
       arktype: 2.2.9
 
@@ -3528,6 +3542,8 @@ snapshots:
   totalist@3.0.1: {}
 
   treetrunks@0.1.12: {}
+
+  treetrunks@0.1.13: {}
 
   turbo@2.11.10:
     optionalDependencies:
