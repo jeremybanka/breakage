@@ -103,7 +103,7 @@ describe(`authored support eras`, () => {
 			...JSON.parse(f.read(`local-host/package.json`)),
 			peerDependencies: { helper: `workspace:^` },
 		})
-		f.config.releaseIntent = () => ({ status: `release`, version: `2.0.0` })
+		f.config.release = { version: () => `2.0.0` }
 		const result = await npmTest(
 			f.config,
 			{ peer: `host`, range: `2` },
@@ -129,7 +129,7 @@ describe(`authored support eras`, () => {
 			...authored,
 			peerDependencies: { helper: `workspace:^1` },
 		})
-		f.config.releaseIntent = () => ({ status: `release`, version: `2.0.0` })
+		f.config.release = { version: () => `2.0.0` }
 		const selected = { peer: `host`, range: `2` }
 		const options = { baseDirectory: f.directory }
 		const result = await npmTest(f.config, selected, options)
@@ -161,9 +161,11 @@ describe(`historical workspace declarations`, () => {
 			f.baseline({ host: `^1 || ^2`, legacy: `workspace:^` })
 			rmSync(path.join(f.directory, `legacy-local`), { recursive: true })
 			const inspected: string[] = []
-			f.config.releaseIntent = ({ packageName }) => {
-				inspected.push(packageName)
-				return { status: `none` }
+			f.config.release = {
+				version: ({ packageName }) => {
+					inspected.push(packageName)
+					return undefined
+				},
 			}
 			const previous = await previousManifest(f.config, f.directory)
 			expect(previous!.peerDependencies!.legacy).toBe(`^2.0.0`)
@@ -254,8 +256,12 @@ describe(`historical workspace declarations`, () => {
 			f.write(`local-host/package.json`, { name: `host`, version: `0.53.3` })
 			f.baseline({ host: range })
 			f.write(`local-host/package.json`, { name: `host`, version: `0.99.0` })
-			f.config.releaseIntent = () => {
-				throw new Error(`Historical resolution must not consult release intent`)
+			f.config.release = {
+				version: () => {
+					throw new Error(
+						`Historical resolution must not consult release intent`,
+					)
+				},
 			}
 			const previous = await previousManifest(f.config, f.directory)
 			expect(previous!.peerDependencies).toEqual({ host: expected })
@@ -268,7 +274,7 @@ describe(`historical workspace declarations`, () => {
 		},
 		30_000,
 	)
-	it(`detects and certifies dropped historical support independently of today's local version`, async () => {
+	it(`allows dropped historical support with a breaking delta against the baseline`, async () => {
 		const f = setup()
 		f.baseline({ host: `workspace:^` })
 		f.write(`local-host/package.json`, { name: `host`, version: `3.0.0` })
@@ -277,10 +283,10 @@ describe(`historical workspace declarations`, () => {
 			peerDependencies: { host: `^3` },
 		})
 		f.representative(`three`, `3.0.0`)
-		f.config.releaseIntent = ({ packageName }) =>
-			packageName === `integration`
-				? { status: `release`, version: `2.0.0` }
-				: { status: `none` }
+		f.config.release = {
+			version: ({ packageName }) =>
+				packageName === `integration` ? `1.1.0` : undefined,
+		}
 		const options = { baseDirectory: f.directory, coverageOnly: true }
 		const result = await npmCheck(f.config, options)
 		expect(result.exitCode, JSON.stringify(result)).toBe(1)
@@ -293,12 +299,12 @@ describe(`historical workspace declarations`, () => {
 				current: `^3`,
 			},
 		])
-		f.config.certifyBreaking = ({ changes, release }) =>
-			changes[0]!.previous === `^2.0.0` && release.delta === `major`
-		const certified = await npmCheck(f.config, options)
-		expect(certified.exitCode, JSON.stringify(certified)).toBe(0)
-		expect(certified.support.status).toBe(`certified`)
-		assertStagesRemoved(f, certified)
+		f.config.release!.version = ({ packageName }) =>
+			packageName === `integration` ? `2.0.0` : undefined
+		const approved = await npmCheck(f.config, options)
+		expect(approved.exitCode, JSON.stringify(approved)).toBe(0)
+		expect(approved.support.status).toBe(`breaking-release`)
+		assertStagesRemoved(f, approved)
 	}, 30_000)
 	it(`reads a sibling peer at a fetched release tag from a nested package`, async () => {
 		const f = setup()

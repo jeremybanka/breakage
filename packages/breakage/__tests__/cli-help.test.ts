@@ -73,7 +73,6 @@ describe(`breakage help route`, () => {
 			JSON.stringify({
 				testPattern: `*__public.test.ts`,
 				testCommand: `exit 99`,
-				certifyCommand: `exit 99`,
 			}),
 		)
 		// A valid configuration reaches the check's non-repository outcome.

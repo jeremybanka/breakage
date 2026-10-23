@@ -203,10 +203,10 @@ describe(`coordinated candidate peer declarations`, () => {
 				...JSON.parse(f.read(filename)),
 				breakage: { candidates: [`ranges-host`, `renderer`] },
 			})
-			f.config.releaseIntent = ({ packageName }) => ({
-				status: `release`,
-				version: packageName === `renderer` ? `19.0.0` : `2.0.0`,
-			})
+			f.config.release = {
+				version: ({ packageName }) =>
+					packageName === `renderer` ? `19.0.0` : `2.0.0`,
+			}
 			const result = await npmCheck(f.config, { baseDirectory: f.directory })
 			expect(result.exitCode, JSON.stringify(result)).toBe(exitCode)
 			expect(result.representatives[0]!.peers.renderer).toMatchObject({

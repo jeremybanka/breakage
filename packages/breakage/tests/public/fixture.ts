@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process"
 import {
+	cpSync,
 	mkdirSync,
 	mkdtempSync,
 	readFileSync,
@@ -33,7 +34,9 @@ export function fixture(changed = false): {
 	const directory = mkdtempSync(path.join(tmpdir(), `breakage-consumer-`))
 	const repository = path.join(directory, `repository`)
 	const remote = path.join(directory, `remote.git`)
-	mkdirSync(repository)
+	cpSync(new URL(`./fixtures/api/`, import.meta.url), repository, {
+		recursive: true,
+	})
 	git(directory, `init`, `--bare`, remote)
 	git(repository, `init`, `--initial-branch=main`)
 	git(repository, `config`, `user.name`, `Breakage Consumer`)
@@ -46,27 +49,19 @@ export function fixture(changed = false): {
 		writeFileSync(destination, contents)
 	}
 
-	write(`.gitignore`, `artifacts/\n.breakage/\n`)
-	write(`implementation.ts`, `export const value = "released"\n`)
-	write(`public/expected.ts`, `export const expected = "released"\n`)
-	write(
-		`public/contract.ts`,
-		`import { strict as assert } from "node:assert"\nimport { value } from "../implementation.ts"\nimport { expected } from "./expected.ts"\nassert.equal(value, expected, "released consumer behavior")\n`,
-	)
-	write(`notes.txt`, `original`)
 	git(repository, `add`, `.`)
 	git(repository, `commit`, `-m`, `Release`)
 	git(repository, `tag`, `-a`, `example@1.0.0`, `-m`, `Release`)
 	git(repository, `push`, `--tags`, `origin`)
 
-	// Today's assertions pass even if today's implementation has broken the release.
+	// Today's assertions match current data even if the implementation broke the release.
 	write(
-		`implementation.ts`,
-		`export const value = ${JSON.stringify(changed ? `changed` : `released`)}\n`,
+		`value.json`,
+		JSON.stringify({ value: changed ? `changed` : `released` }),
 	)
-	write(
-		`public/contract.ts`,
-		`import { strict as assert } from "node:assert"\nimport { value } from "../implementation.ts"\nassert.equal(value, ${JSON.stringify(changed ? `changed` : `released`)})\n`,
+	cpSync(
+		path.join(repository, `current/contract.ts`),
+		path.join(repository, `public/contract.ts`),
 	)
 	rmSync(path.join(repository, `public/expected.ts`))
 	git(repository, `add`, `.`)
@@ -80,7 +75,6 @@ export function fixture(changed = false): {
 			tagPattern: `refs/tags/example@`,
 			testPattern: `public/**/*.ts`,
 			testCommand: `${shellQuote(process.execPath)} public/contract.ts`,
-			certifyCommand: `false`,
 		},
 		write,
 		read: (filename) => readFileSync(path.join(repository, filename), `utf8`),

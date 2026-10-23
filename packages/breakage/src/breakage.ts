@@ -1,4 +1,3 @@
-import { exec } from "node:child_process"
 import path from "node:path"
 
 import { minimatch } from "minimatch"
@@ -6,10 +5,15 @@ import { simpleGit } from "simple-git"
 import type { Chronicle } from "takua"
 import logger from "takua"
 
-import { command, errorMessage } from "./npm/command.ts"
-import type { Task, TaskContext } from "./npm/command.ts"
+import { command, errorMessage } from "./task.ts"
+import type { Task, TaskContext } from "./task.ts"
 import { readManifest, parseManifest } from "./npm/manifest.ts"
-import { resolveReleaseVersion, versionDelta } from "./release.ts"
+import {
+	resolveReleaseVersion,
+	versionDelta,
+	validateRelease,
+	rejectCertificationOptions,
+} from "./release.ts"
 import type { ReleaseConfig, VersionDelta } from "./release.ts"
 import { readBaseline } from "./baseline.ts"
 import { withDirectoryLock } from "./directory-lock.ts"
@@ -22,11 +26,13 @@ export { semverPolicy, versionDelta, resolveReleaseVersion } from "./release.ts"
 export type {
 	ReleaseConfig,
 	ReleasePolicy,
+	ReleasePolicyFunction,
+	SemverPolicyOptions,
 	ReleaseVersion,
 	ReleaseVersionContext,
 	VersionDelta,
 } from "./release.ts"
-export type { Task, TaskContext, CommandResult } from "./npm/command.ts"
+export type { Task, TaskContext, CommandResult } from "./task.ts"
 
 export type PublicTestContext = TaskContext & {
 	baseline: { ref: string; commit: string }
@@ -43,9 +49,6 @@ export type {
 	NpmSuite,
 	NpmSuiteResult,
 	NpmTestSelection,
-	ReleaseContext,
-	ReleaseEvidence,
-	ReleaseIntent,
 	SupportChange,
 } from "./npm/types.ts"
 
@@ -56,8 +59,6 @@ export type BreakageOptions = {
 	testCommand?: string
 	/** String command or inline task. Do not combine with testCommand. */
 	test?: Task<PublicTestContext>
-	/** Legacy certification; use release for version-based decisions. */
-	certifyCommand?: string
 	release?: ReleaseConfig
 	baseDirname?: string
 	verbose?: boolean | undefined
@@ -93,33 +94,30 @@ export type BreakageOutcome =
 			testsFound: string[]
 			breakingChangesFound: true
 			testResult: string
-			breakingChangesCertified: boolean
-			certificationStdout: string
-			certificationStderr: string
 			release?: VersionDelta
 	  }
 
-export async function breakage({
-	tagPattern,
-	baselineFile,
-	testPattern,
-	testCommand,
-	test,
-	release,
-	certifyCommand,
-	baseDirname = process.cwd(),
-	verbose = false,
-}: BreakageOptions): Promise<BreakageOutcome & { summary: string }> {
+export async function breakage(
+	options: BreakageOptions,
+): Promise<BreakageOutcome & { summary: string }> {
+	rejectCertificationOptions(options)
+	const {
+		tagPattern,
+		baselineFile,
+		testPattern,
+		testCommand,
+		test,
+		release,
+		baseDirname = process.cwd(),
+		verbose = false,
+	} = options
 	if (!testPattern || (!test && !testCommand))
 		throw new Error(
 			`required arguments were not provided: testPattern and test or testCommand.`,
 		)
 	if (test !== undefined && testCommand !== undefined)
 		throw new Error(`Choose test or testCommand, not both.`)
-	if (test !== undefined && certifyCommand !== undefined)
-		throw new Error(`Use release with inline tasks instead of certifyCommand.`)
-	if (release !== undefined && certifyCommand !== undefined)
-		throw new Error(`Choose release or certifyCommand, not both.`)
+	if (release !== undefined) validateRelease(release)
 	let mark: Chronicle[`mark`] | undefined
 	let logMarks: Chronicle[`logMarks`] | undefined
 	if (verbose) {
@@ -270,108 +268,45 @@ export async function breakage({
 	const { restore } = prepared
 
 	try {
-		if (test !== undefined || release !== undefined) {
-			try {
-				const result = await command(test ?? testCommand!, baseDirname, {
-					cwd: path.resolve(baseDirname),
-					baseline: { ref: latestReleaseTag, commit: releaseCommit },
-					run: (line: string) => command(line, baseDirname),
-				})
-				if (result.code > 1)
-					return {
-						gitWasClean: true,
-						setupError: result.output,
-						summary: `Public test setup failed (${result.code}).`,
-					}
-				const common = {
-					gitWasClean: true as const,
-					lastReleaseFound: true as const,
-					lastReleaseTag: latestReleaseTag,
-					testsWereFound: true as const,
-					testsFound: productionTestFiles,
-					...(releaseEvidence ? { release: releaseEvidence } : {}),
-				}
-				if (result.code === 0)
-					return {
-						...common,
-						breakingChangesFound: false,
-						summary: `No breaking changes were detected.`,
-					}
-				const permitted = releaseEvidence?.breaking ?? false
-				return {
-					...common,
-					breakingChangesFound: true,
-					breakingChangesCertified: permitted,
-					testResult: result.output,
-					certificationStdout: ``,
-					certificationStderr: ``,
-					summary: permitted
-						? `Breaking changes are covered by release ${releaseEvidence!.previousVersion} → ${releaseEvidence!.version}.`
-						: `Breaking changes require a breaking release.`,
-				}
-			} catch (error) {
-				return {
-					gitWasClean: true,
-					setupError: errorMessage(error),
-					summary: `Public test setup failed: ${errorMessage(error)}`,
-				}
+		const result = await command(test ?? testCommand!, baseDirname, {
+			cwd: path.resolve(baseDirname),
+			baseline: { ref: latestReleaseTag, commit: releaseCommit },
+			run: (line: string) => command(line, baseDirname),
+		})
+		if (result.code > 1)
+			return {
+				gitWasClean: true,
+				setupError: result.output,
+				summary: `Public test setup failed (${result.code}).`,
 			}
+		const common = {
+			gitWasClean: true as const,
+			lastReleaseFound: true as const,
+			lastReleaseTag: latestReleaseTag,
+			testsWereFound: true as const,
+			testsFound: productionTestFiles,
+			...(releaseEvidence ? { release: releaseEvidence } : {}),
 		}
-		const noBreakingChangesDetected = await new Promise<
-			BreakageOutcome & { summary: string }
-		>((resolve, reject) => {
-			const result = exec(
-				testCommand!,
-				{ cwd: baseDirname },
-				(_, __, stderr) => {
-					if (result.exitCode === 0) {
-						resolve({
-							summary: `No breaking changes were detected.`,
-							gitWasClean: true,
-							lastReleaseFound: true,
-							lastReleaseTag: latestReleaseTag,
-							testsWereFound: true,
-							testsFound: productionTestFiles,
-							breakingChangesFound: false,
-						})
-					} else {
-						reject(stderr)
-					}
-				},
-			)
-		})
-		mark?.(`passed tests`)
-		return noBreakingChangesDetected
-	} catch (thrown) {
-		mark?.(`failed tests`)
-		const breakingChangesCertified = await new Promise<
-			BreakageOutcome & { summary: string }
-		>((resolve) => {
-			const result = exec(
-				certifyCommand ?? `false`,
-				{ cwd: baseDirname },
-				(_, stdout, stderr) => {
-					const wereCertified = result.exitCode === 0
-					mark?.(`${wereCertified ? `passed` : `failed`} certification`)
-					resolve({
-						summary: wereCertified
-							? `Breaking changes were found and certified.`
-							: `Breaking changes were found, but not certified.`,
-						gitWasClean: true,
-						lastReleaseFound: true,
-						lastReleaseTag: latestReleaseTag,
-						testsWereFound: true,
-						testsFound: productionTestFiles,
-						breakingChangesFound: true,
-						testResult: thrown as string,
-						breakingChangesCertified: wereCertified,
-						certificationStdout: stdout,
-						certificationStderr: stderr,
-					})
-				},
-			)
-		})
-		return breakingChangesCertified
+		if (result.code === 0)
+			return {
+				...common,
+				breakingChangesFound: false,
+				summary: `No breaking changes were detected.`,
+			}
+		return {
+			...common,
+			breakingChangesFound: true,
+			testResult: result.output,
+			summary: releaseEvidence?.breaking
+				? `Breaking changes are covered by release ${releaseEvidence.previousVersion} → ${releaseEvidence.version}.`
+				: `Breaking changes require a breaking release.`,
+		}
+	} catch (error) {
+		return {
+			gitWasClean: true,
+			setupError: errorMessage(error),
+			summary: `Public test setup failed: ${errorMessage(error)}`,
+		}
 	} finally {
 		await restore()
 		mark?.(`restored original public tests`)

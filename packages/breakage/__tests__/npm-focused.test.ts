@@ -141,13 +141,15 @@ describe(`focused peer selection`, () => {
 		).toBe(false)
 	}, 30_000)
 
-	it(`selects a coordinated candidate using its certified intended version`, async () => {
+	it(`selects a coordinated candidate using its resolved intended version`, async () => {
 		const f = (fixture = npmFixture())
 		f.config.representatives = `environments/*`
 		let inspections = 0
-		f.config.releaseIntent = () => {
-			inspections++
-			return { status: `release`, version: `3.0.0` }
+		f.config.release = {
+			version: () => {
+				inspections++
+				return `3.0.0`
+			},
 		}
 		for (const name of [`released-1`, `released-2`])
 			rmSync(path.join(f.directory, `environments/${name}/package-lock.json`))
@@ -173,7 +175,7 @@ describe(`focused peer selection`, () => {
 	it(`skips a disjoint candidate before requiring its lockfile`, async () => {
 		const f = (fixture = npmFixture())
 		f.config.representatives = `environments/*`
-		f.config.releaseIntent = () => ({ status: `release`, version: `3.0.0` })
+		f.config.release = { version: () => `3.0.0` }
 		rmSync(path.join(f.directory, `environments/candidate/package-lock.json`))
 		const result = await npmTest(
 			f.config,

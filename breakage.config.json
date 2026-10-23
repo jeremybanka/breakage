@@ -1,6 +1,5 @@
 {
 	"tagPattern": "refs/tags/breakage@",
 	"testPattern": "packages/breakage/tests/public/**/*",
-	"testCommand": "pnpm run test:public",
-	"certifyCommand": "false"
+	"testCommand": "pnpm run test:public"
 }

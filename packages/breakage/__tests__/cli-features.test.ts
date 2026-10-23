@@ -4,6 +4,7 @@ import {
 	mkdirSync,
 	mkdtempSync,
 	readdirSync,
+	readFileSync,
 	rmSync,
 	writeFileSync,
 } from "node:fs"
@@ -50,7 +51,6 @@ describe(`CLI features`, () => {
 		`--test-command`,
 		`--pattern`,
 		`--tag-pattern`,
-		`--certify-command`,
 		`--base-dir`,
 		`--baseline-file`,
 	])(`offers %s before validating required options`, (option) => {
@@ -98,6 +98,12 @@ describe(`CLI features`, () => {
 		expect(existsSync(resolve(directory, `breakage.main.schema.json`))).toBe(
 			true,
 		)
+		const schema = JSON.parse(
+			readFileSync(resolve(directory, `breakage.main.schema.json`), `utf8`),
+		) as { properties: Record<string, unknown> }
+		expect(schema.properties).toHaveProperty(`test`)
+		expect(schema.properties).toHaveProperty(`release`)
+		expect(schema.properties).not.toHaveProperty(`certifyCommand`)
 		expect(result.stderr).toContain(`Option "--test-command" is not valid`)
 		expect(result.stderr).toContain(`Unknown option "--typo"`)
 		expect(result.stderr).not.toContain(`--out-dir`)

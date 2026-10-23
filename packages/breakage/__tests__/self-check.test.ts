@@ -1,5 +1,7 @@
 import { expect, it } from "bun:test"
 
+import { versionDelta } from "../src/release.ts"
+
 import configuration from "../../../breakage.config.json" with { type: "json" }
 import { compatibilityResult } from "../../../scripts/check-compatibility.node.ts"
 
@@ -83,4 +85,55 @@ it(`enforces a released contract failure even for a bootstrap tag`, () => {
 			summary: `Breaking changes were found, but not certified.`,
 		}),
 	).toMatchObject({ exitCode: 1, bootstrap: false })
+})
+
+it.each([
+	[`0.8.5`, `0.9.0`, 0],
+	[`0.8.5`, `0.8.6`, 1],
+	[`0.9.0`, `0.9.0`, 1],
+] as const)(
+	`requires a breaking delta for historical failure: %s → %s`,
+	(previous, next, exitCode) => {
+		const release = versionDelta(previous, next, { beforeV1: `minor` })
+		const result = compatibilityResult(
+			baseline,
+			{
+				...missingTests,
+				testsWereFound: true,
+				testsFound: [`contract.test.ts`],
+				breakingChangesFound: true,
+				breakingChangesCertified: false,
+				testResult: `consumer regression`,
+				certificationStdout: ``,
+				certificationStderr: ``,
+				summary: `Breaking changes were found, but not certified.`,
+			},
+			release,
+		)
+		expect(result).toMatchObject({ exitCode, bootstrap: false })
+		if (exitCode === 0)
+			expect(result.message).toContain(
+				`Historical compatibility was NOT established`,
+			)
+	},
+)
+
+it(`cannot cover inconclusive historical checks with a breaking release`, () => {
+	const release = versionDelta(`0.8.5`, `0.9.0`, { beforeV1: `minor` })
+	const currentBaseline = {
+		ref: `refs/tags/breakage@0.8.5`,
+		commit: baseline.commit,
+	}
+	for (const outcome of [
+		missingTests,
+		{ gitWasClean: false, summary: `dirty checkout` } as const,
+		{
+			gitWasClean: true,
+			lastReleaseFound: false,
+			summary: `no release`,
+		} as const,
+	])
+		expect(
+			compatibilityResult(currentBaseline, outcome, release).exitCode,
+		).toBe(2)
 })

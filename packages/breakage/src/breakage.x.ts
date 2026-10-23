@@ -21,8 +21,13 @@ import logger from "takua"
 
 import { defaultConfig, loadConfig } from "./config.ts"
 import { breakage, breakagePrelude } from "./breakage.ts"
-import { errorMessage } from "./npm/command.ts"
+import { errorMessage } from "./task.ts"
 import { npmCheckManual, npmTestManual, runNpmCli } from "./npm/cli.ts"
+
+const releaseSchema = type({
+	"version?": "string",
+	"policy?": { "beforeV1?": '"major" | "minor" | "patch"' },
+})
 
 const BREAKAGE_MANUAL = options(
 	`Check for breaking changes in a package.`,
@@ -31,7 +36,8 @@ const BREAKAGE_MANUAL = options(
 		"baselineFile?": `string`,
 		"testPattern?": `string`,
 		"testCommand?": `string`,
-		"certifyCommand?": `string`,
+		"test?": `string`,
+		"release?": releaseSchema,
 		"baseDirname?": `string`,
 		"verbose?": `boolean`,
 	}),
@@ -67,13 +73,18 @@ const BREAKAGE_MANUAL = options(
 			description: `Complete bash command that runs the tests for the library's public API.`,
 			example: `--testCommand="npm run test"`,
 		},
-		certifyCommand: {
-			aliases: [`certify-command`],
+		test: {
 			completion: { repeatable: false },
-			flag: `c`,
 			required: false,
-			description: `Complete bash command that determines whether a major version bump for your package is indicated in the workspace. Exit code 0 indicates that a major version bump is indicated, and exit code 1 indicates that no major version bump is indicated.`,
-			example: `--certifyCommand=\tsx scripts/certify-major-version-bump.node`,
+			description: `Shell command running the restored public contracts.`,
+			example: `--test="npm run test:public"`,
+		},
+		release: {
+			completion: { repeatable: false },
+			required: false,
+			description: `Release version and policy as JSON; omitted version uses the package manifest.`,
+			example: `--release='{"policy":{"beforeV1":"minor"}}'`,
+			parse: (input) => releaseSchema.assert(JSON.parse(input)),
 		},
 		baseDirname: {
 			aliases: [`base-dir`, `base-dirname`],
@@ -102,7 +113,8 @@ const PRELUDE_MANUAL = options(
 		"out?": `string`,
 		"testPattern?": `string`,
 		"testCommand?": `string`,
-		"certifyCommand?": `string`,
+		"test?": `string`,
+		"release?": releaseSchema,
 		"baselineFile?": `string`,
 		"verbose?": `boolean`,
 	}),
@@ -114,10 +126,6 @@ const PRELUDE_MANUAL = options(
 		},
 		testCommand: {
 			...BREAKAGE_MANUAL.optionConfigs.testCommand,
-			required: false,
-		},
-		certifyCommand: {
-			...BREAKAGE_MANUAL.optionConfigs.certifyCommand,
 			required: false,
 		},
 		out: {
@@ -186,10 +194,19 @@ const completion = await completionResponse(parse.definition, process.argv)
 if (completion !== undefined) {
 	process.stdout.write(completion)
 } else {
-	const { inputs, warnings, writeJsonSchema } = parse(process.argv)
-	logWarnings(warnings)
-
 	try {
+		const { inputs, warnings, writeJsonSchema } = parse(process.argv)
+		logWarnings(warnings)
+		if (
+			process.argv
+				.slice(2)
+				.some((arg) =>
+					/^(?:--certifyCommand|--certify-command|-c)(?:=|$)/.test(arg),
+				)
+		)
+			throw new Error(
+				`certifyCommand was removed. Configure release.version and release.policy instead.`,
+			)
 		switch (inputs.case) {
 			case `npm`:
 			case `npm/help`:
@@ -251,6 +268,7 @@ if (completion !== undefined) {
 						: {}),
 				}
 				if (inputs.opts.testCommand) delete merged.test
+				if (inputs.opts.test) delete merged.testCommand
 				if (!merged.testPattern)
 					throw new Error(`required arguments were not provided: testPattern.`)
 				const { returnValue } = await encapsulate(
@@ -276,14 +294,14 @@ if (completion !== undefined) {
 				}
 				if (`breakingChangesFound` in returnValue) {
 					if (returnValue.breakingChangesFound) {
-						if (returnValue.breakingChangesCertified) {
+						if (returnValue.release?.breaking) {
 							process.stdout.write(
-								`👷 Breaking changes were found and certified.`,
+								`👷 Breaking changes are covered by the breaking release.`,
 							)
 							process.exit(0)
 						} else {
 							process.stdout.write(
-								`❌ Breaking changes were found, but not certified.`,
+								`❌ Breaking changes require a breaking release.`,
 							)
 							process.exit(1)
 						}

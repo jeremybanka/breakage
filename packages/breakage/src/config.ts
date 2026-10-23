@@ -5,7 +5,7 @@ import { pathToFileURL } from "node:url"
 
 import type { BreakageOptions } from "./breakage.ts"
 import type { NpmConfig } from "./npm/types.ts"
-import { validateRelease } from "./release.ts"
+import { validateRelease, rejectCertificationOptions } from "./release.ts"
 
 export type BreakageConfig = Partial<BreakageOptions> & {
 	npm?: NpmConfig
@@ -18,6 +18,8 @@ export function defineConfig<Config extends BreakageConfig>(
 ): Config & BreakageConfig {
 	if (!config || typeof config !== `object` || Array.isArray(config))
 		throw new Error(`Expected a Breakage configuration object.`)
+	rejectCertificationOptions(config)
+	if (config.npm) rejectCertificationOptions(config.npm)
 	if (config.release !== undefined) validateRelease(config.release)
 	if (config.npm?.release !== undefined) validateRelease(config.npm.release)
 	return {

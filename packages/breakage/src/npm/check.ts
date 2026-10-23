@@ -1,9 +1,7 @@
 import path from "node:path"
 
-import semver from "semver"
-
-import { versionDelta } from "../release.ts"
-import { command, errorMessage } from "./command.ts"
+import { versionDelta, type ReleaseVersionContext } from "../release.ts"
+import { command, errorMessage } from "../task.ts"
 import { validateConfig, validatePeerRanges } from "./config.ts"
 import {
 	checkCandidatePeers,
@@ -21,13 +19,12 @@ import {
 	normalizeWorkspacePeers,
 	readManifest,
 } from "./manifest.ts"
-import { intent, previousManifest, supportChanges } from "./release.ts"
+import { releaseVersion, previousManifest, supportChanges } from "./release.ts"
 import type {
 	NpmConfig,
 	NpmReport,
 	NpmRepresentativeResult,
 	NpmTestSelection,
-	ReleaseIntent,
 } from "./types.ts"
 
 async function checkSupport(
@@ -45,39 +42,25 @@ async function checkSupport(
 		const changes = supportChanges(previous, manifest)
 		if (!changes.length)
 			return { status: `unchanged`, previousVersion: previous.version, changes }
-		const evidence = await intent(config, {
+		const evidence = await releaseVersion(config, {
 			packageName: manifest.name,
 			packageDirectory: base,
 			currentVersion: manifest.version,
 		})
-		if (evidence.status === `none`)
+		if (evidence === undefined)
 			return {
 				status: `end-of-support`,
 				previousVersion: previous.version,
 				changes,
 			}
-		if (!config.release && !semver.gt(evidence.version, previous.version))
-			throw new Error(
-				`The intended release must be newer than baseline ${previous.version}.`,
-			)
-		const release = {
-			version: evidence.version,
-			delta: semver.diff(previous.version, evidence.version) ?? `none`,
-		}
-		const certified = config.release
-			? versionDelta(previous.version, evidence.version, config.release.policy)
-					.breaking
-			: config.certifyBreaking
-				? await config.certifyBreaking({
-						previousVersion: previous.version,
-						release,
-						changes,
-					})
-				: false
-		if (typeof certified !== `boolean`)
-			throw new Error(`certifyBreaking must return a boolean.`)
+		const release = versionDelta(
+			previous.version,
+			evidence,
+			config.release?.policy,
+		)
+
 		return {
-			status: certified ? `certified` : `end-of-support`,
+			status: release.breaking ? `breaking-release` : `end-of-support`,
 			previousVersion: previous.version,
 			changes,
 			release,
@@ -103,26 +86,26 @@ async function checkLocalReleases(
 				const current = await readManifest(path.join(directory, `package.json`))
 				if (current.name !== peer)
 					throw new Error(`Local peer identity mismatch for ${peer}.`)
-				const release = await intent(config, {
+				const release = await releaseVersion(config, {
 					packageName: peer,
 					packageDirectory: directory,
 					currentVersion: current.version,
 				})
-				if (release.status === `none`) return []
-				if (!matches(release.version, range))
+				if (release === undefined) return []
+				if (!matches(release, range))
 					return [
-						`Declared support for ${peer}: ${range} does not include its planned local release ${release.version}. Update the peer range to include the intended version.`,
+						`Declared support for ${peer}: ${range} does not include its planned local release ${release}. Update the peer range to include the intended version.`,
 					]
 				if (
 					!representatives.some(
 						(result) =>
 							result.peers[peer]?.source === `candidate` &&
-							result.peers[peer]?.version === release.version &&
+							result.peers[peer]?.version === release &&
 							result.suites.some((suite) => suite.peer === peer),
 					)
 				)
 					return [
-						`No coordinated representative covers planned local peer ${peer}@${release.version}. Enroll ${peer} with breakage.candidates and configure its relationship suite.`,
+						`No coordinated representative covers planned local peer ${peer}@${release}. Enroll ${peer} with breakage.candidates and configure its relationship suite.`,
 					]
 				return []
 			} catch (error) {
@@ -302,32 +285,20 @@ async function run(
 			eras(selection.range)
 		}
 		// One piece of release evidence per package per invocation, including failures.
-		const releases = new Map<string, Promise<ReleaseIntent>>()
-		const getIntent = (
-			context: Parameters<NonNullable<NpmConfig[`releaseIntent`]>>[0],
-		): Promise<ReleaseIntent> => {
+		const releases = new Map<string, Promise<string | undefined>>()
+		const version = (
+			context: ReleaseVersionContext,
+		): Promise<string | undefined> => {
 			let pending = releases.get(context.packageDirectory)
 			if (!pending) {
-				pending = intent(config, context)
+				pending = releaseVersion(config, context)
 				releases.set(context.packageDirectory, pending)
 			}
 			return pending
 		}
 		const effective: NpmConfig = {
 			...config,
-			...(config.release
-				? {
-						release: {
-							...config.release,
-							version: async (context) => {
-								const evidence = await getIntent(context)
-								return evidence.status === `release`
-									? evidence.version
-									: undefined
-							},
-						},
-					}
-				: { releaseIntent: getIntent }),
+			...(config.release ? { release: { ...config.release, version } } : {}),
 		}
 
 		const directories = await discover(config, base)

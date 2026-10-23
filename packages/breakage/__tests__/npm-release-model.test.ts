@@ -46,7 +46,7 @@ it.each([
 		})
 		expect(result.exitCode, JSON.stringify(result)).toBe(expected)
 		expect(result.support.status).toBe(
-			expected === 0 ? `certified` : `end-of-support`,
+			expected === 0 ? `breaking-release` : `end-of-support`,
 		)
 		expect(calls).toBe(1)
 		// The manifest supplies the same intent after a release tool consumes its plan.
@@ -99,7 +99,7 @@ it(`runs inline npm preparation and suites in their own directories and preserve
 	}
 	f.copy(`contracts/check-released-host-failure.ts`, `contracts/check.ts`)
 	const result = await npmCheck(f.config, { baseDirectory: f.directory })
-	expect(result.support.status).toBe(`certified`)
+	expect(result.support.status).toBe(`breaking-release`)
 	expect(result.exitCode, JSON.stringify(result)).toBe(1)
 	expect(result.representatives.map((entry) => entry.status)).toEqual([
 		`compatibility-failure`,

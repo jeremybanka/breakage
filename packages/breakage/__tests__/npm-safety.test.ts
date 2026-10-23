@@ -51,7 +51,7 @@ describe(`npm environment safety`, () => {
 			)
 			const originalArchive = readFileSync(archive)
 			f.config.installCommand += ` && rm node_modules/host/package.json && ln ../../../.cache/host-manifest.json node_modules/host/package.json`
-			f.config.releaseIntent = () => ({ status: `release`, version })
+			f.config.release = { version }
 			f.copy(`contracts/check-manifest-storage.ts`, `contracts/check.ts`)
 			f.config.suites.host!.command = `node contracts/check.ts ${version}`
 			const result = await npmTest(
@@ -157,7 +157,7 @@ describe(`npm environment safety`, () => {
 		async (shadow) => {
 			const f = setup(`runtime-dependencies`)
 			f.representative(`next`, `2.0.0`, true)
-			f.config.releaseIntent = () => ({ status: `release`, version: `2.0.0` })
+			f.config.release = { version: () => `2.0.0` }
 			// Confirm npm installed the optional package; its branch must be audited
 			// even when the current contract does not happen to execute that branch.
 			f.config.installCommand += ` && test -f node_modules/helper/package.json`
@@ -294,18 +294,17 @@ describe(`npm environment safety`, () => {
 		const snapshot = JSON.parse(f.read(`.breakage/baseline.json`))
 		snapshot.commit = git(f.directory, `rev-parse`, `HEAD`).trim()
 		f.write(`.breakage/baseline.json`, snapshot)
-		f.config.releaseIntent = ({ packageName }) =>
-			packageName === `integration`
-				? { status: `release`, version: `0.6.0` }
-				: { status: `none` }
-		f.config.certifyBreaking = ({ previousVersion, release }) =>
-			previousVersion.startsWith(`0.`) && release.delta === `minor`
+		f.config.release = {
+			version: ({ packageName }) =>
+				packageName === `integration` ? `0.6.0` : undefined,
+		}
+		f.config.release!.policy = { beforeV1: `minor` }
 		const result = await npmCheck(f.config, {
 			baseDirectory: f.directory,
 			coverageOnly: true,
 		})
 		expect(result.exitCode, JSON.stringify(result)).toBe(0)
-		expect(result.support.status).toBe(`certified`)
+		expect(result.support.status).toBe(`breaking-release`)
 	}, 30_000)
 })
 

@@ -28,19 +28,19 @@ function run(args: string[]) {
 }
 
 it.each([
-	{ changed: false, certified: false, exitCode: 0 },
-	{ changed: true, certified: false, exitCode: 1 },
-	{ changed: true, certified: true, exitCode: 0 },
+	{ changed: false, breakingRelease: false, exitCode: 0 },
+	{ changed: true, breakingRelease: false, exitCode: 1 },
+	{ changed: true, breakingRelease: true, exitCode: 0 },
 ])(
-	`returns $exitCode for changed=$changed, certified=$certified using a config file`,
-	({ changed, certified, exitCode }) => {
+	`returns $exitCode for changed=$changed, breakingRelease=$breakingRelease using a config file`,
+	({ changed, breakingRelease, exitCode }) => {
 		project = fixture(changed)
 		const currentTests = project.read(`public/contract.ts`)
 		project.write(
 			`breakage.config.json`,
 			JSON.stringify({
 				...project.options,
-				certifyCommand: certified ? `true` : `false`,
+				release: { version: breakingRelease ? `2.0.0` : `1.0.0` },
 			}),
 		)
 		// Configuration is committed because checking requires a clean repository.
@@ -59,7 +59,6 @@ it(`returns 2 when no release can establish compatibility`, () => {
 		`--tag-pattern=refs/tags/absent@`,
 		`--test-pattern=public/**/*.ts`,
 		`--test-command=false`,
-		`--certify-command=false`,
 	])
 	expect(result.exitCode).toBe(2)
 })

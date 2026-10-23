@@ -31,6 +31,7 @@ it.each([
 		expect(
 			versionDelta(previous, next, semverPolicy({ beforeV1 })).breaking,
 		).toBe(breaking)
+		expect(versionDelta(previous, next, { beforeV1 }).breaking).toBe(breaking)
 	},
 )
 
@@ -101,7 +102,6 @@ it(`uses the manifest version and pinned commit without needing origin`, async (
 		release: { policy: semverPolicy({ beforeV1: `minor` }) },
 	})
 	expect(result).toMatchObject({
-		breakingChangesCertified: true,
 		release: { previousVersion: `0.53.3`, version: `0.54.0`, breaking: true },
 	})
 })
@@ -111,11 +111,11 @@ it(`does not permit unchanged releases, missing evidence, or task setup errors`,
 	const config = { ...fixtureConfig, baseDirname: project.library }
 	const options = { ...config, testPattern: config.testPattern! }
 	expect(await breakage({ ...options, release: {} })).toMatchObject({
-		breakingChangesCertified: false,
+		release: { breaking: false },
 	})
 	expect(
 		await breakage({ ...options, release: { version: () => undefined } }),
-	).toMatchObject({ breakingChangesCertified: false })
+	).not.toHaveProperty(`release`)
 	for (const test of [
 		() => {
 			throw new Error(`setup failed`)
@@ -150,7 +150,7 @@ it(`passes pinned context to inline tasks without changing process cwd`, async (
 			return await context.run(`node public/contract.ts`)
 		},
 	})
-	expect(result).toMatchObject({ breakingChangesCertified: true })
+	expect(result).toMatchObject({ release: { breaking: true } })
 })
 
 it(`shares a release object with npm while preserving explicit overrides`, () => {
@@ -208,4 +208,129 @@ it(`propagates Changesets configuration failures instead of guessing release int
 	expect(result.status).toBe(2)
 	expect(result.stderr).toContain(`setup error`)
 	expect(project.git(`status`, `--porcelain`)).toBe(``)
+})
+
+it(`supports JSON release policy and shell tasks before and after versioning`, () => {
+	project = releaseFixture()
+	const filename = `packages/library/breakage.config.json`
+	const config = {
+		tagPattern: `refs/tags/release-library@`,
+		testPattern: fixtureConfig.testPattern,
+		test: `node public/contract.ts`,
+		release: { version: `0.54.0`, policy: { beforeV1: `minor` } },
+	}
+	project.write(filename, config)
+	project.commit()
+	const before = project.run(filename)
+	expect(before.status, before.stdout + before.stderr).toBe(0)
+	expect(before.stdout).toContain(`0.53.3 → 0.54.0`)
+	project.version()
+	project.write(filename, {
+		...config,
+		release: { policy: { beforeV1: `minor` } },
+	})
+	project.commit()
+	const after = project.run(filename)
+	expect(after.status, after.stdout + after.stderr).toBe(0)
+	expect(after.stdout).toContain(`0.53.3 → 0.54.0`)
+	expect(project.git(`status`, `--porcelain`)).toBe(``)
+}, 20_000)
+
+it.each([0, 1, 2])(
+	`shares shell and function task semantics for exit %s`,
+	async (code) => {
+		project = releaseFixture()
+		const options: import("breakage").BreakageOptions = {
+			...fixtureConfig,
+			baseDirname: project.library,
+			testPattern: fixtureConfig.testPattern!,
+		}
+		delete options.test
+		for (const task of [
+			{ test: `exit ${code}` },
+			{ test: () => ({ code, output: `` }) },
+			{ testCommand: `exit ${code}` },
+		]) {
+			const outcome = await breakage({ ...options, ...task })
+			if (code === 2) {
+				expect(outcome).toHaveProperty(`setupError`)
+				expect(outcome).not.toHaveProperty(`breakingChangesFound`)
+			} else {
+				expect(outcome).toMatchObject({
+					breakingChangesFound: code === 1,
+					release: { breaking: true },
+				})
+			}
+			for (const key of [
+				`breakingChangesCertified`,
+				`certificationStdout`,
+				`certificationStderr`,
+			])
+				expect(outcome).not.toHaveProperty(key)
+			expect(project.git(`status`, `--porcelain`)).toBe(``)
+		}
+	},
+)
+
+it.each([`certifyCommand`, `releaseIntent`, `certifyBreaking`])(
+	`rejects removed %s in JSON and programmatic options`,
+	async (key) => {
+		project = releaseFixture()
+		const config = {
+			...fixtureConfig,
+			baseDirname: project.library,
+			testPattern: fixtureConfig.testPattern!,
+			[key]: `true`,
+		}
+		expect(() => defineConfig(config)).toThrow(`${key} was removed`)
+		expect(
+			await breakage(config).catch((error: unknown) => error),
+		).toMatchObject({
+			message: `${key} was removed. Use release.version and release.policy instead.`,
+		})
+		for (const oldConfig of [{ [key]: `true` }, { npm: { [key]: `true` } }]) {
+			project.write(`breakage.config.json`, oldConfig)
+			project.commit()
+			const result = project.run(`breakage.config.json`)
+			expect(result.status).toBe(2)
+			expect(result.stderr).toContain(`${key} was removed`)
+		}
+	},
+)
+
+it.each([`--certifyCommand=true`, `--certify-command=true`, `-c=true`])(
+	`rejects removed flag %s`,
+	(flag) => {
+		project = releaseFixture()
+		const result = project.run(configPath, flag)
+		expect(result.status).toBe(2)
+		expect(result.stderr).toContain(`certifyCommand was removed`)
+	},
+)
+
+it.each([
+	{ policy: null },
+	{ policy: [] },
+	{ policy: { beforeV1: `invalid` } },
+	{ policy: { beforeOne: `minor` } },
+])(`rejects invalid JSON policies: %j`, ({ policy }) => {
+	expect(() =>
+		defineConfig({ release: { policy } } as unknown as Parameters<
+			typeof defineConfig
+		>[0]),
+	).toThrow()
+})
+
+it(`accepts JSON release flags and reports malformed JSON as a setup error`, () => {
+	project = releaseFixture()
+	const result = project.run(
+		configPath,
+		`--test=exit 1`,
+		`--release={"version":"0.54.0","policy":{"beforeV1":"minor"}}`,
+	)
+	expect(result.status, result.stdout + result.stderr).toBe(0)
+	expect(result.stdout).toContain(`0.53.3 → 0.54.0`)
+	const invalid = project.run(configPath, `--release={invalid`)
+	expect(invalid.status).toBe(2)
+	expect(invalid.stderr).toContain(`setup error`)
 })

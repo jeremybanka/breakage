@@ -32,6 +32,10 @@ beforeEach(async () => {
 	await mkdir(path.join(producer, `tests`), { recursive: true })
 	await writeFile(path.join(producer, `.gitignore`), `.breakage/\n.turbo/\n`)
 	await writeFile(path.join(producer, `tests/public.txt`), `released-1`)
+	await writeFile(
+		path.join(producer, `package.json`),
+		JSON.stringify({ name: `example`, version: `1.0.0` }),
+	)
 	await writeFile(path.join(producer, `tests/removed.txt`), `removed`)
 	const git = simpleGit(producer)
 	await git
@@ -56,7 +60,7 @@ beforeEach(async () => {
 		tagPattern: `refs/tags/example@`,
 		testPattern: `tests/*.txt`,
 		testCommand: `test "$(cat tests/public.txt)" = released-1 && test "$(cat tests/removed.txt)" = removed`,
-		certifyCommand: `exit 1`,
+
 		baselineFile: snapshot,
 	}
 })
@@ -152,18 +156,18 @@ it(`checks the pinned release after a newer release and a moved tag, without ori
 })
 
 it.each([false, true])(
-	`restores tests after failure with certification=%s`,
-	async (certified) => {
+	`restores tests after failure with breaking release=%s`,
+	async (breakingRelease) => {
 		await prelude()
 		expect(
 			await breakage({
 				...options,
 				testCommand: `exit 1`,
-				certifyCommand: certified ? `exit 0` : `exit 1`,
+				release: { version: breakingRelease ? `2.0.0` : `1.0.0` },
 			}),
 		).toMatchObject({
 			breakingChangesFound: true,
-			breakingChangesCertified: certified,
+			release: { breaking: breakingRelease },
 		})
 		await assertRestored()
 	},

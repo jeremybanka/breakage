@@ -1,6 +1,6 @@
 import path from "node:path"
 
-import { validateRelease } from "../release.ts"
+import { validateRelease, rejectCertificationOptions } from "../release.ts"
 
 import { eras, packageName, record } from "./manifest.ts"
 import type { NpmConfig } from "./types.ts"
@@ -29,11 +29,8 @@ export function validateConfig(value: unknown): asserts value is NpmConfig {
 		throw new Error(`npm.prepareCommand must be a command or function.`)
 	if (value.installCommand !== undefined && !task(value.installCommand))
 		throw new Error(`Invalid npm.installCommand.`)
-	if (value.release !== undefined) {
-		validateRelease(value.release)
-		if (value.releaseIntent || value.certifyBreaking)
-			throw new Error(`Choose npm.release or legacy release hooks, not both.`)
-	}
+	rejectCertificationOptions(value)
+	if (value.release !== undefined) validateRelease(value.release)
 	for (const key of [`packageDirectory`] as const) {
 		if (value[key] !== undefined && !nonempty(value[key]))
 			throw new Error(`Invalid npm.${key}.`)
@@ -89,10 +86,6 @@ export function validateConfig(value: unknown): asserts value is NpmConfig {
 				throw new Error(`Invalid local peer ${peer}.`)
 			}
 		}
-	}
-	for (const hook of [`releaseIntent`, `certifyBreaking`] as const) {
-		if (value[hook] !== undefined && typeof value[hook] !== `function`)
-			throw new Error(`npm.${hook} must be a function.`)
 	}
 }
 

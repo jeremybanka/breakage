@@ -22,10 +22,10 @@ function setup(range: string): NpmFixture {
 	})
 	f.config.artifact = f.pack(`.`)
 	f.config.localPeers!.host!.artifact = f.pack(`local-host`)
-	f.config.releaseIntent = ({ packageName }) =>
-		packageName === `host`
-			? { status: `release`, version: `0.54.0` }
-			: { status: `none` }
+	f.config.release = {
+		version: ({ packageName }) =>
+			packageName === `host` ? `0.54.0` : undefined,
+	}
 	return f
 }
 
@@ -37,11 +37,13 @@ for (const coverageOnly of [false, true]) {
 				const f = setup(range)
 				f.representative(`next`, `0.53.3`, true)
 				let calls = 0
-				f.config.releaseIntent = ({ packageName, currentVersion }) => {
-					expect(packageName).toBe(`host`)
-					expect(currentVersion).toBe(`0.53.3`)
-					calls++
-					return { status: `release`, version: `0.54.0` }
+				f.config.release = {
+					version: ({ packageName, currentVersion }) => {
+						expect(packageName).toBe(`host`)
+						expect(currentVersion).toBe(`0.53.3`)
+						calls++
+						return `0.54.0`
+					},
 				}
 				if (coverageOnly) f.config.artifact = `not-built.tgz`
 				const result = await npmCheck(f.config, {
@@ -110,15 +112,16 @@ it.each([`none`, `throws`, `invalid`, `older`])(
 		const f = setup(`^0.53.3`)
 		f.representative(`released`, `0.53.3`)
 		let calls = 0
-		f.config.releaseIntent = () => {
-			calls++
-			if (scenario === `throws`) throw new Error(`release plan unavailable`)
-			return scenario === `none`
-				? { status: `none` }
-				: {
-						status: `release`,
-						version: scenario === `older` ? `0.52.0` : `invalid`,
-					}
+		f.config.release = {
+			version: () => {
+				calls++
+				if (scenario === `throws`) throw new Error(`release plan unavailable`)
+				return scenario === `none`
+					? undefined
+					: scenario === `older`
+						? `0.52.0`
+						: `invalid`
+			},
 		}
 		const result = await npmCheck(f.config, {
 			baseDirectory: f.directory,
@@ -167,9 +170,11 @@ it(`only inspects currently declared registered local peers, including optional 
 		peerDependenciesMeta: { host: { optional: true } },
 	})
 	const inspected: string[] = []
-	f.config.releaseIntent = ({ packageName }) => {
-		inspected.push(packageName)
-		return { status: `release`, version: `0.54.0` }
+	f.config.release = {
+		version: ({ packageName }) => {
+			inspected.push(packageName)
+			return `0.54.0`
+		},
 	}
 	const result = await npmCheck(f.config, {
 		baseDirectory: f.directory,
@@ -182,20 +187,19 @@ it(`only inspects currently declared registered local peers, including optional 
 	)
 }, 30_000)
 
-it(`does not certify away a missing planned version when certifying dropped historical support`, async () => {
+it(`requires planned-version coverage even when a breaking release permits dropped support`, async () => {
 	const f = setup(`^0.53.3`)
 	f.representative(`released`, `0.53.3`)
 	f.baseline({ host: `^0.52.0 || ^0.53.3` })
-	f.config.releaseIntent = ({ packageName }) => ({
-		status: `release`,
-		version: packageName === `host` ? `0.54.0` : `2.0.0`,
-	})
-	f.config.certifyBreaking = () => true
+	f.config.release = {
+		version: ({ packageName }) => (packageName === `host` ? `0.54.0` : `2.0.0`),
+	}
+
 	const result = await npmCheck(f.config, {
 		baseDirectory: f.directory,
 		coverageOnly: true,
 	})
-	expect(result.support.status).toBe(`certified`)
+	expect(result.support.status).toBe(`breaking-release`)
 	expect(result.exitCode).toBe(2)
 	expect(result.errors.join()).toContain(
 		`does not include its planned local release 0.54.0`,
@@ -206,7 +210,7 @@ it(`preserves compatibility failures when a declared coordinated candidate fails
 	const f = setup(`*`)
 	f.representative(`released`, `0.53.3`)
 	f.representative(`next`, `0.53.3`, true)
-	f.config.certifyBreaking = () => true
+
 	f.copy(`contracts/check-candidate-failure.ts`, `contracts/check.ts`)
 	const result = await npmCheck(f.config, { baseDirectory: f.directory })
 	expect(result.exitCode, JSON.stringify(result)).toBe(1)

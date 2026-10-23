@@ -7,7 +7,7 @@ import { options, parseBooleanOption } from "comline"
 import { defaultConfig, loadConfig } from "../config.ts"
 
 import { formatNpmReport, npmCheck, npmTest } from "./check.ts"
-import { errorMessage } from "./command.ts"
+import { errorMessage } from "../task.ts"
 import { validateConfig } from "./config.ts"
 import type { NpmTestSelection } from "./types.ts"
 

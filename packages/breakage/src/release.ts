@@ -1,8 +1,9 @@
 import semver from "semver"
 
-import type { ReleaseContext } from "./npm/types.ts"
-
-export type ReleaseVersionContext = ReleaseContext & {
+export type ReleaseVersionContext = {
+	packageName: string
+	packageDirectory: string
+	currentVersion: string
 	baseline?: { version: string; ref?: string; commit?: string }
 }
 export type ReleaseVersion =
@@ -16,7 +17,11 @@ export type VersionDelta = {
 	delta: string
 	breaking: boolean
 }
-export type ReleasePolicy = (delta: Omit<VersionDelta, `breaking`>) => boolean
+export type SemverPolicyOptions = { beforeV1?: `major` | `minor` | `patch` }
+export type ReleasePolicyFunction = (
+	delta: Omit<VersionDelta, `breaking`>,
+) => boolean
+export type ReleasePolicy = ReleasePolicyFunction | SemverPolicyOptions
 export type ReleaseConfig = {
 	/** Defaults to the current package manifest version. */
 	version?: ReleaseVersion
@@ -27,7 +32,7 @@ export type ReleaseConfig = {
 /** Choose which version increments permit breaking changes. Prerelease-only increments do not. */
 export function semverPolicy({
 	beforeV1 = `major`,
-}: { beforeV1?: `major` | `minor` | `patch` } = {}): ReleasePolicy {
+}: SemverPolicyOptions = {}): ReleasePolicyFunction {
 	if (![`major`, `minor`, `patch`].includes(beforeV1))
 		throw new Error(`Invalid beforeV1 policy.`)
 	return ({ previousVersion, version }) => {
@@ -56,7 +61,7 @@ export function versionDelta(
 		delta: semver.diff(previousVersion, version) ?? `none`,
 	}
 	const breaking = semver.gt(version, previousVersion)
-		? policy(evidence)
+		? (typeof policy === `function` ? policy : semverPolicy(policy))(evidence)
 		: false
 	if (typeof breaking !== `boolean`)
 		throw new Error(`Release policy must return a boolean.`)
@@ -75,8 +80,17 @@ export function validateRelease(
 		(typeof config.version !== `string` || !semver.valid(config.version))
 	)
 		throw new Error(`release.version must be an exact version or resolver.`)
-	if (config.policy !== undefined && typeof config.policy !== `function`)
-		throw new Error(`release.policy must be a function.`)
+	if (config.policy !== undefined && typeof config.policy !== `function`) {
+		const policy = config.policy
+		if (
+			!policy ||
+			typeof policy !== `object` ||
+			Array.isArray(policy) ||
+			Object.keys(policy).some((key) => key !== `beforeV1`)
+		)
+			throw new Error(`release.policy must be a function or { beforeV1 }.`)
+		semverPolicy(policy)
+	}
 }
 
 export async function resolveReleaseVersion(
@@ -98,4 +112,14 @@ export async function resolveReleaseVersion(
 			`Invalid release version for ${context.packageName}; expected a current/newer exact version.`,
 		)
 	return version
+}
+
+/** Removed hooks must fail explicitly, including in untyped JSON configurations. */
+export function rejectCertificationOptions(value: object): void {
+	for (const key of [`certifyCommand`, `releaseIntent`, `certifyBreaking`]) {
+		if (key in value)
+			throw new Error(
+				`${key} was removed. Use release.version and release.policy instead.`,
+			)
+	}
 }

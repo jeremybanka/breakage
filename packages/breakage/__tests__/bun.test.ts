@@ -38,13 +38,9 @@ beforeEach(async () => {
 		`${testDirname}/fixtures/bun/private-method.fixture.ts`,
 		`${localRepoDirname}/private-method.test.ts`,
 	)
-	await bunCopyFile(
-		`${testDirname}/fixtures/bun/certify-major-version.ts`,
-		`${localRepoDirname}/certify-major-version.ts`,
-	)
-	await bunCopyFile(
-		`${testDirname}/fixtures/bun/.changesets/decent-files-exemplify.md`,
-		`${localRepoDirname}/.changesets/decent-files-exemplify.md`,
+	await Bun.write(
+		`${localRepoDirname}/package.json`,
+		JSON.stringify({ name: `my-library`, version: `1.0.0` }),
 	)
 	expect(
 		await Bun.file(`${localRepoDirname}/public-method__public.test.ts`).text(),
@@ -97,7 +93,7 @@ describe(`breakage`, () => {
 				tagPattern: `my-library`,
 				testPattern: `*__public.test.ts`,
 				testCommand: `bun test *__public.test.ts`,
-				certifyCommand: `bun ./certify-major-version.ts`,
+				release: { version: `2.0.0` },
 				baseDirname: localRepoDirname,
 				verbose: true,
 			})
@@ -107,7 +103,7 @@ describe(`breakage`, () => {
 		}
 		expect(caught).toBeUndefined()
 		expect(returnValue?.summary).toBe(
-			`Breaking changes were found and certified.`,
+			`Breaking changes are covered by release 1.0.0 → 2.0.0.`,
 		)
 	})
 })

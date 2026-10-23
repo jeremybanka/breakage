@@ -1,26 +1,11 @@
-import type { ReleaseConfig } from "../release.ts"
-import type { Task } from "./command.ts"
-
-export type ReleaseIntent =
-	| { status: `none` }
-	| { status: `release`; version: string }
-
-export type ReleaseContext = {
-	packageName: string
-	packageDirectory: string
-	currentVersion: string
-}
+import type { ReleaseConfig, VersionDelta } from "../release.ts"
+import type { Task } from "../task.ts"
 
 export type SupportChange = {
 	peer: string
 	reason: `narrowed-range` | `required-peer`
 	previous: string | null
 	current: string | null
-}
-
-export type ReleaseEvidence = {
-	version: string
-	delta: string
 }
 
 export type NpmSuite = {
@@ -44,14 +29,6 @@ export type NpmConfig = {
 	baseline:
 		| { firstRelease: true }
 		| { tagPattern?: string; baselineFile?: string }
-	releaseIntent?: (
-		context: ReleaseContext,
-	) => ReleaseIntent | Promise<ReleaseIntent>
-	certifyBreaking?: (context: {
-		previousVersion: string
-		release: ReleaseEvidence
-		changes: SupportChange[]
-	}) => boolean | Promise<boolean>
 }
 
 export type NpmTestSelection =
@@ -94,14 +71,14 @@ export type NpmReport = {
 	support: {
 		status:
 			| `unchanged`
-			| `certified`
+			| `breaking-release`
 			| `end-of-support`
 			| `first-release`
 			| `not-checked`
 			| `setup-error`
 		changes: SupportChange[]
 		previousVersion?: string
-		release?: ReleaseEvidence
+		release?: VersionDelta
 		error?: string
 	}
 	errors: string[]
