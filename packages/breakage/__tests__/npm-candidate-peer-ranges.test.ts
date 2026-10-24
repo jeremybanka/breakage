@@ -1,3 +1,4 @@
+import { versionTransition } from "breakage"
 import { afterEach, describe, expect, it } from "bun:test"
 
 import { npmCheck, npmTest } from "../src/npm/check.ts"
@@ -203,10 +204,14 @@ describe(`coordinated candidate peer declarations`, () => {
 				...JSON.parse(f.read(filename)),
 				breakage: { candidates: [`ranges-host`, `renderer`] },
 			})
-			f.config.releaseIntent = ({ packageName }) => ({
-				status: `release`,
-				version: packageName === `renderer` ? `19.0.0` : `2.0.0`,
-			})
+			f.config.release = {
+				resolveDelta: ({ packageName, baseline, currentVersion }) => {
+					return versionTransition(
+						baseline?.version ?? currentVersion,
+						packageName === `renderer` ? `19.0.0` : `2.0.0`,
+					)
+				},
+			}
 			const result = await npmCheck(f.config, { baseDirectory: f.directory })
 			expect(result.exitCode, JSON.stringify(result)).toBe(exitCode)
 			expect(result.representatives[0]!.peers.renderer).toMatchObject({

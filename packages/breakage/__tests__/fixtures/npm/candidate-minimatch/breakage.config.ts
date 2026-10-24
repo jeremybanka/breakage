@@ -2,10 +2,12 @@ import type { NpmConfig } from "breakage"
 
 const config: { npm: NpmConfig } = {
 	npm: {
-		releaseIntent: ({ packageName }) =>
-			packageName === `minimatch-host`
-				? { status: `release`, version: `2.0.0` }
-				: { status: `none` },
+		release: {
+			resolveDelta: ({ packageName }) =>
+				packageName === `minimatch-host`
+					? { previousVersion: `2.0.0`, version: `2.0.0`, delta: `none` }
+					: undefined,
+		},
 		artifact: "artifacts/minimatch-integration-1.1.0.tgz",
 		representatives: "peer-environments/minimatch-8",
 		lockfile: "package-lock.json",

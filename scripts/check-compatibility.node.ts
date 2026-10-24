@@ -1,9 +1,18 @@
+import { execFileSync } from "node:child_process"
+import { fileURLToPath } from "node:url"
 import { appendFile } from "node:fs/promises"
 
 import type { BreakageBaseline, BreakageOutcome } from "breakage-supervisor"
 import { breakage, breakagePrelude } from "breakage-supervisor"
 
-import configuration from "../breakage.config.json" with { type: "json" }
+import { changesetsReleaseDelta } from "../packages/breakage/src/changesets.ts"
+import {
+	semverPolicy,
+	versionDelta,
+	type VersionDelta,
+} from "../packages/breakage/src/release.ts"
+import manifest from "../packages/breakage/package.json" with { type: "json" }
+import configuration from "../breakage.config.ts"
 
 // These releases predate the consumer suite. Never allow arbitrary missing tests.
 const bootstrapReleases = new Map([
@@ -15,14 +24,15 @@ const bootstrapReleases = new Map([
 export function compatibilityResult(
 	baseline: Pick<BreakageBaseline, "ref" | "commit">,
 	outcome: BreakageOutcome & { summary: string },
+	release?: VersionDelta,
 ): { message: string; exitCode: number; bootstrap: boolean } {
 	if (`breakingChangesFound` in outcome) {
+		const allowed = outcome.breakingChangesFound && release?.breaking
 		return {
-			message: outcome.summary,
-			exitCode:
-				!outcome.breakingChangesFound || outcome.breakingChangesCertified
-					? 0
-					: 1,
+			message: allowed
+				? `Breaking changes are covered by release ${release.previousVersion} → ${release.version}. Historical compatibility was NOT established.`
+				: outcome.summary,
+			exitCode: !outcome.breakingChangesFound || allowed ? 0 : 1,
 			bootstrap: false,
 		}
 	}
@@ -55,8 +65,44 @@ if (import.meta.main) {
 	})
 	console.log(`Pinned supervisor: breakage@0.8.2`)
 	console.log(`Release baseline: ${baseline.ref} (${baseline.commit})`)
-	const outcome = await breakage({ ...configuration, baselineFile })
-	const result = compatibilityResult(baseline, outcome)
+	const packageDirectory = fileURLToPath(
+		new URL(`../packages/breakage`, import.meta.url),
+	)
+	const previous = JSON.parse(
+		execFileSync(
+			`git`,
+			[`show`, `${baseline.commit}:packages/breakage/package.json`],
+			{ encoding: `utf8` },
+		),
+	) as { name: string; version: string }
+	if (previous.name !== manifest.name || typeof previous.version !== `string`)
+		throw new Error(`Baseline package identity or version is invalid.`)
+	const transition = await changesetsReleaseDelta()({
+		packageName: manifest.name,
+		packageDirectory,
+		currentVersion: manifest.version,
+		baseline: {
+			version: previous.version,
+			ref: baseline.ref,
+			commit: baseline.commit,
+		},
+	})
+	const release = versionDelta(
+		transition.previousVersion,
+		transition.version,
+		semverPolicy({ beforeV1: `minor` }),
+	)
+	console.log(
+		`Release intent: ${release.previousVersion} → ${release.version} (${release.delta})`,
+	)
+	// The frozen supervisor predates the release model. Keep its hook disabled;
+	// only the explicit version delta above can acknowledge intentional breaks.
+	const outcome = await breakage({
+		...configuration,
+		baselineFile,
+		certifyCommand: `false`,
+	})
+	const result = compatibilityResult(baseline, outcome, release)
 	if (`breakingChangesFound` in outcome && outcome.breakingChangesFound) {
 		console.error(outcome.testResult)
 	}

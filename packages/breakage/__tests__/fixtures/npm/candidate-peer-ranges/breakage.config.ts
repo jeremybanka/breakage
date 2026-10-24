@@ -2,10 +2,12 @@ import type { NpmConfig } from "breakage"
 
 const config: { npm: NpmConfig } = {
 	npm: {
-		releaseIntent: ({ packageName }) =>
-			packageName === `ranges-host`
-				? { status: `release`, version: `2.0.0` }
-				: { status: `none` },
+		release: {
+			resolveDelta: ({ packageName }) =>
+				packageName === `ranges-host`
+					? { previousVersion: `2.0.0`, version: `2.0.0`, delta: `none` }
+					: undefined,
+		},
 		artifact: "artifacts/ranges-integration-1.1.0.tgz",
 		representatives: "peer-environments/*",
 		lockfile: "package-lock.json",

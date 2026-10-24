@@ -1,6 +1,5 @@
 import { spawnSync } from "node:child_process"
 import {
-	existsSync,
 	mkdirSync,
 	mkdtempSync,
 	readdirSync,
@@ -38,19 +37,18 @@ function runCli(command: string, args: string[]) {
 
 describe(`CLI features`, () => {
 	it(`generates all shell integrations without validating configuration`, () => {
-		writeFileSync(resolve(directory, `breakage.config.json`), `invalid json`)
+		writeFileSync(resolve(directory, `breakage.config.ts`), `invalid json`)
 		for (const target of [`bash`, `zsh`, `fish`, `nushell`, `carapace`]) {
 			const result = runCli(`breakage`, [`completion`, target])
 			expect(result.stdout).toContain(`breakage`)
 			expect(result.stderr).toBe(``)
 		}
-		expect(readdirSync(directory)).toEqual([`breakage.config.json`])
+		expect(readdirSync(directory)).toEqual([`breakage.config.ts`])
 	})
 	it.each([
 		`--test-command`,
 		`--pattern`,
 		`--tag-pattern`,
-		`--certify-command`,
 		`--base-dir`,
 		`--baseline-file`,
 	])(`offers %s before validating required options`, (option) => {
@@ -64,7 +62,7 @@ describe(`CLI features`, () => {
 		expect(
 			runCli(`breakage`, [`_carapace`, `export`, `breakage`, `sam`]).stdout,
 		).toContain(`sample.json`)
-		for (const words of [[`--base-dir=sam`], [`schema`, `--out-dir=sam`]]) {
+		for (const words of [[`--base-dir=sam`]]) {
 			const result = runCli(`breakage`, [
 				`_carapace`,
 				`export`,
@@ -76,7 +74,7 @@ describe(`CLI features`, () => {
 		}
 	})
 	it(`completes prelude options and snapshot paths without loading config`, () => {
-		writeFileSync(resolve(directory, `breakage.config.json`), `invalid json`)
+		writeFileSync(resolve(directory, `breakage.config.ts`), `invalid json`)
 		writeFileSync(resolve(directory, `sample.json`), `{}`)
 		for (const words of [[`--baseline-file=sam`], [`prelude`, `--out=sam`]]) {
 			expect(
@@ -88,19 +86,10 @@ describe(`CLI features`, () => {
 			runCli(`breakage`, [`__complete`, `prelude`, `--o`]).stdout,
 		).toContain(`--out`)
 	})
-	it(`accepts the output alias and warns about ignored options before schema generation`, () => {
-		const result = runCli(`breakage`, [
-			`schema`,
-			`--out-dir=${directory}`,
-			`--test-command=true`,
-			`--typo`,
-		])
-		expect(existsSync(resolve(directory, `breakage.main.schema.json`))).toBe(
-			true,
-		)
+	it(`warns about ignored check options without loading config for help`, () => {
+		const result = runCli(`breakage`, [`help`, `--test-command=true`, `--typo`])
 		expect(result.stderr).toContain(`Option "--test-command" is not valid`)
 		expect(result.stderr).toContain(`Unknown option "--typo"`)
-		expect(result.stderr).not.toContain(`--out-dir`)
 		expect(result.stdout).not.toContain(`Warning:`)
 	})
 })

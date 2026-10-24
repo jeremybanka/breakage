@@ -1,7 +1,35 @@
 import path from "node:path"
+import { type } from "arktype"
+
+import { releaseSchema, rejectCertificationOptions } from "../release.ts"
 
 import { eras, packageName, record } from "./manifest.ts"
 import type { NpmConfig } from "./types.ts"
+
+export const npmSuiteSchema = type({
+	"+": `reject`,
+	files: `string[]`,
+	command: `string`,
+})
+export const npmConfigSchema = type({
+	"+": `reject`,
+	"release?": releaseSchema,
+	"packageDirectory?": `string`,
+	artifact: `string`,
+	representatives: `string | string[]`,
+	lockfile: `string`,
+	prepareCommand: `string`,
+	"installCommand?": `string`,
+	suites: { "[string]": npmSuiteSchema },
+	"localPeers?": {
+		"[string]": { "+": `reject`, directory: `string`, artifact: `string` },
+	},
+	baseline: type({ "+": `reject`, firstRelease: `true` }).or({
+		"+": `reject`,
+		"tagPattern?": `string`,
+		"baselineFile?": `string`,
+	}),
+})
 
 function nonempty(value: unknown): value is string {
 	return typeof value === `string` && value.trim().length > 0
@@ -9,7 +37,9 @@ function nonempty(value: unknown): value is string {
 
 export function validateConfig(value: unknown): asserts value is NpmConfig {
 	if (!record(value)) throw new Error(`Configuration must have an npm object.`)
-	for (const key of [`artifact`, `lockfile`, `prepareCommand`] as const) {
+	rejectCertificationOptions(value)
+	npmConfigSchema.assert(value)
+	for (const key of [`artifact`, `lockfile`] as const) {
 		if (!nonempty(value[key]))
 			throw new Error(`npm.${key} must be a nonempty string.`)
 	}
@@ -19,7 +49,13 @@ export function validateConfig(value: unknown): asserts value is NpmConfig {
 	) {
 		throw new Error(`npm.lockfile must stay inside each representative.`)
 	}
-	for (const key of [`packageDirectory`, `installCommand`] as const) {
+	if (!nonempty(value.prepareCommand))
+		throw new Error(
+			`npm.prepareCommand must be a nonempty shell command string.`,
+		)
+	if (value.installCommand !== undefined && !nonempty(value.installCommand))
+		throw new Error(`Invalid npm.installCommand.`)
+	for (const key of [`packageDirectory`] as const) {
 		if (value[key] !== undefined && !nonempty(value[key]))
 			throw new Error(`Invalid npm.${key}.`)
 	}
@@ -74,10 +110,6 @@ export function validateConfig(value: unknown): asserts value is NpmConfig {
 				throw new Error(`Invalid local peer ${peer}.`)
 			}
 		}
-	}
-	for (const hook of [`releaseIntent`, `certifyBreaking`] as const) {
-		if (value[hook] !== undefined && typeof value[hook] !== `function`)
-			throw new Error(`npm.${hook} must be a function.`)
 	}
 }
 

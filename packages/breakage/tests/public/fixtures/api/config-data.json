@@ -1,0 +1,1 @@
+{ "options": { "testPattern": "public/*.ts", "test": "exit 99" } }

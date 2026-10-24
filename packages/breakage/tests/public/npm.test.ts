@@ -1,5 +1,5 @@
 import { afterEach, expect, it } from "bun:test"
-import { npmCheck, npmTest } from "breakage"
+import { versionTransition, npmCheck, npmTest } from "breakage"
 
 import type { NpmFixture } from "./npm-fixture.ts"
 import { assertStagesRemoved, npmFixture } from "./npm-fixture.ts"
@@ -30,18 +30,26 @@ it(`tests every matching peer formulation through consumer imports in the enviro
 	assertStagesRemoved(project, report)
 }, 30_000)
 
-it(`cannot certify away a failure against a still-supported peer`, async () => {
+it(`cannot excuse a failure against a still-supported peer`, async () => {
 	project = npmFixture()
 	project.representative(`oldest`, `1.0.0`)
 	project.representative(`current`, `2.0.0`)
 	// Keep the candidate valid but break the shared consumer identity.
 	project.copy(`src/broken.ts`, `src/index.ts`)
 	project.config.artifact = project.build(`.`)
-	project.config.releaseIntent = ({ packageName }) =>
-		packageName === `integration`
-			? { status: `release`, version: `3.0.0` }
-			: { status: `none` }
-	project.config.certifyBreaking = () => true
+	project.config.release = {
+		resolveDelta: ({ packageName, baseline, currentVersion }) => {
+			const intendedVersion =
+				packageName === `integration` ? `3.0.0` : undefined
+			return intendedVersion === undefined
+				? undefined
+				: versionTransition(
+						baseline?.version ?? currentVersion,
+						intendedVersion,
+					)
+		},
+	}
+
 	const report = await npmCheck(project.config, {
 		baseDirectory: project.directory,
 	})
@@ -58,10 +66,17 @@ it(`requires support and coordinated evidence for a planned local peer release`,
 	project = npmFixture()
 	project.representative(`oldest`, `1.0.0`)
 	project.representative(`current`, `2.0.0`)
-	project.config.releaseIntent = ({ packageName }) =>
-		packageName === `host`
-			? { status: `release`, version: `3.0.0` }
-			: { status: `none` }
+	project.config.release = {
+		resolveDelta: ({ packageName, baseline, currentVersion }) => {
+			const intendedVersion = packageName === `host` ? `3.0.0` : undefined
+			return intendedVersion === undefined
+				? undefined
+				: versionTransition(
+						baseline?.version ?? currentVersion,
+						intendedVersion,
+					)
+		},
+	}
 	const options = { baseDirectory: project.directory }
 	const unsupported = await npmCheck(project.config, options)
 	expect(unsupported.exitCode).toBe(2)
@@ -99,7 +114,11 @@ it(`validates a coordinated peer's requirement on the package under test`, async
 		peerDependencies: { host: `^2` },
 	})
 	project.config.artifact = project.pack(`.`)
-	project.config.releaseIntent = () => ({ status: `release`, version: `2.0.0` })
+	project.config.release = {
+		resolveDelta: ({ baseline, currentVersion }) => {
+			return versionTransition(baseline?.version ?? currentVersion, `2.0.0`)
+		},
+	}
 	const host = JSON.parse(project.read(`local-host/package.json`))
 	for (const range of [`^1`, `^2`]) {
 		project.write(`local-host/package.json`, {

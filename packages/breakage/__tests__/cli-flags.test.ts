@@ -11,7 +11,7 @@ async function parseOptions(args: string[]): Promise<BreakageOptions> {
 			`${import.meta.dir}/../src/breakage.x.ts`,
 			`--testPattern=*__public.test.ts`,
 			`--testCommand=bun test`,
-			`--certifyCommand=bun certify.ts`,
+
 			...args,
 		],
 		{ cwd: import.meta.dir, stdout: `pipe`, stderr: `pipe` },

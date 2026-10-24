@@ -112,7 +112,6 @@ it.each([1, 2])(
 			tagPattern: `example@`,
 			testPattern: `missing/*`,
 			testCommand: `exit 0`,
-			certifyCommand: `exit 1`,
 		})
 		let restoration: Promise<void> | undefined
 		let result: Awaited<ReturnType<typeof breakage>>

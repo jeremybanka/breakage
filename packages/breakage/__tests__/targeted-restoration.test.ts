@@ -96,7 +96,6 @@ process.exit(${exitCode});
 			tagPattern: `example@`,
 			testPattern: `public tests/*.test.js`,
 			testCommand: `${shellQuote(process.execPath)} ${shellQuote(command)}`,
-			certifyCommand: `exit 1`,
 		})
 		expect(outcome).toMatchObject({ breakingChangesFound: exitCode !== 0 })
 		if (exitCode !== 0) expect(outcome).toMatchObject({ testResult: `` })
@@ -172,7 +171,7 @@ const result = await breakage({
   tagPattern: "example@",
   testPattern: ${fromRoot ? `name + "/"` : `""`} + "*.test.js",
   testCommand: ${JSON.stringify(`${shellQuote(process.execPath)} ${shellQuote(testCommand)} `)} + name,
-  certifyCommand: "exit 1",
+
 });
 console.log(JSON.stringify(result));
 `,
@@ -189,7 +188,6 @@ console.log(JSON.stringify(result));
 				tagPattern: `example@`,
 				testPattern: `a/*.test.js`,
 				testCommand: `exit 0`,
-				certifyCommand: `exit 1`,
 			}
 			await rejects(
 				breakage(options),
@@ -257,7 +255,6 @@ it(`does not overwrite ignored files that occupy release-only test paths`, async
 			tagPattern: `example@`,
 			testPattern: `*.test.js`,
 			testCommand: `exit 0`,
-			certifyCommand: `exit 1`,
 		}),
 		/Cannot overwrite the existing untracked path/,
 	)
@@ -280,7 +277,6 @@ it(`supports linked Git worktrees`, async () => {
 		tagPattern: `example@`,
 		testPattern: `*.test.js`,
 		testCommand: `${shellQuote(process.execPath)} -e ${shellQuote(`if (await Bun.file("public.test.js").text() !== "released") process.exit(1)`)}`,
-		certifyCommand: `exit 1`,
 	})
 	expect(outcome).toMatchObject({ breakingChangesFound: false })
 	expect(
@@ -315,7 +311,6 @@ it(`selects conventional version tags and ignores malformed versions`, async () 
 		baseDirname: repository,
 		testPattern: `*.test.js`,
 		testCommand: `${shellQuote(process.execPath)} -e ${shellQuote(`if (await Bun.file("public.test.js").text() !== "second") process.exit(1)`)}`,
-		certifyCommand: `exit 1`,
 	})
 	expect(outcome).toMatchObject({
 		lastReleaseTag: `refs/tags/v2.0.0`,
@@ -335,7 +330,6 @@ it(`reports no release when remote tags have no supported version`, async () => 
 			baseDirname: repository,
 			testPattern: `*.test.js`,
 			testCommand: `exit 0`,
-			certifyCommand: `exit 1`,
 		}),
 	).toMatchObject({ lastReleaseFound: false })
 })

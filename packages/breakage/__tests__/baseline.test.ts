@@ -1,3 +1,4 @@
+import { versionTransition } from "breakage"
 import { rejects } from "node:assert/strict"
 import * as filesystem from "node:fs/promises"
 import {
@@ -32,6 +33,10 @@ beforeEach(async () => {
 	await mkdir(path.join(producer, `tests`), { recursive: true })
 	await writeFile(path.join(producer, `.gitignore`), `.breakage/\n.turbo/\n`)
 	await writeFile(path.join(producer, `tests/public.txt`), `released-1`)
+	await writeFile(
+		path.join(producer, `package.json`),
+		JSON.stringify({ name: `example`, version: `1.0.0` }),
+	)
 	await writeFile(path.join(producer, `tests/removed.txt`), `removed`)
 	const git = simpleGit(producer)
 	await git
@@ -56,7 +61,7 @@ beforeEach(async () => {
 		tagPattern: `refs/tags/example@`,
 		testPattern: `tests/*.txt`,
 		testCommand: `test "$(cat tests/public.txt)" = released-1 && test "$(cat tests/removed.txt)" = removed`,
-		certifyCommand: `exit 1`,
+
 		baselineFile: snapshot,
 	}
 })
@@ -152,18 +157,25 @@ it(`checks the pinned release after a newer release and a moved tag, without ori
 })
 
 it.each([false, true])(
-	`restores tests after failure with certification=%s`,
-	async (certified) => {
+	`restores tests after failure with breaking release=%s`,
+	async (breakingRelease) => {
 		await prelude()
 		expect(
 			await breakage({
 				...options,
 				testCommand: `exit 1`,
-				certifyCommand: certified ? `exit 0` : `exit 1`,
+				release: {
+					resolveDelta: ({ baseline, currentVersion }) => {
+						return versionTransition(
+							baseline?.version ?? currentVersion,
+							breakingRelease ? `2.0.0` : `1.0.0`,
+						)
+					},
+				},
 			}),
 		).toMatchObject({
 			breakingChangesFound: true,
-			breakingChangesCertified: certified,
+			release: { breaking: breakingRelease },
 		})
 		await assertRestored()
 	},
@@ -279,8 +291,17 @@ it.each([
 
 it(`supports explicit config paths, base directories, and the baseline-file CLI alias`, async () => {
 	const entrypoint = path.resolve(import.meta.dirname, `../dist/breakage.x.js`)
-	const config = path.join(directory, `check.json`)
-	await writeFile(config, JSON.stringify(options))
+	const config = path.join(directory, `check.ts`)
+	await writeFile(
+		config,
+		await readFile(
+			new URL(`./fixtures/config/breakage.config.ts`, import.meta.url),
+		),
+	)
+	await writeFile(
+		path.join(directory, `config-data.json`),
+		JSON.stringify({ options }),
+	)
 	function cli(args: string[]) {
 		const result = Bun.spawnSync([`node`, entrypoint, ...args], {
 			cwd: directory,
@@ -345,8 +366,14 @@ it(`keeps package snapshots separate and supports parallel pinned checks`, async
 it(`discovers a minimal default config for prelude without requiring check commands`, async () => {
 	const entrypoint = path.resolve(import.meta.dirname, `../dist/breakage.x.js`)
 	await writeFile(
-		path.join(repository, `breakage.config.json`),
-		JSON.stringify({ tagPattern: options.tagPattern }),
+		path.join(repository, `config-data.json`),
+		JSON.stringify({ options: { tagPattern: options.tagPattern } }),
+	)
+	await writeFile(
+		path.join(repository, `breakage.config.ts`),
+		await readFile(
+			new URL(`./fixtures/config/breakage.config.ts`, import.meta.url),
+		),
 	)
 	await simpleGit(repository).add(`.`).commit(`Default config`)
 	const result = Bun.spawnSync([`node`, entrypoint, `prelude`], {
@@ -398,12 +425,20 @@ it(`runs a fresh prelude on Turbo cache hits and misses on new releases and move
 		}),
 	)
 	await writeFile(
-		path.join(repository, `breakage.config.json`),
+		path.join(repository, `config-data.json`),
 		JSON.stringify({
-			...options,
-			baseDirname: `.`,
-			testCommand: `cat tests/public.txt > .breakage/observed.txt; grep -q '^released-' tests/public.txt`,
+			options: {
+				...options,
+				baseDirname: `.`,
+				testCommand: `cat tests/public.txt > .breakage/observed.txt; grep -q '^released-' tests/public.txt`,
+			},
 		}),
+	)
+	await writeFile(
+		path.join(repository, `breakage.config.ts`),
+		await readFile(
+			new URL(`./fixtures/config/breakage.config.ts`, import.meta.url),
+		),
 	)
 	await simpleGit(repository).add(`.`).commit(`Turbo fixture`)
 	function runTurbo() {

@@ -16,11 +16,11 @@ import path from "node:path"
 import semver from "semver"
 import { simpleGit } from "simple-git"
 
-import { prepare } from "./command.ts"
+import { prepare } from "../task.ts"
 import { validatePeerRanges } from "./config.ts"
 import type { Manifest } from "./manifest.ts"
 import { matches, normalizeWorkspacePeers, readManifest } from "./manifest.ts"
-import { intent } from "./release.ts"
+import { releaseVersion } from "./release.ts"
 import type { NpmConfig, NpmPeerEvidence, NpmSuite } from "./types.ts"
 
 export type Environment = {
@@ -192,14 +192,14 @@ export async function maySelectEnvironment(
 		)
 		if (current.name !== peer)
 			throw new Error(`Local peer identity mismatch for ${peer}.`)
-		const release = await intent(config, {
+		const release = await releaseVersion(config, {
 			packageName: peer,
 			packageDirectory,
 			currentVersion: current.version,
 		})
-		if (release.status === `none`)
-			throw new Error(`Candidate ${peer} has no certified release intent.`)
-		return matches(release.version, range)
+		if (release === undefined)
+			throw new Error(`Candidate ${peer} has no release version.`)
+		return matches(release, range)
 	}
 	const declared = declarations[peer]
 	return declared !== undefined && matches(declared, range)
@@ -243,18 +243,18 @@ export async function prepareEnvironment(
 		if (localManifest.name !== peer)
 			throw new Error(`Local peer identity mismatch for ${peer}.`)
 		validatePeerRanges(localManifest.peerDependencies ?? {})
-		const evidence = await intent(config, {
+		const evidence = await releaseVersion(config, {
 			packageName: peer,
 			packageDirectory: localDirectory,
 			currentVersion: localManifest.version,
 		})
-		if (evidence.status === `none`)
-			throw new Error(`Candidate ${peer} has no certified release intent.`)
+		if (evidence === undefined)
+			throw new Error(`Candidate ${peer} has no release version.`)
 		candidates[peer] = {
 			directory: localDirectory,
 			artifact: path.resolve(base, local.artifact),
 			currentVersion: localManifest.version,
-			version: evidence.version,
+			version: evidence,
 			manifest: localManifest,
 		}
 	}
