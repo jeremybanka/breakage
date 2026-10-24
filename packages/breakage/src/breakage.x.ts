@@ -1,10 +1,8 @@
 #!/usr/bin/env node
 
-import { existsSync } from "node:fs"
 import path from "node:path"
 import { inspect } from "node:util"
 
-import { type } from "arktype"
 import {
 	cli,
 	completionResponse,
@@ -19,24 +17,29 @@ import {
 } from "comline"
 import logger from "takua"
 
-import { defaultConfig, loadConfig } from "./config.ts"
+import {
+	defaultConfig,
+	configPath,
+	resolveConfig,
+	configSchema,
+	configFields,
+} from "./config.ts"
 import { breakage, breakagePrelude } from "./breakage.ts"
 import { errorMessage } from "./task.ts"
 import { npmCheckManual, npmTestManual, runNpmCli } from "./npm/cli.ts"
 
+// Either command spelling can override the other spelling in a config file.
+const commandOverrides = new Set<`test` | `testCommand`>()
+
 const BREAKAGE_MANUAL = options(
 	`Check for breaking changes in a package.`,
-	type({
-		"tagPattern?": `string`,
-		"baselineFile?": `string`,
-		"testPattern?": `string`,
-		"testCommand?": `string`,
-		"test?": `string`,
-		"baseDirname?": `string`,
-		"verbose?": `boolean`,
-	}),
+	configSchema,
 	{
+		release: { configOnly: true },
+		npm: { configOnly: true },
+		out: { configOnly: true },
 		tagPattern: {
+			schema: configFields.tagPattern,
 			aliases: [`tag-pattern`],
 			completion: { repeatable: false },
 			flag: `g`,
@@ -45,6 +48,7 @@ const BREAKAGE_MANUAL = options(
 			example: `--tagPattern="my-library"`,
 		},
 		baselineFile: {
+			schema: configFields.baselineFile,
 			aliases: [`baseline-file`],
 			completion: { repeatable: false, fileSystem: `files` },
 			required: false,
@@ -52,6 +56,7 @@ const BREAKAGE_MANUAL = options(
 			example: `--baseline-file=.breakage/baseline.json`,
 		},
 		testPattern: {
+			schema: configFields.testPattern,
 			aliases: [`test-pattern`, `pattern`],
 			completion: { repeatable: false },
 			flag: `p`,
@@ -60,6 +65,11 @@ const BREAKAGE_MANUAL = options(
 			example: `--pattern="*__public.test.ts"`,
 		},
 		testCommand: {
+			parse: (value) => {
+				commandOverrides.add(`testCommand`)
+				return value
+			},
+			schema: configFields.testCommand,
 			aliases: [`test-command`],
 			completion: { repeatable: false },
 			flag: `t`,
@@ -68,12 +78,19 @@ const BREAKAGE_MANUAL = options(
 			example: `--testCommand="npm run test"`,
 		},
 		test: {
+			parse: (value) => {
+				commandOverrides.add(`test`)
+				return value
+			},
+			schema: configFields.test,
 			completion: { repeatable: false },
 			required: false,
 			description: `Shell command running the restored public contracts.`,
 			example: `--test="npm run test:public"`,
 		},
 		baseDirname: {
+			parse: (value) => path.resolve(value),
+			schema: configFields.baseDirname,
 			aliases: [`base-dir`, `base-dirname`],
 			completion: { repeatable: false, fileSystem: `directories` },
 			flag: `d`,
@@ -82,6 +99,7 @@ const BREAKAGE_MANUAL = options(
 			example: `--baseDirname=./packages/my-package`,
 		},
 		verbose: {
+			schema: configFields.verbose,
 			completion: { repeatable: false },
 			flag: `v`,
 			required: false,
@@ -94,16 +112,7 @@ const BREAKAGE_MANUAL = options(
 
 const PRELUDE_MANUAL = options(
 	`Resolve and fetch the release baseline for a cacheable compatibility check.`,
-	type({
-		"tagPattern?": `string`,
-		"baseDirname?": `string`,
-		"out?": `string`,
-		"testPattern?": `string`,
-		"testCommand?": `string`,
-		"test?": `string`,
-		"baselineFile?": `string`,
-		"verbose?": `boolean`,
-	}),
+	configSchema,
 	{
 		...BREAKAGE_MANUAL.optionConfigs,
 		testPattern: {
@@ -115,6 +124,7 @@ const PRELUDE_MANUAL = options(
 			required: false,
 		},
 		out: {
+			schema: configFields.out,
 			completion: { repeatable: false, fileSystem: `files` },
 			required: false,
 			description: `Gitignored snapshot path relative to the base directory (default: .breakage/baseline.json).`,
@@ -123,9 +133,19 @@ const PRELUDE_MANUAL = options(
 	},
 )
 
+let loadedConfigPath: string | undefined
 const parse = cli(
 	{
 		cliName: `breakage`,
+		discoverConfigPath: (segments: readonly string[]) => {
+			if (segments[0] === `help` || segments[0] === `npm`) return undefined
+			const explicit = segments[0] === `prelude` ? segments[1] : segments[0]
+			loadedConfigPath = configPath(
+				explicit ?? defaultConfig(process.cwd()),
+				explicit !== undefined,
+			)
+			return loadedConfigPath
+		},
 		routes: optional({
 			help: null,
 			npm: optional({
@@ -176,10 +196,7 @@ if (completion !== undefined) {
 			throw new Error(
 				`certifyCommand was removed. Configure release.resolveDelta and release.policy instead.`,
 			)
-		if (process.argv.slice(2).some((arg) => /^--release(?:=|$)/.test(arg)))
-			throw new Error(
-				`--release was removed. Define release hooks in breakage.config.ts.`,
-			)
+
 		switch (inputs.case) {
 			case `npm`:
 			case `npm/help`:
@@ -197,44 +214,27 @@ if (completion !== undefined) {
 				break
 			case `prelude`:
 			case `prelude/$configPath`: {
-				const configPath =
-					inputs.case === `prelude/$configPath`
-						? inputs.params.configPath
-						: defaultConfig(process.cwd())
-				const config: Awaited<ReturnType<typeof loadConfig>> =
-					existsSync(configPath) || inputs.case === `prelude/$configPath`
-						? await loadConfig(configPath)
-						: {}
+				const config = resolveConfig(inputs.opts, loadedConfigPath)
 				const baseline = await breakagePrelude({
 					...config,
-					...inputs.opts,
-					...(inputs.opts.baseDirname
-						? { baseDirname: path.resolve(inputs.opts.baseDirname) }
-						: {}),
-					out: inputs.opts.out ?? config.out ?? `.breakage/baseline.json`,
+					out: config.out ?? `.breakage/baseline.json`,
 				})
 				process.stdout.write(`Pinned ${baseline.ref} at ${baseline.commit}.\n`)
 				break
 			}
 			case ``:
 			case `$configPath`: {
-				const configPath =
-					inputs.case === `$configPath`
-						? inputs.params.configPath
-						: defaultConfig(process.cwd())
-				const config: Awaited<ReturnType<typeof loadConfig>> =
-					existsSync(configPath) || inputs.case === `$configPath`
-						? await loadConfig(configPath)
-						: {}
-				const merged = {
-					...config,
-					...inputs.opts,
-					...(inputs.opts.baseDirname
-						? { baseDirname: path.resolve(inputs.opts.baseDirname) }
-						: {}),
-				}
-				if (inputs.opts.testCommand) delete merged.test
-				if (inputs.opts.test) delete merged.testCommand
+				const merged = resolveConfig(inputs.opts, loadedConfigPath)
+				if (
+					commandOverrides.has(`testCommand`) &&
+					!commandOverrides.has(`test`)
+				)
+					delete merged.test
+				if (
+					commandOverrides.has(`test`) &&
+					!commandOverrides.has(`testCommand`)
+				)
+					delete merged.testCommand
 				if (!merged.testPattern)
 					throw new Error(`required arguments were not provided: testPattern.`)
 				const { returnValue } = await encapsulate(

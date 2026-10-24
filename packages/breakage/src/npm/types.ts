@@ -1,4 +1,4 @@
-import type { ReleaseConfig, VersionDelta } from "../release.ts"
+import type { VersionDelta } from "../release.ts"
 
 export type SupportChange = {
 	peer: string
@@ -7,28 +7,8 @@ export type SupportChange = {
 	current: string | null
 }
 
-export type NpmSuite = {
-	/** Package-relative globs; preserve relative paths inside the stage. */
-	files: string[]
-	/** Run once; 1 means assertion failure, other nonzero codes mean setup failure. */
-	command: string
-}
-
-export type NpmConfig = {
-	release?: ReleaseConfig
-	packageDirectory?: string
-	artifact: string
-	representatives: string | string[]
-	lockfile: string
-	prepareCommand: string
-	installCommand?: string
-	suites: Record<string, NpmSuite>
-	/** Currently declared local peers must support and exercise each planned release. */
-	localPeers?: Record<string, { directory: string; artifact: string }>
-	baseline:
-		| { firstRelease: true }
-		| { tagPattern?: string; baselineFile?: string }
-}
+export type NpmSuite = typeof import("./config.ts").npmSuiteSchema.infer
+export type NpmConfig = typeof import("./config.ts").npmConfigSchema.infer
 
 export type NpmTestSelection =
 	| { peer: string; range: string }

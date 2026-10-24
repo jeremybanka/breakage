@@ -4,25 +4,34 @@ import { type } from "arktype"
 import type { OptionsGroup } from "comline"
 import { options, parseBooleanOption } from "comline"
 
-import { defaultConfig, loadConfig } from "../config.ts"
+import { configOptions, defaultConfig, loadConfig } from "../config.ts"
 
 import { formatNpmReport, npmCheck, npmTest } from "./check.ts"
 import { errorMessage } from "../task.ts"
 import { validateConfig } from "./config.ts"
 import type { NpmTestSelection } from "./types.ts"
 
-type CommonOptions = { config?: string | undefined; json?: boolean | undefined }
+type CommonOptions = {
+	config?: string | undefined
+	json?: boolean | undefined
+	release?: import("../release.ts").ReleaseConfig
+	npm?: import("./types.ts").NpmConfig
+}
 type CheckOptions = CommonOptions & { coverageOnly?: boolean | undefined }
 type TestOptions = CommonOptions & { representative?: string | undefined }
 
 const common = {
+	release: configOptions.optionConfigs.release,
+	npm: configOptions.optionConfigs.npm,
 	config: {
+		schema: type(`string`),
 		required: false,
 		description: `Configuration file (defaults to breakage.config.ts).`,
 		example: `--config ./breakage.config.ts`,
 		completion: { fileSystem: `files` as const, repeatable: false },
 	},
 	json: {
+		schema: type(`boolean`),
 		required: false,
 		description: `Emit the structured result.`,
 		example: `--json`,
@@ -32,10 +41,17 @@ const common = {
 
 export const npmCheckManual: OptionsGroup<CheckOptions> = options(
 	`Check npm peer compatibility and changes in declared support.`,
-	type({ "config?": `string`, "json?": `boolean`, "coverageOnly?": `boolean` }),
+	type({
+		"config?": `string`,
+		"json?": `boolean`,
+		"coverageOnly?": `boolean`,
+		"release?": configOptions.optionsSchema.get(`release`),
+		"npm?": configOptions.optionsSchema.get(`npm`),
+	}),
 	{
 		...common,
 		coverageOnly: {
+			schema: type(`boolean`),
 			aliases: [`coverage-only`],
 			required: false,
 			description: `Audit coverage and support changes without executing assertions.`,
@@ -51,10 +67,13 @@ export const npmTestManual: OptionsGroup<TestOptions> = options(
 		"config?": `string`,
 		"json?": `boolean`,
 		"representative?": `string`,
+		"release?": configOptions.optionsSchema.get(`release`),
+		"npm?": configOptions.optionsSchema.get(`npm`),
 	}),
 	{
 		...common,
 		representative: {
+			schema: type(`string`),
 			required: false,
 			description: `Select an exact configured representative path relative to the package.`,
 			example: `--representative peer-environments/react-19`,

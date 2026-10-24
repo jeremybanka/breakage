@@ -12,7 +12,7 @@ const config: UserConfig = defineConfig({
 		dts: { entry: [`src/breakage.ts`, `src/changesets.ts`], sourcemap: true },
 		fixedExtension: false,
 		sourcemap: true,
-		tsconfig: `tsconfig.json`,
+		tsconfig: `tsconfig.build.json`,
 	},
 	run: {
 		tasks: {

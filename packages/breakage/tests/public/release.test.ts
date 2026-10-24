@@ -333,7 +333,7 @@ it(`rejects release CLI flags and function test hooks`, async () => {
 	project = releaseFixture()
 	const result = project.run(configPath, `--release={}`)
 	expect(result.status).toBe(2)
-	expect(result.stderr).toContain(`Define release hooks in breakage.config.ts`)
+	expect(result.stderr).toContain(`config-only`)
 	const invalid = {
 		...fixtureConfig,
 		testPattern: fixtureConfig.testPattern!,
@@ -349,7 +349,7 @@ it(`rejects release CLI flags and function test hooks`, async () => {
 		defineConfig({
 			release: { resolveDelta: `2.0.0` },
 		} as unknown as import("breakage").BreakageConfig),
-	).toThrow(`release.resolveDelta must be a function`)
+	).toThrow(`resolveDelta must be a function`)
 })
 
 it(`rejects a resolver's different baseline before replacing historical tests`, async () => {

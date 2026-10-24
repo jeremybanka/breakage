@@ -1,9 +1,35 @@
 import path from "node:path"
+import { type } from "arktype"
 
-import { validateRelease, rejectCertificationOptions } from "../release.ts"
+import { releaseSchema, rejectCertificationOptions } from "../release.ts"
 
 import { eras, packageName, record } from "./manifest.ts"
 import type { NpmConfig } from "./types.ts"
+
+export const npmSuiteSchema = type({
+	"+": `reject`,
+	files: `string[]`,
+	command: `string`,
+})
+export const npmConfigSchema = type({
+	"+": `reject`,
+	"release?": releaseSchema,
+	"packageDirectory?": `string`,
+	artifact: `string`,
+	representatives: `string | string[]`,
+	lockfile: `string`,
+	prepareCommand: `string`,
+	"installCommand?": `string`,
+	suites: { "[string]": npmSuiteSchema },
+	"localPeers?": {
+		"[string]": { "+": `reject`, directory: `string`, artifact: `string` },
+	},
+	baseline: type({ "+": `reject`, firstRelease: `true` }).or({
+		"+": `reject`,
+		"tagPattern?": `string`,
+		"baselineFile?": `string`,
+	}),
+})
 
 function nonempty(value: unknown): value is string {
 	return typeof value === `string` && value.trim().length > 0
@@ -11,6 +37,8 @@ function nonempty(value: unknown): value is string {
 
 export function validateConfig(value: unknown): asserts value is NpmConfig {
 	if (!record(value)) throw new Error(`Configuration must have an npm object.`)
+	rejectCertificationOptions(value)
+	npmConfigSchema.assert(value)
 	for (const key of [`artifact`, `lockfile`] as const) {
 		if (!nonempty(value[key]))
 			throw new Error(`npm.${key} must be a nonempty string.`)
@@ -27,8 +55,6 @@ export function validateConfig(value: unknown): asserts value is NpmConfig {
 		)
 	if (value.installCommand !== undefined && !nonempty(value.installCommand))
 		throw new Error(`Invalid npm.installCommand.`)
-	rejectCertificationOptions(value)
-	if (value.release !== undefined) validateRelease(value.release)
 	for (const key of [`packageDirectory`] as const) {
 		if (value[key] !== undefined && !nonempty(value[key]))
 			throw new Error(`Invalid npm.${key}.`)

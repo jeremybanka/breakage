@@ -12,7 +12,6 @@
 			"breakage/changesets": ["./src/changesets.ts"]
 		},
 		"allowJs": false,
-		"isolatedDeclarations": true,
 		"types": [
 			"bun",
 			"node"

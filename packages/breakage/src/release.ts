@@ -1,5 +1,6 @@
 // cspell:words premajor preminor prepatch
 import semver from "semver"
+import { type } from "arktype"
 
 export type ReleaseDeltaContext = {
 	packageName: string
@@ -29,12 +30,12 @@ export type VersionDelta = VersionTransition & { breaking: boolean }
 export type SemverPolicyOptions = { beforeV1?: `major` | `minor` | `patch` }
 export type ReleasePolicyFunction = (delta: VersionTransition) => boolean
 export type ReleasePolicy = ReleasePolicyFunction
-export type ReleaseConfig = {
-	/** Defaults to comparing the selected baseline with the current manifest. */
-	resolveDelta?: ReleaseDeltaResolver
-	/** Defaults to major releases, including before v1. */
-	policy?: ReleasePolicy
-}
+export const releaseSchema = type({
+	"+": `reject`,
+	"resolveDelta?": type(`Function`).as<ReleaseDeltaResolver>(),
+	"policy?": type(`Function`).as<ReleasePolicy>(),
+})
+export type ReleaseConfig = typeof releaseSchema.infer
 
 /** Choose which version increments permit breaking changes. Prerelease-only increments do not. */
 export function semverPolicy({
@@ -92,18 +93,7 @@ export function validateRelease(
 		throw new Error(
 			`release.version was removed. Use release.resolveDelta to return a version transition.`,
 		)
-	const config = value as ReleaseConfig
-	if (
-		config.resolveDelta !== undefined &&
-		typeof config.resolveDelta !== `function`
-	)
-		throw new Error(
-			`release.resolveDelta must be a function returning a version transition or undefined.`,
-		)
-	if (config.policy !== undefined && typeof config.policy !== `function`)
-		throw new Error(
-			`release.policy must be a function; use semverPolicy({ beforeV1 }).`,
-		)
+	releaseSchema.assert(value)
 }
 
 /** Resolve and validate release evidence; policy is applied separately. */

@@ -32,6 +32,8 @@ Use `breakage help` instead of the former `--help` or `-h` options. Configuratio
 
 Create `breakage.config.ts` with a default export. Public checks, `prelude`, and npm checks load this file by default; explicit `.ts` configuration paths still work. JSON configuration is no longer supported. Running TypeScript configuration on Node requires native erasable TypeScript support (Node 22.18 or newer). Information-producing hooks are functions, while tests and setup commands remain shell strings.
 
+`defineConfig` and `satisfies BreakageConfig` check config keys and hook signatures while authoring. The same strict schemas validate loaded configuration, including nested release and npm options: misspelled keys fail setup instead of falling back to defaults. Comline loads the module, validates the file before applying CLI overrides, and validates the merged result. Config modules load synchronously; put asynchronous work inside `release.resolveDelta`, rather than using top-level await.
+
 ```ts
 import { defineConfig, semverPolicy } from "breakage"
 import { changesetsReleaseDelta } from "breakage/changesets"
@@ -85,6 +87,8 @@ export default defineConfig({
 `test` is a nonempty shell-command string. Breakage runs it in the configured directory and captures stdout and stderr as diagnostics. Exit 0 succeeds, exit 1 reports incompatibility, and other nonzero exits or process failures report setup errors. A breaking release can permit incompatibility, but cannot permit setup errors. Runners using exit 1 for infrastructure failures need a wrapper that distinguishes those failures. Test functions are rejected; there is no implicit-success return convention. `testCommand` remains a string alias; configure only one.
 
 `release.resolveDelta` and `release.policy` are functions whose return values carry transitions and policy decisions; stdout is never parsed as release information. `semverPolicy({ beforeV1: "minor" })` creates a policy function. If a resolver invokes an external program, it owns parsing and validating that program's output.
+
+Comline treats `release` and `npm` as `configOnly` options. Their functions survive loading and validation without being called; they have no CLI flags or completion suggestions. Attempts to set them through flags, including dotted names such as `--release.policy`, fail setup. Ordinary scalar options retain their flags, aliases, and overrides.
 
 Relative `baseDirname` values resolve from the configuration file's directory, which is also the default base directory when loading a config. CLI `--base-dir` values resolve from the caller's directory. CLI options override config fields, including `--test-command` overriding `test`. Test patterns, `baselineFile`, and prelude `out` are relative to the resulting base directory. Imports and additional filesystem work in callbacks should use `import.meta.url` or the supplied directory rather than assuming a process working directory.
 
