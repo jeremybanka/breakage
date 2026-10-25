@@ -5,6 +5,7 @@
 - Keep executable test fixtures in real TypeScript files, organized as complete miniature projects with their source, manifests, configuration, and representative environments together. Copy and build those projects in disposable directories; tests should express only case-specific changes, and pass varying inputs as data rather than interpolating source code into strings.
 - Put reusable packages in `packages/` and applications in `apps/`.
 - Name release compatibility checks `test:breakage` and their baseline preparation commands `test:breakage:prelude`; keep scripts, task-runner configuration, CI, examples, and documentation aligned.
+- Before assessing compatibility failures, read [interpreting results](packages/breakage/README.md#interpreting-results): breakage runs alongside normal tests, and historical import failures can demonstrate breaking changes even before assertions run.
 - Use the canonical commands in `docs/commands.md`: `fmt` writes formatting, `check` aggregates `check:*` validators, and `test` runs once. Coverage commands use the `cov` prefix where implemented. Keep CI and documentation aligned when changing commands.
 - Do not put line breaks in changeset bodies; keep each body on a single line.
 - Before 1.0.0, use patch releases for features and bug fixes, and minor releases for breaking changes.

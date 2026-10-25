@@ -20,7 +20,35 @@ breakage distinguishes two kinds of tests:
 1. Public tests record behavior consumers can rely on across releases. breakage restores their released versions so a proposed change cannot weaken an assertion alongside the implementation it checks.
 2. Private tests cover implementation details, development diagnostics, and other behavior you want to verify without preserving it as a release commitment. They can detect real bugs too; they are not used as the historical compatibility contract.
 
-Identify the public tests with a glob pattern and provide a command that runs those tests once against source. The tested package's build and current-test preflight checks belong in independent jobs. Upstream dependency builds, such as Turbo's `^build`, can run before compatibility checks. Individual public contracts may build a disposable package or fixture when published entries, declaration files, or compiled runtimes are themselves the behavior being verified. A passing comparison means the selected released tests passed; its strength depends on the promises those tests actually protect.
+Identify the public tests with a glob pattern and provide a command that runs those tests once against source. The tested package's build and current-test preflight checks belong in independent jobs. Upstream dependency builds, such as Turbo's `^build`, can run before compatibility checks. Individual public contracts may build a disposable package or fixture when published entries, declaration files, or compiled runtimes are themselves the behavior being verified. A comparison without detected breakage means the selected released tests passed; its strength depends on the promises those tests actually protect.
+
+## interpreting results
+
+**Run normal tests alongside breakage, and require both checks to pass.** Normal tests check the candidate against its current requirements, including new public contracts and private implementation tests. breakage checks the candidate against the public contracts preserved in a previous release. Run them in independent jobs or checkouts so restoring historical tests does not interfere with the current suite. A passing breakage check never overrides failing normal tests, builds, or type checks.
+
+Read the two branches below together; they describe independent checks, not an execution order. The breakage branch describes the public historical check after successful cleanup.
+
+```mermaid
+flowchart TD
+    candidate["Candidate release"] --> current{"Normal tests pass?"}
+    current -->|No| invalid["Current requirements failed; overall checks fail"]
+    current -->|Yes| valid["Current requirements passed; also require breakage"]
+    candidate --> baseline{"Historical baseline and setup ready?"}
+    baseline -->|No| inconclusive["No compatibility conclusion; breakage exits 2"]
+    baseline -->|Yes| historical{"Historical test command result?"}
+    historical -->|Exit 0| preserved["Tested historical contracts passed; breakage exits 0"]
+    historical -->|Exit 1| changed["Historical contract failure reported"]
+    historical -->|Other exit or process error| inconclusive
+    changed --> policy{"Release policy permits breakage?"}
+    policy -->|No| blocked["Breakage is unapproved; breakage exits 1"]
+    policy -->|Yes| allowed["Breakage is permitted for this release; breakage exits 0"]
+```
+
+When normal tests pass but historical tests fail, the candidate satisfies the tested current requirements while failing an expectation encoded by the released suite. For example, removing an exported function and updating current callers can leave normal tests passing while a historical consumer test can no longer import that function. The import failure is evidence of a broken consumer contract even though no assertions execute. The point at which a test stops does not by itself distinguish incompatibility from a setup problem.
+
+General misconfigurations that also affect the current suite surface in normal tests, even if release policy permits the historical failure. Failure to acquire a baseline, invalid configuration, and other setup errors leave the comparison inconclusive and fail the check. The test command's exit codes are a reporting convention, not an automatic diagnosis of the cause: exit 1 reports incompatibility; other nonzero exits or process errors report setup failure. See the [test command contract](#typescript-configuration-and-release-intent) when configuring your runner.
+
+A successful check has two possible meanings: the selected historical tests passed, or they reported incompatibility that release policy permits. Permission to release a breaking change does not establish that compatibility was preserved. Passing historical tests establish only the promises those tests cover; normal tests remain independently required in either case.
 
 ## help
 
