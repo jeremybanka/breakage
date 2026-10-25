@@ -111,15 +111,11 @@ export function npmFixture(
 		git(directory, `init`, `--initial-branch=main`)
 		git(directory, `config`, `user.name`, `Npm Tests`)
 		git(directory, `config`, `user.email`, `tests@example.invalid`)
-		const config: NpmConfig = existsSync(
-			path.join(directory, `breakage.config.ts`),
-		)
-			? (
-					createRequire(import.meta.url)(
-						path.join(directory, `breakage.config.ts`),
-					) as { default: { npm: NpmConfig } }
-				).default.npm
-			: JSON.parse(read(`breakage.config.json`)).npm
+		const config: NpmConfig = (
+			createRequire(import.meta.url)(
+				path.join(directory, `breakage.config.ts`),
+			) as { default: { npm: NpmConfig } }
+		).default.npm
 		const hostName: string = JSON.parse(read(`local-host/package.json`)).name
 		const representative = (
 			label: string,

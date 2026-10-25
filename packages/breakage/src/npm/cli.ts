@@ -1,30 +1,37 @@
-import { existsSync } from "node:fs"
-import { readFile } from "node:fs/promises"
 import path from "node:path"
-import { pathToFileURL } from "node:url"
 
 import { type } from "arktype"
 import type { OptionsGroup } from "comline"
 import { options, parseBooleanOption } from "comline"
 
+import { configOptions, defaultConfig, loadConfig } from "../config.ts"
+
 import { formatNpmReport, npmCheck, npmTest } from "./check.ts"
-import { errorMessage } from "./command.ts"
+import { errorMessage } from "../task.ts"
 import { validateConfig } from "./config.ts"
-import { record } from "./manifest.ts"
 import type { NpmTestSelection } from "./types.ts"
 
-type CommonOptions = { config?: string | undefined; json?: boolean | undefined }
+type CommonOptions = {
+	config?: string | undefined
+	json?: boolean | undefined
+	release?: import("../release.ts").ReleaseConfig
+	npm?: import("./types.ts").NpmConfig
+}
 type CheckOptions = CommonOptions & { coverageOnly?: boolean | undefined }
 type TestOptions = CommonOptions & { representative?: string | undefined }
 
 const common = {
+	release: configOptions.optionConfigs.release,
+	npm: configOptions.optionConfigs.npm,
 	config: {
+		schema: type(`string`),
 		required: false,
-		description: `Configuration file (defaults to breakage.config.ts, then .json).`,
+		description: `Configuration file (defaults to breakage.config.ts).`,
 		example: `--config ./breakage.config.ts`,
 		completion: { fileSystem: `files` as const, repeatable: false },
 	},
 	json: {
+		schema: type(`boolean`),
 		required: false,
 		description: `Emit the structured result.`,
 		example: `--json`,
@@ -34,10 +41,17 @@ const common = {
 
 export const npmCheckManual: OptionsGroup<CheckOptions> = options(
 	`Check npm peer compatibility and changes in declared support.`,
-	type({ "config?": `string`, "json?": `boolean`, "coverageOnly?": `boolean` }),
+	type({
+		"config?": `string`,
+		"json?": `boolean`,
+		"coverageOnly?": `boolean`,
+		"release?": configOptions.optionsSchema.get(`release`),
+		"npm?": configOptions.optionsSchema.get(`npm`),
+	}),
 	{
 		...common,
 		coverageOnly: {
+			schema: type(`boolean`),
 			aliases: [`coverage-only`],
 			required: false,
 			description: `Audit coverage and support changes without executing assertions.`,
@@ -53,10 +67,13 @@ export const npmTestManual: OptionsGroup<TestOptions> = options(
 		"config?": `string`,
 		"json?": `boolean`,
 		"representative?": `string`,
+		"release?": configOptions.optionsSchema.get(`release`),
+		"npm?": configOptions.optionsSchema.get(`npm`),
 	}),
 	{
 		...common,
 		representative: {
+			schema: type(`string`),
 			required: false,
 			description: `Select an exact configured representative path relative to the package.`,
 			example: `--representative peer-environments/react-19`,
@@ -65,15 +82,6 @@ export const npmTestManual: OptionsGroup<TestOptions> = options(
 	},
 )
 
-export function defaultConfig(directory: string): string {
-	return path.join(
-		directory,
-		existsSync(path.join(directory, `breakage.config.ts`))
-			? `breakage.config.ts`
-			: `breakage.config.json`,
-	)
-}
-
 export async function runNpmCli(
 	action: `check` | `test`,
 	opts: CheckOptions & TestOptions,
@@ -81,11 +89,7 @@ export async function runNpmCli(
 ): Promise<number> {
 	try {
 		const filename = path.resolve(opts.config ?? defaultConfig(process.cwd()))
-		const loaded: unknown = filename.endsWith(`.json`)
-			? JSON.parse(await readFile(filename, `utf8`))
-			: ((await import(pathToFileURL(filename).href)) as { default: unknown })
-					.default
-		const config = record(loaded) ? loaded.npm : undefined
+		const config = (await loadConfig(filename)).npm
 		validateConfig(config)
 		let selection: NpmTestSelection | undefined
 		if (action === `test`) {

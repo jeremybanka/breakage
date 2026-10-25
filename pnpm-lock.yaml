@@ -242,6 +242,21 @@ importers:
         specifier: 0.2.3
         version: 0.2.3
     devDependencies:
+      '@changesets/assemble-release-plan':
+        specifier: 7.0.0
+        version: 7.0.0
+      '@changesets/config':
+        specifier: 4.0.1
+        version: 4.0.1
+      '@changesets/pre':
+        specifier: 3.0.0
+        version: 3.0.0
+      '@changesets/read':
+        specifier: 1.0.1
+        version: 1.0.1
+      '@manypkg/get-packages':
+        specifier: 3.1.0
+        version: 3.1.0
       '@types/bun':
         specifier: npm:bun-types@1.4.4
         version: bun-types@1.4.4

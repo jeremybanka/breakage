@@ -1,5 +1,7 @@
 # Breakage npm follow-up decisions
 
+The [shared release model](../packages/breakage/README.md#migration-to-the-release-model) supersedes the certification-hook API proposals below. These recorded decisions preserve the original discussion.
+
 Deck version: 1. Completed: 8 of 8.
 
 These answers refine the npm specification after the completed first-round decisions. Example commands and configuration are proposals, not released APIs.

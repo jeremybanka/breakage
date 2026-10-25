@@ -1,4 +1,10 @@
-import { mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs"
+import {
+	cpSync,
+	mkdtempSync,
+	readdirSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 
@@ -33,7 +39,7 @@ describe(`breakage help route`, () => {
 		expect(result.exitCode).toBe(0)
 		expect(result.stdout).toContain(`USAGE`)
 		expect(result.stdout).toContain(`help`)
-		expect(result.stdout).toContain(`schema`)
+		expect(result.stdout).not.toContain(`schema`)
 		expect(result.stdout).toContain(`--testCommand`)
 		expect(result.stdout).not.toContain(`--help`)
 		expect(result.stderr).toBe(``)
@@ -41,42 +47,27 @@ describe(`breakage help route`, () => {
 	})
 
 	it(`skips malformed default configuration and a file named help`, () => {
-		writeFileSync(path.join(tempDir, `breakage.config.json`), `{ invalid`)
+		writeFileSync(path.join(tempDir, `breakage.config.ts`), `{ invalid`)
 		writeFileSync(path.join(tempDir, `help`), `{ invalid`)
 		const result = runCli([`help`])
 		expect(result.exitCode).toBe(0)
 		expect(result.stdout).toContain(`USAGE`)
 		expect(result.stderr).toBe(``)
-		expect(readdirSync(tempDir).sort()).toEqual([
-			`breakage.config.json`,
-			`help`,
-		])
-	})
-
-	it(`preserves schema generation without reading default configuration`, () => {
-		writeFileSync(path.join(tempDir, `breakage.config.json`), `{ invalid`)
-		const result = runCli([`schema`])
-		expect(result.exitCode).toBe(0)
-		expect(result.stdout).toContain(`Wrote json.schema`)
-		expect(result.stdout).not.toContain(`USAGE`)
-		expect(result.stderr).toBe(``)
-		expect(readdirSync(tempDir)).toContain(`breakage.main.schema.json`)
+		expect(readdirSync(tempDir).sort()).toEqual([`breakage.config.ts`, `help`])
 	})
 
 	it.each([
-		{ args: [], config: `breakage.config.json` },
-		{ args: [`check.json`], config: `check.json` },
-		{ args: [`./help`], config: `help` },
+		{ args: [], config: `breakage.config.ts` },
+		{ args: [`check.ts`], config: `check.ts` },
 	])(`keeps $args on the check path`, ({ args, config }) => {
-		writeFileSync(
+		cpSync(
+			new URL(`./fixtures/config/breakage.config.ts`, import.meta.url),
 			path.join(tempDir, config),
-			JSON.stringify({
-				testPattern: `*__public.test.ts`,
-				testCommand: `exit 99`,
-				certifyCommand: `exit 99`,
-			}),
 		)
-		// A valid configuration reaches the check's non-repository outcome.
+		cpSync(
+			new URL(`./fixtures/config/config-data.json`, import.meta.url),
+			path.join(tempDir, `config-data.json`),
+		)
 		const result = runCli(args)
 		expect(result.exitCode).toBe(2)
 		expect(result.stdout).toContain(`Breakage failed to determine`)

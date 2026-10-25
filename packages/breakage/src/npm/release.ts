@@ -3,38 +3,22 @@ import path from "node:path"
 import semver from "semver"
 import { simpleGit } from "simple-git"
 
+import { resolveReleaseDelta, type ReleaseDeltaContext } from "../release.ts"
 import { readBaseline } from "../baseline.ts"
 import { withDirectoryLock } from "../directory-lock.ts"
 import { latestReleaseTag } from "../release-tag.ts"
 import { validatePeerRanges } from "./config.ts"
 import type { Manifest } from "./manifest.ts"
-import { normalizeWorkspacePeers, parseManifest, record } from "./manifest.ts"
-import type {
-	NpmConfig,
-	ReleaseContext,
-	ReleaseIntent,
-	SupportChange,
-} from "./types.ts"
+import { normalizeWorkspacePeers, parseManifest } from "./manifest.ts"
+import type { NpmConfig, SupportChange } from "./types.ts"
 
-export async function intent(
+export async function releaseVersion(
 	config: NpmConfig,
-	context: ReleaseContext,
-): Promise<ReleaseIntent> {
-	if (!config.releaseIntent) return { status: `none` }
-	const result: unknown = await config.releaseIntent(context)
-	if (record(result) && result.status === `none`) return { status: `none` }
-	if (
-		!record(result) ||
-		result.status !== `release` ||
-		typeof result.version !== `string` ||
-		!semver.valid(result.version) ||
-		semver.lt(result.version, context.currentVersion)
-	) {
-		throw new Error(
-			`Invalid release intent for ${context.packageName}; expected none or a current/newer exact version.`,
-		)
-	}
-	return { status: `release`, version: result.version }
+	context: ReleaseDeltaContext,
+): Promise<string | undefined> {
+	return config.release
+		? (await resolveReleaseDelta(config.release, context))?.version
+		: undefined
 }
 
 /**

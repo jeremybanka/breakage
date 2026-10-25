@@ -1,0 +1,1 @@
+{ "testPattern": "public/*.ts", "test": "node --test public/*.ts" }

@@ -1,0 +1,7 @@
+{
+	"name": "peer-integration",
+	"version": "1.0.0",
+	"dependencies": {
+		"peer-core": "^0.53.3"
+	}
+}

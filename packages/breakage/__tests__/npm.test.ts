@@ -1,3 +1,4 @@
+import { versionTransition } from "breakage"
 import { existsSync, mkdirSync, symlinkSync } from "node:fs"
 import path from "node:path"
 
@@ -37,15 +38,23 @@ describe(`npm release compatibility`, () => {
 		expect(result.support.status).toBe(`first-release`)
 		assertStagesRemoved(f, result)
 	}, 30_000)
-	it(`collects compatibility failure and independent passes without certification bypass`, async () => {
+	it(`collects compatibility failure and independent passes despite a breaking release`, async () => {
 		const f = setup()
 		f.representative(`one`, `1.0.0`)
 		f.representative(`two`, `2.0.0`)
-		f.config.releaseIntent = ({ packageName }) =>
-			packageName === `integration`
-				? { status: `release`, version: `3.0.0` }
-				: { status: `none` }
-		f.config.certifyBreaking = () => true
+		f.config.release = {
+			resolveDelta: ({ packageName, baseline, currentVersion }) => {
+				const intendedVersion =
+					packageName === `integration` ? `3.0.0` : undefined
+				return intendedVersion === undefined
+					? undefined
+					: versionTransition(
+							baseline?.version ?? currentVersion,
+							intendedVersion,
+						)
+			},
+		}
+
 		f.copy(`contracts/check-released-host-failure.ts`, `contracts/check.ts`)
 		const result = await npmCheck(f.config, { baseDirectory: f.directory })
 		expect(result.exitCode).toBe(1)
@@ -69,7 +78,7 @@ describe(`npm release compatibility`, () => {
 		expect(result.representatives[0]!.suites[0]!.status).toBe(`not-run`)
 		assertStagesRemoved(f, result)
 	}, 30_000)
-	it(`requires certified intent for candidate peers and records intended and archive versions`, async () => {
+	it(`requires release intent for candidate peers and records intended and archive versions`, async () => {
 		const f = setup()
 		f.representative(`next`, `2.0.0`, true)
 		let result = await npmTest(
@@ -78,10 +87,12 @@ describe(`npm release compatibility`, () => {
 			{ baseDirectory: f.directory },
 		)
 		expect(result.exitCode).toBe(2)
-		expect(result.representatives[0]!.error).toContain(
-			`no certified release intent`,
-		)
-		f.config.releaseIntent = () => ({ status: `release`, version: `3.0.0` })
+		expect(result.representatives[0]!.error).toContain(`no release version`)
+		f.config.release = {
+			resolveDelta: ({ baseline, currentVersion }) => {
+				return versionTransition(baseline?.version ?? currentVersion, `3.0.0`)
+			},
+		}
 		result = await npmTest(
 			f.config,
 			{ peer: `host`, range: `3` },
@@ -103,8 +114,10 @@ describe(`npm release compatibility`, () => {
 		const f = setup()
 		f.representative(`next`, `2.0.0`, true)
 		f.representative(`released`, `1.0.0`)
-		f.config.releaseIntent = () => {
-			throw new Error(`release plan unavailable`)
+		f.config.release = {
+			resolveDelta: () => {
+				throw new Error(`release plan unavailable`)
+			},
 		}
 		const result = await npmCheck(f.config, { baseDirectory: f.directory })
 		expect(result.exitCode).toBe(2)
@@ -128,19 +141,31 @@ describe(`npm release compatibility`, () => {
 		})
 		expect(result.exitCode).toBe(1)
 		expect(result.support.status).toBe(`end-of-support`)
-		f.config.releaseIntent = ({ packageName }) =>
-			packageName === `integration`
-				? { status: `release`, version: `2.0.0` }
-				: { status: `none` }
-		f.config.certifyBreaking = ({ release, changes }) =>
-			release.delta === `major` && changes[0]!.peer === `host`
+		f.config.release = {
+			resolveDelta: ({ packageName, baseline, currentVersion }) => {
+				const intendedVersion =
+					packageName === `integration` ? `2.0.0` : undefined
+				return intendedVersion === undefined
+					? undefined
+					: versionTransition(
+							baseline?.version ?? currentVersion,
+							intendedVersion,
+						)
+			},
+		}
+		f.config.release!.policy = ({ delta }) => delta === `major`
 		result = await npmCheck(f.config, {
 			baseDirectory: f.directory,
 			coverageOnly: true,
 		})
 		expect(result.exitCode, JSON.stringify(result)).toBe(0)
-		expect(result.support.status).toBe(`certified`)
-		expect(result.support.release).toEqual({ version: `2.0.0`, delta: `major` })
+		expect(result.support.status).toBe(`breaking-release`)
+		expect(result.support.release).toEqual({
+			previousVersion: `1.0.0`,
+			version: `2.0.0`,
+			delta: `major`,
+			breaking: true,
+		})
 	}, 30_000)
 	it(`rejects absent or mismatched release baselines instead of silently bootstrapping`, async () => {
 		const f = setup()

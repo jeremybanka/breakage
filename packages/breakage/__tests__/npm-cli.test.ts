@@ -54,17 +54,18 @@ describe(`packaged npm CLI`, () => {
 		expect(explicit.status, explicit.stdout + explicit.stderr).toBe(0)
 		expect(explicit.stdout).toContain(`conditional on publication`)
 	}, 30_000)
-	it(`accepts data-only JSON audit configuration and exposes missing coverage as exit 2`, () => {
+	it(`awaits TypeScript audit configuration and exposes missing coverage as exit 2`, () => {
 		const f = (fixture = npmFixture())
 		f.representative(`one`, `1.0.0`)
-		f.write(`custom.json`, { npm: f.config })
+		f.copy(`data.config.ts`, `custom.config.ts`)
+		f.write(`fixture-config.json`, { npm: f.config })
 		const result = cli(
 			f.directory,
 			`npm`,
 			`check`,
 			`--coverage-only`,
 			`--config`,
-			`custom.json`,
+			`custom.config.ts`,
 			`--json`,
 		)
 		expect(result.status, result.stdout + result.stderr).toBe(2)
@@ -75,11 +76,12 @@ describe(`packaged npm CLI`, () => {
 	}, 30_000)
 	it(`reports malformed configuration and invalid selection without running tests`, () => {
 		const f = (fixture = npmFixture())
-		f.write(`breakage.config.json`, { npm: {} })
+		f.copy(`data.config.ts`, `breakage.config.ts`)
+		f.write(`fixture-config.json`, { npm: {} })
 		const bad = cli(f.directory, `npm`, `check`, `--json`)
 		expect(bad.status).toBe(2)
 		expect(JSON.parse(bad.stdout).errors[0]).toContain(`artifact`)
-		f.write(`breakage.config.json`, { npm: f.config })
+		f.write(`fixture-config.json`, { npm: f.config })
 		const missing = cli(f.directory, `npm`, `test`, `--json`)
 		expect(missing.status).toBe(2)
 		expect(JSON.parse(missing.stdout).errors[0]).toContain(

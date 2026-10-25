@@ -8,6 +8,8 @@ export async function command(
 	commandLine: string,
 	cwd: string,
 ): Promise<CommandResult> {
+	if (typeof commandLine !== `string` || !commandLine.trim())
+		throw new Error(`Commands must be nonempty shell strings.`)
 	return await new Promise((resolve, reject) => {
 		const child = spawn(commandLine, {
 			cwd,

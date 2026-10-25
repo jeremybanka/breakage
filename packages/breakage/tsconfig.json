@@ -8,10 +8,10 @@
 	],
 	"compilerOptions": {
 		"paths": {
-			"breakage": ["./src/breakage.ts"]
+			"breakage": ["./src/breakage.ts"],
+			"breakage/changesets": ["./src/changesets.ts"]
 		},
 		"allowJs": false,
-		"isolatedDeclarations": true,
 		"types": [
 			"bun",
 			"node"

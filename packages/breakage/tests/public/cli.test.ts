@@ -1,3 +1,4 @@
+import { versionTransition } from "breakage"
 import { readdirSync } from "node:fs"
 import path from "node:path"
 
@@ -28,23 +29,26 @@ function run(args: string[]) {
 }
 
 it.each([
-	{ changed: false, certified: false, exitCode: 0 },
-	{ changed: true, certified: false, exitCode: 1 },
-	{ changed: true, certified: true, exitCode: 0 },
+	{ changed: false, breakingRelease: false, exitCode: 0 },
+	{ changed: true, breakingRelease: false, exitCode: 1 },
+	{ changed: true, breakingRelease: true, exitCode: 0 },
 ])(
-	`returns $exitCode for changed=$changed, certified=$certified using a config file`,
-	({ changed, certified, exitCode }) => {
+	`returns $exitCode for changed=$changed, breakingRelease=$breakingRelease using a config file`,
+	({ changed, breakingRelease, exitCode }) => {
 		project = fixture(changed)
 		const currentTests = project.read(`public/contract.ts`)
 		project.write(
-			`breakage.config.json`,
+			`config-data.json`,
 			JSON.stringify({
-				...project.options,
-				certifyCommand: certified ? `true` : `false`,
+				options: project.options,
+				transition: versionTransition(
+					`1.0.0`,
+					breakingRelease ? `2.0.0` : `1.0.0`,
+				),
 			}),
 		)
 		// Configuration is committed because checking requires a clean repository.
-		git(project.repository, `add`, `breakage.config.json`)
+		git(project.repository, `add`, `config-data.json`)
 		git(project.repository, `commit`, `-m`, `Configure check`)
 		const result = run([])
 		expect(result.exitCode).toBe(exitCode)
@@ -59,14 +63,13 @@ it(`returns 2 when no release can establish compatibility`, () => {
 		`--tag-pattern=refs/tags/absent@`,
 		`--test-pattern=public/**/*.ts`,
 		`--test-command=false`,
-		`--certify-command=false`,
 	])
 	expect(result.exitCode).toBe(2)
 })
 
 it(`shows help independently of malformed configuration without writing files`, () => {
 	project = fixture()
-	project.write(`breakage.config.json`, `{ malformed`)
+	project.write(`breakage.config.ts`, `{ malformed`)
 	const before = readdirSync(project.repository).sort()
 	const result = run([`help`])
 	expect(result.exitCode).toBe(0)

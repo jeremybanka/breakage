@@ -1,9 +1,8 @@
 #!/usr/bin/env node
 
+import path from "node:path"
 import { inspect } from "node:util"
 
-import { type } from "arktype"
-import type { OptionsGroup } from "comline"
 import {
 	cli,
 	completionResponse,
@@ -18,28 +17,29 @@ import {
 } from "comline"
 import logger from "takua"
 
-import type { BreakageOptions } from "./breakage.ts"
-import { breakage, breakagePrelude } from "./breakage.ts"
 import {
 	defaultConfig,
-	npmCheckManual,
-	npmTestManual,
-	runNpmCli,
-} from "./npm/cli.ts"
+	configPath,
+	resolveConfig,
+	configSchema,
+	configFields,
+} from "./config.ts"
+import { breakage, breakagePrelude } from "./breakage.ts"
+import { errorMessage } from "./task.ts"
+import { npmCheckManual, npmTestManual, runNpmCli } from "./npm/cli.ts"
+
+// Either command spelling can override the other spelling in a config file.
+const commandOverrides = new Set<`test` | `testCommand`>()
 
 const BREAKAGE_MANUAL = options(
 	`Check for breaking changes in a package.`,
-	type({
-		"tagPattern?": `string`,
-		"baselineFile?": `string`,
-		testPattern: `string`,
-		testCommand: `string`,
-		certifyCommand: `string`,
-		"baseDirname?": `string`,
-		"verbose?": `boolean`,
-	}),
+	configSchema,
 	{
+		release: { configOnly: true },
+		npm: { configOnly: true },
+		out: { configOnly: true },
 		tagPattern: {
+			schema: configFields.tagPattern,
 			aliases: [`tag-pattern`],
 			completion: { repeatable: false },
 			flag: `g`,
@@ -48,6 +48,7 @@ const BREAKAGE_MANUAL = options(
 			example: `--tagPattern="my-library"`,
 		},
 		baselineFile: {
+			schema: configFields.baselineFile,
 			aliases: [`baseline-file`],
 			completion: { repeatable: false, fileSystem: `files` },
 			required: false,
@@ -55,30 +56,41 @@ const BREAKAGE_MANUAL = options(
 			example: `--baseline-file=.breakage/baseline.json`,
 		},
 		testPattern: {
+			schema: configFields.testPattern,
 			aliases: [`test-pattern`, `pattern`],
 			completion: { repeatable: false },
 			flag: `p`,
-			required: true,
+			required: false,
 			description: `The pattern to match test files that test the public API of the library.`,
 			example: `--pattern="*__public.test.ts"`,
 		},
 		testCommand: {
+			parse: (value) => {
+				commandOverrides.add(`testCommand`)
+				return value
+			},
+			schema: configFields.testCommand,
 			aliases: [`test-command`],
 			completion: { repeatable: false },
 			flag: `t`,
-			required: true,
+			required: false,
 			description: `Complete bash command that runs the tests for the library's public API.`,
 			example: `--testCommand="npm run test"`,
 		},
-		certifyCommand: {
-			aliases: [`certify-command`],
+		test: {
+			parse: (value) => {
+				commandOverrides.add(`test`)
+				return value
+			},
+			schema: configFields.test,
 			completion: { repeatable: false },
-			flag: `c`,
-			required: true,
-			description: `Complete bash command that determines whether a major version bump for your package is indicated in the workspace. Exit code 0 indicates that a major version bump is indicated, and exit code 1 indicates that no major version bump is indicated.`,
-			example: `--certifyCommand=\tsx scripts/certify-major-version-bump.node`,
+			required: false,
+			description: `Shell command running the restored public contracts.`,
+			example: `--test="npm run test:public"`,
 		},
 		baseDirname: {
+			parse: (value) => path.resolve(value),
+			schema: configFields.baseDirname,
 			aliases: [`base-dir`, `base-dirname`],
 			completion: { repeatable: false, fileSystem: `directories` },
 			flag: `d`,
@@ -87,6 +99,7 @@ const BREAKAGE_MANUAL = options(
 			example: `--baseDirname=./packages/my-package`,
 		},
 		verbose: {
+			schema: configFields.verbose,
 			completion: { repeatable: false },
 			flag: `v`,
 			required: false,
@@ -95,20 +108,11 @@ const BREAKAGE_MANUAL = options(
 			parse: parseBooleanOption,
 		},
 	},
-) satisfies OptionsGroup<BreakageOptions>
+)
 
 const PRELUDE_MANUAL = options(
 	`Resolve and fetch the release baseline for a cacheable compatibility check.`,
-	type({
-		"tagPattern?": `string`,
-		"baseDirname?": `string`,
-		"out?": `string`,
-		"testPattern?": `string`,
-		"testCommand?": `string`,
-		"certifyCommand?": `string`,
-		"baselineFile?": `string`,
-		"verbose?": `boolean`,
-	}),
+	configSchema,
 	{
 		...BREAKAGE_MANUAL.optionConfigs,
 		testPattern: {
@@ -119,11 +123,8 @@ const PRELUDE_MANUAL = options(
 			...BREAKAGE_MANUAL.optionConfigs.testCommand,
 			required: false,
 		},
-		certifyCommand: {
-			...BREAKAGE_MANUAL.optionConfigs.certifyCommand,
-			required: false,
-		},
 		out: {
+			schema: configFields.out,
 			completion: { repeatable: false, fileSystem: `files` },
 			required: false,
 			description: `Gitignored snapshot path relative to the base directory (default: .breakage/baseline.json).`,
@@ -132,27 +133,21 @@ const PRELUDE_MANUAL = options(
 	},
 )
 
-const SCHEMA_MANUAL = options(
-	`Create a copy of the schema for configuring breakage.`,
-	type({ "outdir?": `string` }),
-	{
-		outdir: {
-			aliases: [`out-dir`],
-			completion: { repeatable: false, fileSystem: `directories` },
-			flag: `o`,
-			required: false,
-			description: `Directory to write the schema to.`,
-			example: `--outdir=./dist`,
-		},
-	},
-)
-
+let loadedConfigPath: string | undefined
 const parse = cli(
 	{
 		cliName: `breakage`,
+		discoverConfigPath: (segments: readonly string[]) => {
+			if (segments[0] === `help` || segments[0] === `npm`) return undefined
+			const explicit = segments[0] === `prelude` ? segments[1] : segments[0]
+			loadedConfigPath = configPath(
+				explicit ?? defaultConfig(process.cwd()),
+				explicit !== undefined,
+			)
+			return loadedConfigPath
+		},
 		routes: optional({
 			help: null,
-			schema: null,
 			npm: optional({
 				help: null,
 				check: null,
@@ -165,7 +160,6 @@ const parse = cli(
 			"": BREAKAGE_MANUAL,
 			$configPath: BREAKAGE_MANUAL,
 			help: noOptions(`Show usage.`),
-			schema: SCHEMA_MANUAL,
 			npm: noOptions(`Show npm compatibility commands.`),
 			"npm/help": noOptions(`Show npm compatibility commands.`),
 			"npm/check": npmCheckManual,
@@ -178,15 +172,6 @@ const parse = cli(
 			$configPath: { fileSystem: `files` },
 			"prelude/$configPath": { fileSystem: `files` },
 		},
-		discoverConfigPath: (args: readonly string[]) => {
-			if (args[0] === `help` || args[0] === `schema` || args[0] === `npm`) {
-				return
-			}
-			const configPath =
-				(args[0] === `prelude` ? args[1] : args[0]) ??
-				defaultConfig(process.cwd())
-			return configPath
-		},
 	},
 	{
 		info: (message, ...data) => logger.info(`breakage`, message, data),
@@ -198,74 +183,110 @@ const completion = await completionResponse(parse.definition, process.argv)
 if (completion !== undefined) {
 	process.stdout.write(completion)
 } else {
-	const { inputs, warnings, writeJsonSchema } = parse(process.argv)
-	logWarnings(warnings)
+	try {
+		const { inputs, warnings } = await parse.async(process.argv)
+		logWarnings(warnings)
+		if (
+			process.argv
+				.slice(2)
+				.some((arg) =>
+					/^(?:--certifyCommand|--certify-command|-c)(?:=|$)/.test(arg),
+				)
+		)
+			throw new Error(
+				`certifyCommand was removed. Configure release.resolveDelta and release.policy instead.`,
+			)
 
-	switch (inputs.case) {
-		case `npm`:
-		case `npm/help`:
-		case `help`:
-			console.log(help(parse.definition))
-			break
-		case `npm/check`:
-			process.exitCode = await runNpmCli(`check`, inputs.opts)
-			break
-		case `npm/test`:
-			process.exitCode = await runNpmCli(`test`, inputs.opts)
-			break
-		case `npm/test/$peer/$range`:
-			process.exitCode = await runNpmCli(`test`, inputs.opts, inputs.params)
-			break
-		case `schema`:
-			{
-				const { outdir } = inputs.opts
-				writeJsonSchema(outdir ?? `.`)
-				process.stdout.write(`📝 Wrote json.schema.`)
+		switch (inputs.case) {
+			case `npm`:
+			case `npm/help`:
+			case `help`:
+				console.log(help(parse.definition))
+				break
+			case `npm/check`:
+				process.exitCode = await runNpmCli(`check`, inputs.opts)
+				break
+			case `npm/test`:
+				process.exitCode = await runNpmCli(`test`, inputs.opts)
+				break
+			case `npm/test/$peer/$range`:
+				process.exitCode = await runNpmCli(`test`, inputs.opts, inputs.params)
+				break
+			case `prelude`:
+			case `prelude/$configPath`: {
+				const config = resolveConfig(inputs.opts, loadedConfigPath)
+				const baseline = await breakagePrelude({
+					...config,
+					out: config.out ?? `.breakage/baseline.json`,
+				})
+				process.stdout.write(`Pinned ${baseline.ref} at ${baseline.commit}.\n`)
+				break
 			}
-			break
-		case `prelude`:
-		case `prelude/$configPath`: {
-			const baseline = await breakagePrelude({
-				...inputs.opts,
-				out: inputs.opts.out ?? `.breakage/baseline.json`,
-			})
-			process.stdout.write(`Pinned ${baseline.ref} at ${baseline.commit}.\n`)
-			break
-		}
-		case ``:
-		case `$configPath`: {
-			const { returnValue } = await encapsulate(() => breakage(inputs.opts), {
-				console: true,
-				stdout: true,
-			})
-			if (`testResult` in returnValue && returnValue.breakingChangesFound) {
-				process.stdout.write(returnValue.testResult)
-			}
-			if (`breakingChangesFound` in returnValue) {
-				if (returnValue.breakingChangesFound) {
-					if (returnValue.breakingChangesCertified) {
-						process.stdout.write(
-							`👷 Breaking changes were found and certified.`,
-						)
-						process.exit(0)
+			case ``:
+			case `$configPath`: {
+				const merged = resolveConfig(inputs.opts, loadedConfigPath)
+				if (
+					commandOverrides.has(`testCommand`) &&
+					!commandOverrides.has(`test`)
+				)
+					delete merged.test
+				if (
+					commandOverrides.has(`test`) &&
+					!commandOverrides.has(`testCommand`)
+				)
+					delete merged.testCommand
+				if (!merged.testPattern)
+					throw new Error(`required arguments were not provided: testPattern.`)
+				const { returnValue } = await encapsulate(
+					() =>
+						breakage({
+							...merged,
+							testPattern: merged.testPattern!,
+						}),
+					{
+						console: true,
+						stdout: true,
+					},
+				)
+				if (`release` in returnValue && returnValue.release) {
+					const { previousVersion, version, delta, breaking } =
+						returnValue.release
+					process.stdout.write(
+						`Release: ${previousVersion} → ${version} (${delta}; ${breaking ? `breaking` : `compatible`}).\n`,
+					)
+				}
+				if (`testResult` in returnValue && returnValue.breakingChangesFound) {
+					process.stdout.write(returnValue.testResult)
+				}
+				if (`breakingChangesFound` in returnValue) {
+					if (returnValue.breakingChangesFound) {
+						if (returnValue.release?.breaking) {
+							process.stdout.write(
+								`👷 Breaking changes are covered by the breaking release.`,
+							)
+							process.exit(0)
+						} else {
+							process.stdout.write(
+								`❌ Breaking changes require a breaking release.`,
+							)
+							process.exit(1)
+						}
 					} else {
-						process.stdout.write(
-							`❌ Breaking changes were found, but not certified.`,
-						)
-						process.exit(1)
+						process.stdout.write(`✅ No breaking changes were found.`)
+						process.exit(0)
 					}
 				} else {
-					process.stdout.write(`✅ No breaking changes were found.`)
-					process.exit(0)
+					process.stdout.write(
+						`💥 Breakage failed to determine breaking changes.` +
+							`\n` +
+							inspect(returnValue),
+					)
+					process.exit(2)
 				}
-			} else {
-				process.stdout.write(
-					`💥 Breakage failed to determine breaking changes.` +
-						`\n` +
-						inspect(returnValue),
-				)
-				process.exit(2)
 			}
 		}
+	} catch (error) {
+		process.stderr.write(`Breakage setup error: ${errorMessage(error)}\n`)
+		process.exitCode = 2
 	}
 }

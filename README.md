@@ -2,14 +2,13 @@
 
 Run yesterday’s tests against tomorrow’s release.
 
-Breakage runs the public tests from your latest release against your current implementation to detect breaking changes before you ship them. A project-defined certification command can acknowledge intentional breaks in your release plan.
+Breakage runs the public tests from your latest release against your current implementation to detect breaking changes before you ship them. A shared TypeScript release model acknowledges intentional breaks by comparing intended versions with the released baseline, including before and after Changesets versioning. Configuration is TypeScript-only, with function release hooks and string test commands.
 
 ```sh
 npx breakage \
   --tagPattern="refs/tags/my-library@" \
   --testPattern="tests/public/**/*" \
-  --testCommand="npm run test:public" \
-  --certifyCommand="false"
+  --testCommand="npm run test:public"
 ```
 
 See the [package documentation](packages/breakage/README.md) for configuration, consumer contracts, shell completion, and migration from break-check.
@@ -31,13 +30,15 @@ The publishable package lives in `packages/breakage`. The private root contains 
 
 ## Checking breakage with breakage
 
-`pnpm test:public` runs the current consumer contracts against source without building. The contracts import `breakage` through a TypeScript path mapping and exercise the CLI entrypoint selected by the current package script. When moving source files, update those runner settings; the released assertions do not depend on internal source paths. The suite covers compatible and incompatible changes, certification, CLI exit statuses and configuration, baseline replay, and restoration of tests while preserving unrelated files, the Git index, and stashes. Each scenario uses a disposable repository with a local bare origin.
+`pnpm test:public` runs the current consumer contracts against source without building. The contracts import `breakage` through a TypeScript path mapping and exercise the CLI entrypoint selected by the current package script. When moving source files, update those runner settings; the released assertions do not depend on internal source paths. The suite covers compatible and incompatible changes, release intent, CLI exit statuses and configuration, baseline replay, and restoration of tests while preserving unrelated files, the Git index, and stashes. Each scenario uses a disposable repository with a local bare origin.
 
 `pnpm test:breakage` uses the exact published `breakage@0.8.2` installed as `breakage-supervisor` to resolve the newest `breakage@` release on origin, pin its commit in `.breakage/baseline.json`, and replay its public contracts against current source. The restore pattern includes the entire `packages/breakage/tests/public/` directory, including fixture and observation code. The candidate runs only inside the contracts' disposable repositories; the public command never invokes the outer compatibility command. Run this from a clean checkout. CI runs all current public and private tests together in the Tests job and released contracts independently in the Breakage job, without caching the compatibility result.
 
-**Baseline bootstrap:** releases 0.8.1, 0.8.2, and 0.8.3 predate these contracts. Only their exact recorded tag/commit pairs may finish with a `BOOTSTRAP ONLY` notice and CI job summary saying historical compatibility was not established. The patch changeset accompanying this suite creates the first release baseline when published. From that release onward, a missing suite fails; missing tags, discovery errors, dirty checkouts, and other inconclusive results also fail. The bootstrap exception is never a compatibility claim. Remove the three-entry allowlist after the first contract-bearing release is published. Certification remains `false`: investigate failures and explicitly configure an intentional-break release-plan check before accepting a breaking change.
+**Baseline bootstrap:** releases 0.8.1, 0.8.2, and 0.8.3 predate these contracts. Only their exact recorded tag/commit pairs may finish with a `BOOTSTRAP ONLY` notice and CI job summary saying historical compatibility was not established. The patch changeset accompanying this suite creates the first release baseline when published. From that release onward, a missing suite fails; missing tags, discovery errors, dirty checkouts, and other inconclusive results also fail. The bootstrap exception is never a compatibility claim. Remove the three-entry allowlist after the first contract-bearing release is published. The pinned supervisor's legacy hook stays disabled in its adapter. Before replay, the gate resolves the candidate's Changesets version (or versioned manifest) and compares it with the exact baseline manifest using `beforeV1: "minor"`. A breaking delta permits released contract failures with an explicit notice that compatibility was not established; it cannot turn missing baselines, missing tests, or inconclusive checks into success.
 
 The supervisor dependency is deliberately pinned independently of the candidate and excluded from automatic Renovate updates. Review supervisor upgrades separately, retaining the bootstrap policy and validating historical replay and restoration.
+
+`pnpm test:breakage:npm` builds and packs Breakage, then runs its own `npm check` against locked Changesets CLI 3.0.0 and 3.0.3 environments. Both pin the five direct peers at their currently advertised minimum versions, which are also the current releases. Contracts exercise the packed helpers, dependency propagation, prerelease state, real versioning, and malformed configuration. A separate packed consumer verifies core imports, CLI help, and TypeScript configuration without any Changesets peers. CI requires these checks in the Package job. The environments are authored explicitly; there is no workflow matrix generation.
 
 ## Releases
 

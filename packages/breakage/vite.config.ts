@@ -8,14 +8,19 @@ const config: UserConfig = defineConfig({
 			// https://tsdown.dev/options/dependencies#deps-resolvedepsubpath
 			resolveDepSubpath: true,
 		},
-		entry: [`src/breakage.ts`, `src/breakage.x.ts`],
-		dts: { entry: [`src/breakage.ts`], sourcemap: true },
+		entry: [`src/breakage.ts`, `src/breakage.x.ts`, `src/changesets.ts`],
+		dts: { entry: [`src/breakage.ts`, `src/changesets.ts`], sourcemap: true },
 		fixedExtension: false,
 		sourcemap: true,
-		tsconfig: `tsconfig.json`,
+		tsconfig: `tsconfig.build.json`,
 	},
 	run: {
 		tasks: {
+			"test:breakage:npm": {
+				command: "node ../../scripts/check-peers.node.ts",
+				dependsOn: ["build"],
+				cache: false,
+			},
 			"test:run": {
 				command:
 					"BREAKAGE_CLI_ENTRYPOINT=./src/breakage.x.ts bun test ./__tests__ ./tests/public",

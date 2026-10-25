@@ -7,7 +7,13 @@ const npm: NpmConfig = JSON.parse(
 const config: { npm: NpmConfig } = {
 	npm: {
 		...npm,
-		releaseIntent: () => ({ status: `release`, version: `3.0.0` }),
+		release: {
+			resolveDelta: () => ({
+				previousVersion: `2.0.0`,
+				version: `3.0.0`,
+				delta: `major`,
+			}),
+		},
 	},
 }
 export default config

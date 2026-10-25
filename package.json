@@ -20,7 +20,8 @@
 		"test:prepare": "vp run -r test:prepare",
 		"test:public": "vp run -r test:public",
 		"test:watch": "vp run -r test:watch",
-		"workflows:update": "node scripts/update-workflows.node.ts"
+		"workflows:update": "node scripts/update-workflows.node.ts",
+		"test:breakage:npm": "vp run breakage#test:breakage:npm"
 	},
 	"devDependencies": {
 		"@changesets/cli": "3.0.3",

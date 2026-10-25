@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs"
 import path from "node:path"
 
 import { afterEach, expect, it } from "bun:test"
-import { breakage, breakagePrelude } from "breakage"
+import { versionTransition, breakage, breakagePrelude } from "breakage"
 
 import { fixture, git, shellQuote } from "./fixture.ts"
 
@@ -22,8 +22,8 @@ it(`accepts an implementation that satisfies released assertions`, async () => {
 })
 
 it.each([false, true])(
-	`detects a break despite changed current assertions (certified: %s)`,
-	async (certified) => {
+	`detects a break despite changed current assertions (breakingRelease: %s)`,
+	async (breakingRelease) => {
 		project = fixture(true)
 		const current = Bun.spawnSync([process.execPath, `public/contract.ts`], {
 			cwd: project.repository,
@@ -31,18 +31,24 @@ it.each([false, true])(
 		expect(current.exitCode).toBe(0)
 		const result = await breakage({
 			...project.options,
-			certifyCommand: certified ? `printf 'intentional break'` : `false`,
+			release: {
+				resolveDelta: ({ baseline, currentVersion }) => {
+					return versionTransition(
+						baseline?.version ?? currentVersion,
+						breakingRelease ? `2.0.0` : `1.0.0`,
+					)
+				},
+			},
 		})
 		expect(result).toMatchObject({
 			gitWasClean: true,
 			lastReleaseFound: true,
 			testsWereFound: true,
 			breakingChangesFound: true,
-			breakingChangesCertified: certified,
+			release: { breaking: breakingRelease },
 		})
 		if (!(`testResult` in result)) throw new Error(`Expected a detected break`)
 		expect(result.testResult).toContain(`released consumer behavior`)
-		if (certified) expect(result.certificationStdout).toBe(`intentional break`)
 	},
 )
 
@@ -58,11 +64,7 @@ it.each([false, true])(
 		const index = readFileSync(path.resolve(repository, indexFile))
 		const head = git(repository, `rev-parse`, `HEAD`)
 		const currentTests = project.read(`public/contract.ts`)
-		const command = path.join(project.directory, `run.ts`)
-		await Bun.write(
-			command,
-			`import { writeFileSync } from "node:fs"\nwriteFileSync("notes.txt", "command edit")\nwriteFileSync("artifacts/result.txt", "command output")\nawait import(${JSON.stringify(path.join(repository, `public/contract.ts`))})\n`,
-		)
+		const command = path.join(repository, `run-with-edits.ts`)
 		project.write(`artifacts/.keep`, ``)
 		const result = await breakage({
 			...project.options,
@@ -86,15 +88,16 @@ it(`refuses a dirty checkout without running commands or replacing files`, async
 	const result = await breakage({
 		...project.options,
 		testCommand: `touch should-not-run`,
-		certifyCommand: `touch should-not-certify`,
+		release: {
+			resolveDelta: () => {
+				throw new Error(`Release resolver must not run for a dirty checkout`)
+			},
+		},
 	})
 	expect(result).toMatchObject({ gitWasClean: false })
 	expect(project.read(`notes.txt`)).toBe(`uncommitted work`)
 	expect(project.read(`public/contract.ts`)).toBe(currentTests)
 	expect(existsSync(path.join(project.repository, `should-not-run`))).toBe(
-		false,
-	)
-	expect(existsSync(path.join(project.repository, `should-not-certify`))).toBe(
 		false,
 	)
 })
