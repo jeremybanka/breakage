@@ -114,12 +114,23 @@
 			]
 		},
 		{
-			"description": "Preserve Changesets versions in the 3.0.0 compatibility environment",
+			"description": "Preserve minimum dependency versions in the Changesets 3.0.0 compatibility environment",
 			"matchFileNames": [
 				"packages/breakage/peer-environments/changesets-3.0.0/**"
 			],
 			"matchPackageNames": [
-				"@changesets/*"
+				"@changesets/*",
+				"@manypkg/get-packages"
+			],
+			"enabled": false
+		},
+		{
+			"description": "Keep the current Changesets 3.x environment within its supported dependency majors",
+			"matchFileNames": [
+				"packages/breakage/peer-environments/changesets-3.x/**"
+			],
+			"matchUpdateTypes": [
+				"major"
 			],
 			"enabled": false
 		},

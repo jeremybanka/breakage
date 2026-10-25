@@ -63,11 +63,11 @@
 		"typescript": "7.0.2"
 	},
 	"peerDependencies": {
-		"@changesets/assemble-release-plan": "^7.0.0",
-		"@changesets/config": "^4.0.1",
-		"@changesets/pre": "^3.0.0",
-		"@changesets/read": "^1.0.1",
-		"@manypkg/get-packages": "^3.1.0"
+		"@changesets/assemble-release-plan": "^7",
+		"@changesets/config": "^4",
+		"@changesets/pre": "^3",
+		"@changesets/read": "^1",
+		"@manypkg/get-packages": "^3"
 	},
 	"peerDependenciesMeta": {
 		"@changesets/assemble-release-plan": {
