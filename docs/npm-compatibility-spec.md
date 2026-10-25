@@ -61,8 +61,14 @@ export default {
 		},
 		baseline: { tagPattern: "refs/tags/integration@" },
 		release: {
-			version: async ({ packageName, packageDirectory, currentVersion }) => {
-				// Inspect the release plan. Return an exact version or undefined; throw on errors.
+			resolveDelta: async ({
+				packageName,
+				packageDirectory,
+				currentVersion,
+				baseline,
+			}) => {
+				// Inspect the release plan. Return { previousVersion, version, delta }
+				// or undefined for no release evidence; throw on errors.
 				return undefined
 			},
 			policy: semverPolicy({ beforeV1: "minor" }),
@@ -70,6 +76,8 @@ export default {
 	} satisfies NpmConfig,
 }
 ```
+
+The resolver above is a placeholder for release-plan inspection. Construct a transition with `versionTransition(baseline?.version ?? currentVersion, intendedVersion)` from `breakage`, using an exact semantic version for the target. Support checks supply the historical baseline; candidate checks without one compare against the current manifest. The policy receives the resulting transition separately. For Changesets, use `resolveDelta: changesetsReleaseDelta()` from `breakage/changesets`; see the [release configuration guide](../packages/breakage/README.md#typescript-configuration-and-release-intent).
 
 Every declared local peer needs a dedicated configured suite. Configured external suites opt into checking external peers too; the tool never discovers registry versions or generates a matrix. Suite files are current package-relative globs including contracts, fixtures, and explicit runner configuration. Each pattern must select files. Stage their relative paths intact; reject source symlinks and reserved paths rather than following them into the checkout. Runner commands must fail if no tests run. Exit 1 means assertions failed; other nonzero exits mean setup failed. Repositories must map runner-specific statuses accordingly and keep source aliases out of staged configuration.
 
