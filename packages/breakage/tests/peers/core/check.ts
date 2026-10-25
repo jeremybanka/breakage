@@ -35,4 +35,6 @@ assert.match(
 	execFileSync(process.execPath, [cli, `help`], { encoding: `utf8` }),
 	/USAGE/,
 )
-console.log(`Packed core and TypeScript config work without Changesets peers.`)
+console.log(
+	`Packed core and async TypeScript config work without Changesets peers.`,
+)

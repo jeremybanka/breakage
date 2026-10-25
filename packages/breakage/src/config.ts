@@ -122,7 +122,7 @@ export async function loadConfig(filename: string): Promise<BreakageConfig> {
 		discoverConfigPath: () => absolute,
 	})
 	return resolveConfig(
-		parse([process.execPath, `breakage`]).inputs.opts,
+		(await parse.async([process.execPath, `breakage`])).inputs.opts,
 		absolute,
 	)
 }

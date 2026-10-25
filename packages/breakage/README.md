@@ -32,7 +32,7 @@ Use `breakage help` instead of the former `--help` or `-h` options. Configuratio
 
 Create `breakage.config.ts` with a default export. Public checks, `prelude`, and npm checks load this file by default; explicit `.ts` configuration paths still work. JSON configuration is no longer supported. Running TypeScript configuration on Node requires native erasable TypeScript support (Node 22.18 or newer). Information-producing hooks are functions, while tests and setup commands remain shell strings.
 
-`defineConfig` and `satisfies BreakageConfig` check config keys and hook signatures while authoring. The same strict schemas validate loaded configuration, including nested release and npm options: misspelled keys fail setup instead of falling back to defaults. Comline loads the module, validates the file before applying CLI overrides, and validates the merged result. Config modules load synchronously; put asynchronous work inside `release.resolveDelta`, rather than using top-level await.
+`defineConfig` and `satisfies BreakageConfig` check config keys and hook signatures while authoring. The same strict schemas validate loaded configuration, including nested release and npm options: misspelled keys fail setup instead of falling back to defaults. Comline awaits module initialization, validates the file before applying CLI overrides, and validates the merged result. Config modules and their imports may use top-level await to construct the default-exported config object. Initialization failures fail setup; Promise-valued default exports and config factories are not supported. Release inspection can remain inside `release.resolveDelta`, where the selected baseline and package context are available.
 
 ```ts
 import { defineConfig, semverPolicy } from "breakage"

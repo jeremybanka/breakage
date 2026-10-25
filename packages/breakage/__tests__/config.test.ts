@@ -28,10 +28,10 @@ beforeEach(() => {
 })
 afterEach(() => rmSync(directory, { recursive: true, force: true }))
 
-function writeOptions(options: unknown): void {
+function writeOptions(options: unknown, initializationError?: string): void {
 	writeFileSync(
 		path.join(directory, `config-data.json`),
-		JSON.stringify({ options }),
+		JSON.stringify({ options, initializationError }),
 	)
 }
 
@@ -180,7 +180,7 @@ it.each([
 	},
 )
 
-it(`preserves async resolver and policy identities without invoking them, including inherited npm hooks`, async () => {
+it(`awaits transitive config initialization and preserves hook identities without invoking them`, async () => {
 	writeOptions({ npm, baseDirname: `nested` })
 	const filename = path.join(directory, `hooks.config.ts`)
 	const loaded = await loadConfig(filename)
@@ -190,6 +190,29 @@ it(`preserves async resolver and policy identities without invoking them, includ
 	expect(loaded.npm?.release).toBe(loaded.release)
 	expect(loaded.baseDirname).toBe(path.join(directory, `nested`))
 })
+
+it(`propagates asynchronous module initialization errors through loadConfig`, async () => {
+	writeOptions({}, `shared settings unavailable`)
+	await rejects(
+		loadConfig(path.join(directory, `hooks.config.ts`)),
+		/shared settings unavailable/,
+	)
+})
+
+it.each([false, true])(
+	`reports async config initialization failures on every route (built Node CLI: %s)`,
+	(built) => {
+		writeOptions({}, `shared settings unavailable`)
+		for (const args of [[], [`prelude`], [`npm`, `check`, `--json`]]) {
+			const result = run(args, built)
+			expect(result.error).toBeUndefined()
+			expect(result.status, result.stdout + result.stderr).toBe(2)
+			expect(result.stdout + result.stderr).toContain(
+				`shared settings unavailable`,
+			)
+		}
+	},
+)
 
 it.each([false, true])(
 	`validates raw configuration before overrides (built Node CLI: %s)`,
@@ -207,6 +230,7 @@ it.each([
 	`--npm={}`,
 	`--npm.release.policy=true`,
 ])(`reserves config-only flag %s`, (flag) => {
+	writeOptions({}, `config-only flags must fail before module initialization`)
 	for (const args of [[flag], [`prelude`, flag], [`npm`, `check`, flag]]) {
 		const result = run(args)
 		expect(result.status).toBe(2)
@@ -215,6 +239,7 @@ it.each([
 })
 
 it(`keeps config-only options out of help and completions`, () => {
+	writeOptions({}, `help and completion must not initialize configuration`)
 	for (const args of [
 		[`help`],
 		[`__complete`, `--`],

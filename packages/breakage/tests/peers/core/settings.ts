@@ -1,0 +1,5 @@
+import { readFile } from "node:fs/promises"
+
+export const settings: { testPattern: string; test: string } = JSON.parse(
+	await readFile(new URL(`./settings.json`, import.meta.url), `utf8`),
+)

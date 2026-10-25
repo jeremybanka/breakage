@@ -54,7 +54,7 @@ describe(`packaged npm CLI`, () => {
 		expect(explicit.status, explicit.stdout + explicit.stderr).toBe(0)
 		expect(explicit.stdout).toContain(`conditional on publication`)
 	}, 30_000)
-	it(`loads TypeScript audit configuration and exposes missing coverage as exit 2`, () => {
+	it(`awaits TypeScript audit configuration and exposes missing coverage as exit 2`, () => {
 		const f = (fixture = npmFixture())
 		f.representative(`one`, `1.0.0`)
 		f.copy(`data.config.ts`, `custom.config.ts`)

@@ -1,8 +1,8 @@
 import { versionTransition, defineConfig, semverPolicy } from "breakage"
+import { settings } from "./settings.ts"
 
 export default defineConfig({
-	testPattern: `public/*.ts`,
-	test: `node --test public/*.ts`,
+	...settings,
 	release: {
 		resolveDelta: ({ baseline, currentVersion }) => {
 			return versionTransition(baseline?.version ?? currentVersion, `0.9.0`)

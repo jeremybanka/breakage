@@ -184,7 +184,7 @@ if (completion !== undefined) {
 	process.stdout.write(completion)
 } else {
 	try {
-		const { inputs, warnings } = parse(process.argv)
+		const { inputs, warnings } = await parse.async(process.argv)
 		logWarnings(warnings)
 		if (
 			process.argv
