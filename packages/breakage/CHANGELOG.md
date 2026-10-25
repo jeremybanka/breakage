@@ -2,6 +2,16 @@
 
 Breakage continues break-check's version sequence. Historical source and `break-check@` release tags are included in this repository; see the [history guide](../../docs/history/README.md) for provenance and commit mappings. Historical changelog commit IDs refer to the original [Wayforge](https://github.com/jeremybanka/wayforge) commits.
 
+## 0.9.0
+
+### Minor Changes
+
+- e932c07: Replace certification hooks and JSON configuration with TypeScript configuration, function resolveDelta and policy hooks, and shell-string test commands; share release evidence across public and npm checks with beforeV1 and optional Changesets helpers that preserve intent after versioning, return validated version transitions through changesetsReleaseDelta() and apply policy separately, and resolve config paths relative to their files. Use Comline 0.9.3 asynchronous configuration loading, config-only options, and strict schemas to support top-level await, preserve hooks, reject unknown keys, and derive authored config types. Validate the packed Changesets integration in authored peer environments.
+
+### Patch Changes
+
+- e932c07: Clarify how to interpret compatibility results with a README flowchart, explain why normal tests must run alongside breakage and why historical import failures can demonstrate breaking changes, and distinguish preserved compatibility from permission to release a breaking change.
+
 ## 0.8.5
 
 ### Patch Changes

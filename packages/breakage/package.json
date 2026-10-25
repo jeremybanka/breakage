@@ -1,6 +1,6 @@
 {
 	"name": "breakage",
-	"version": "0.8.5",
+	"version": "0.9.0",
 	"description": "Run yesterday\u2019s tests against tomorrow\u2019s release.",
 	"homepage": "https://github.com/jeremybanka/breakage#readme",
 	"bugs": "https://github.com/jeremybanka/breakage/issues",
