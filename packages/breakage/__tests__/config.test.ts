@@ -229,9 +229,25 @@ it.each([
 	`--release.policy=true`,
 	`--npm={}`,
 	`--npm.release.policy=true`,
+	`--npmMatrix={}`,
+	`--npmMatrix.prepare=true`,
 ])(`reserves config-only flag %s`, (flag) => {
 	writeOptions({}, `config-only flags must fail before module initialization`)
-	for (const args of [[flag], [`prelude`, flag], [`npm`, `check`, flag]]) {
+	for (const args of [
+		[flag],
+		[`prelude`, flag],
+		[`npm`, `check`, flag],
+		[`npm`, `plan`, flag],
+		[
+			`npm`,
+			`execute`,
+			`environment`,
+			`--plan=p.json`,
+			`--receipt=r.json`,
+			flag,
+		],
+		[`npm`, `verify`, `--plan=p.json`, `--receipts=*.json`, flag],
+	]) {
 		const result = run(args)
 		expect(result.status).toBe(2)
 		expect(result.stderr).toContain(`config-only`)
@@ -245,6 +261,8 @@ it(`keeps config-only options out of help and completions`, () => {
 		[`__complete`, `--`],
 		[`__complete`, `prelude`, `--`],
 		[`__complete`, `npm`, `check`, `--`],
+		[`__complete`, `npm`, `plan`, `--`],
+		[`__complete`, `npm`, `verify`, `--`],
 	]) {
 		const result = run(args)
 		expect(result.status, result.stderr).toBe(0)

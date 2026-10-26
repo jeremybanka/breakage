@@ -5,6 +5,7 @@ import { type } from "arktype"
 import { cli, options, type ConfigInput } from "comline"
 
 import { npmConfigSchema } from "./npm/config.ts"
+import { npmMatrixConfigSchema } from "./npm/matrix-model.ts"
 import {
 	releaseSchema,
 	validateRelease,
@@ -34,6 +35,7 @@ export const configSchema = type({
 	"out?": configFields.out,
 	"release?": releaseSchema,
 	"npm?": npmConfigSchema,
+	"npmMatrix?": npmMatrixConfigSchema,
 })
 
 /** The complete config, with no fields exposed to argv by this loader. */
@@ -48,6 +50,7 @@ export const configOptions = options(`Breakage configuration`, configSchema, {
 	out: { configOnly: true },
 	release: { configOnly: true },
 	npm: { configOnly: true },
+	npmMatrix: { configOnly: true },
 })
 export type BreakageConfig = ConfigInput<typeof configOptions>
 

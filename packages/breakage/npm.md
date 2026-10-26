@@ -185,7 +185,7 @@ export default defineConfig({
 
 `npm.release.policy` replaces `certifyBreaking`. The default requires a major increment; `semverPolicy({ beforeV1: "minor" })` permits pre-1.0 minor increments too. Missing evidence or a compatible version delta leaves a support drop unapproved. Invalid evidence and resolver/policy errors fail setup. Compatibility failures against still-declared peers remain failures even when the integration has a breaking release. The old `releaseIntent` and `certifyBreaking` hooks are removed and fail with migration guidance. Policies must be functions and receive `{ previousVersion, version, delta }`.
 
-`prepareCommand`, `installCommand`, and each suite's `command` are nonempty shell strings. Preparation runs in the representative directory; installation and suites run in its disposable `test/` directory. Breakage captures stdout and stderr for reporting. All nonzero preparation/installation results fail setup; suite exit 1 denotes incompatibility and other nonzero exits denote setup failure. Functions are reserved for the release-delta resolver and policy.
+`prepareCommand`, `installCommand`, and each suite's `command` are nonempty shell strings. Preparation runs in the representative directory; installation and suites run in its disposable `test/` directory. Breakage captures stdout and stderr for reporting. All nonzero preparation/installation results fail setup; suite exit 1 denotes incompatibility and other nonzero exits denote setup failure. Release-delta resolvers and policies are functions; the optional matrix's archive preparation accepts a command or function.
 
 ## Removing support
 
@@ -211,26 +211,158 @@ Tests, candidate packages, and their runtime dependencies must resolve the same 
 
 ## CI and caching
 
-Keep the existing public check as `test:breakage` and add the npm check to that release gate, or use `test:breakage:npm` for a separate required job. Preparation must build and pack every participating candidate. A developer-owned matrix can run one configured representative per job, plus an audit job:
+Keep the existing public check as `test:breakage` and add the npm check to that release gate, or use `test:breakage:npm` for a separate required job. For a local package, `npm check` still performs the complete check without a matrix plan. For a repository with several packages or distributed runners, use the optional plan → execute → verify protocol below. CI owns scheduling and artifact transport; Breakage owns discovery, audits, candidate identity, and receipt verification.
 
-```yaml
-jobs:
-  npm-audit:
-    steps:
-      # Checkout, install tools/dependencies, and prepare release evidence first.
-      - run: breakage npm check --coverage-only
-  npm-contracts:
-    strategy:
-      fail-fast: false
-      matrix:
-        representative: [peer-environments/core-1, peer-environments/core-2]
-    steps:
-      # Checkout, install tools/dependencies, and build/pack candidates first.
-      - run: breakage npm test --representative "${{ matrix.representative }}"
+### Configure and plan a matrix
+
+Keep each package's existing `npm` configuration, representative manifests/lock files, and contracts. Add this to the root `breakage.config.ts`:
+
+```ts
+import { defineConfig } from "breakage"
+
+export default defineConfig({
+	npmMatrix: {
+		configs: ["packages/*/breakage.config.ts"],
+		prepare: "pnpm exec turbo run pack:breakage",
+		label: ({ packageName, description, representative }) =>
+			`${packageName}: ${description ?? representative}`,
+	},
+})
 ```
 
-This is a job excerpt: add your runner, checkout, setup, and working directory. Require the audit, all matrix jobs, and the public check before release. Updating the authored representative list requires updating the required matrix. Breakage neither generates workflows nor aggregates cross-job receipts.
+`configs` is a root-relative glob or list of globs. Only matched configs with an `npm` section participate; a package is discovered once even when patterns overlap. Package names must be unique. Root matrix configuration does not implicitly supply release hooks to package configs: share `release` through a TypeScript module and `defineConfig` as usual. Each required peer needs a relationship suite, each declared era needs coverage, and every selected representative must have executable audited suites. Keep exploratory environments outside the matrix's configured representative globs.
 
-Start uncached. A correct cache key includes candidate/peer archives, suite files, representative manifests and lock files, observed installation identities, configuration and imported helpers, baseline, release-plan inputs, and command/environment/toolchain inputs. Unknown dynamic input means the check stays uncached. There is no new npm prelude or mandatory execution plan.
+`prepare` runs once after the coverage/support audits. Use your existing build/pack task to create the exact `artifact` paths in the package configs, including registered local peers. It must not alter tracked sources, manifests, lock files, contracts, or release evidence. Tool choice and dependency build order remain yours. Alternatively, provide an async function receiving `{ rootDirectory, archives }`; each deduplicated archive request contains `{ packageName, directory, artifact }`, with both paths relative to the root. Its return value is ignored, and throwing fails planning. `label` is optional and receives package name, representative path, optional manifest description, and audited peers; the default is `packageName: representative`.
+
+Use a clean Git checkout and ignore generated archives, `.breakage/npm-plan/`, `.breakage/receipts/`, and each representative's `test/` directory. Commit the intended source/config changes before planning. All package inputs and configured archive paths must stay within the checkout. The root must be the Git checkout root; the default is the current directory. Planning requires baseline tags or pinned baseline files and the same Changesets/tool dependencies as the package checks. With `changesetsReleaseDelta()`, both pending changesets and versioned manifests supply the existing release evidence; no matrix-specific release script is needed.
+
+```sh
+breakage npm plan --config breakage.config.ts --out .breakage/npm-plan
+# stdout is one JSON object: {"include":[{"id":"...","label":"...",...}]}
+# Copy an id from that output; execute every id before verifying.
+breakage npm execute <id> --plan .breakage/npm-plan/plan.json --receipt .breakage/receipts/<id>.json
+breakage npm verify --plan .breakage/npm-plan/plan.json --receipts '.breakage/receipts/*.json'
+```
+
+`plan` writes `plan.json` and content-addressed archives into the bundle directory, defaulting to `.breakage/npm-plan`. `--root` changes the checkout root for all three commands; config, output, plan, and receipt paths resolve from it. Quoting the receipt glob lets Breakage collect all matching files, including duplicates from different runners. Empty discovery, uncovered eras, unapproved support changes, and preparation failures are errors. A failed re-plan removes the previous `plan.json` in that output directory. After cancellation, discard the incomplete bundle and inspect/remove its `.lock` directory before retrying.
+
+The plan has `formatVersion: 1`, a fresh run identity, source commit, configuration and input fingerprints, release evidence, coverage/support audits, expected environments/suites/peer identities, and archive SHA-256 digests. Its `id` binds the complete payload. Execution consumes the bundled archives directly; workers do not repack or restore archives over workspace outputs. Each receipt has `formatVersion: 1`, `planId`, environment `id`, `exitCode`, and a report or setup error. Environment IDs remain stable for a config/representative path, while plan IDs change on every planning run.
+
+Execution rechecks the source, configuration, representative discovery, contract/manifests/lockfile inputs, release evidence, and archive digests before and after running the existing `npmTest` path. A valid plan produces a failure receipt on ordinary setup or compatibility failure. An invalid/unreadable plan or killed process may produce no receipt; that cannot satisfy verification. Assertions retain exit 1, setup failures exit 2, and successful execution exits 0. Planning and aggregate verification return 0 on success and 2 on any failure.
+
+### Use the same protocol from TypeScript
+
+```ts
+import { readFile } from "node:fs/promises"
+import { npmPlan, npmMatrix, npmExecute, npmVerify } from "breakage"
+import config from "./breakage.config.ts"
+
+const location = { rootDirectory: process.cwd() }
+if (!config.npmMatrix) throw new Error("Configure npmMatrix first.")
+const plan = await npmPlan(config.npmMatrix, location)
+const receipts = []
+for (const { id } of npmMatrix(plan).include) {
+	receipts.push(await npmExecute(plan, id, location))
+}
+const result = await npmVerify(plan, receipts, location)
+process.exitCode = result.exitCode
+
+// Another runner can load the transported bundle without depending on its old path.
+const transportedPlan: unknown = JSON.parse(
+	await readFile(".breakage/npm-plan/plan.json", "utf8"),
+)
+```
+
+The exported types are `NpmMatrixConfig`, `NpmPrepareContext`, `NpmArchiveRequest`, `NpmMatrixLabelContext`, `NpmMatrixLocation`, `NpmPlan`, `NpmReceipt`, and `NpmVerification`. `npmVerify` validates the checkout and bundle as well as receipts. `verifyNpmReceipts(plan, receipts)` provides pure structural/audit/receipt verification for custom orchestrators that independently validate source/config/archive identity. It does not inspect the filesystem. Receipt order and runner-local installed paths do not affect either verifier.
+
+### Distribute the matrix in CI
+
+This GitHub Actions example assumes your existing `./.github/actions/setup` installs pinned Node/package-manager versions and frozen workspace dependencies. Keep the plan bundle and receipts specific to the current workflow run; fetch release history in every checkout. The verify job must require successful planning and execution jobs as well as complete receipts, so cancellation or skipped jobs cannot reuse old success. Keep the ordinary public check required separately.
+
+```yaml
+name: Peer compatibility
+on: [pull_request]
+permissions:
+  contents: read
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup
+      - id: plan
+        run: |
+          matrix=$(pnpm exec breakage npm plan)
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: peer-plan
+          path: .breakage/npm-plan/
+          include-hidden-files: true
+          if-no-files-found: error
+  execute:
+    needs: plan
+    runs-on: ubuntu-latest
+    name: ${{ matrix.label }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup
+      - uses: actions/download-artifact@v4
+        with:
+          name: peer-plan
+          path: .breakage/npm-plan/
+      - env:
+          ENVIRONMENT_ID: ${{ matrix.id }}
+        run: pnpm exec breakage npm execute "$ENVIRONMENT_ID" --plan .breakage/npm-plan/plan.json --receipt ".breakage/receipts/$ENVIRONMENT_ID.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: peer-receipt-${{ matrix.id }}
+          path: .breakage/receipts/
+          include-hidden-files: true
+          if-no-files-found: error
+  verify:
+    name: Peer compatibility
+    if: always()
+    needs: [plan, execute]
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          PLAN_RESULT: ${{ needs.plan.result }}
+          EXECUTION_RESULT: ${{ needs.execute.result }}
+        run: test "$PLAN_RESULT" = success && test "$EXECUTION_RESULT" = success
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup
+      - uses: actions/download-artifact@v4
+        with:
+          name: peer-plan
+          path: .breakage/npm-plan/
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: peer-receipt-*
+          path: .breakage/receipts/
+      - run: pnpm exec breakage npm verify --plan .breakage/npm-plan/plan.json --receipts '.breakage/receipts/**/*.json'
+```
+
+Keep downloaded receipt artifacts in separate subdirectories: merging them could overwrite duplicate filenames before the verifier sees them. Require the stable aggregate `Peer compatibility` job. Pin action references according to your repository policy. Other CI systems can transport the same JSON and archive bundle, schedule `npmMatrix(plan).include`, and run the same commands.
+
+### Remove repository-specific orchestration
+
+For atom.io-style scripts, replace discovery/coverage commands with `npm plan`, archive collection and copying with its bundle, per-environment wrappers with `npm execute`, and custom receipt validation with `npm verify`. Delete the custom plan/receipt types, hashing, suite enumeration, and aggregate verifier tests once the repository uses the protocol. Keep package configs/shared release helpers, authored peer environments/contracts, the build/pack task, tool setup, and CI artifact transport. No workspace manager, task runner, Changesets versioning, or CI provider is invoked implicitly.
+
+Verification rejects missing, duplicate, unexpected, malformed, stale, failed, or skipped receipts; wrong package/peer identities; audit reports substituted for execution; and missing, duplicate, unexecuted, or failing suites. It validates coverage/support audits as well as executions. The protocol checks consistency within trusted CI, not cryptographic attestation of an untrusted worker: a worker able to fabricate both plans and receipts can fabricate success. Commands, hooks, environment variables, and external services remain repository-owned inputs; use identical toolchains and deterministic hooks across jobs.
+
+Start uncached. A correct cache key includes candidate/peer archives, suite files, representative manifests and lock files, observed installation identities, configuration and imported helpers, baseline, release-plan inputs, and command/environment/toolchain inputs. Unknown dynamic input means the check stays uncached. Do not reuse execution receipts across planning runs. There is no new npm prelude, and the matrix protocol is optional.
 
 Programmatic consumers can import `npmCheck`, `npmTest`, `formatNpmReport`, and their exported types from `breakage`. Both check functions return a structured `NpmReport` with `exitCode`, coverage, support findings, and independent representative/suite results; `mode` distinguishes audit from execution.
