@@ -10,6 +10,7 @@ import { afterEach, beforeEach, expect, it } from "bun:test"
 import { defineConfig, type BreakageConfig, type NpmConfig } from "breakage"
 
 import { loadConfig } from "../src/config.ts"
+import { validateConfig } from "../src/npm/config.ts"
 
 const npm: NpmConfig = {
 	artifact: `package.tgz`,
@@ -17,9 +18,18 @@ const npm: NpmConfig = {
 	lockfile: `package-lock.json`,
 	prepareCommand: `npm ci`,
 	suites: { host: { files: [`test.ts`], command: `node test.ts` } },
-	baseline: { firstRelease: true },
+	baseline: {},
 }
 let directory: string
+
+it(`explains how to migrate the removed firstRelease assertion`, () => {
+	expect(() =>
+		validateConfig({ ...npm, baseline: { firstRelease: true } }),
+	).toThrow(
+		`Configure tagPattern or {} to discover first-release status from release history on origin.`,
+	)
+})
+
 beforeEach(() => {
 	directory = mkdtempSync(path.join(tmpdir(), `breakage-config-`))
 	cpSync(new URL(`./fixtures/config`, import.meta.url), directory, {
@@ -151,6 +161,10 @@ it.each([
 			},
 		},
 		key: `release`,
+	},
+	{
+		options: { npm: { ...npm, baseline: { firstRelease: true } } },
+		key: `firstRelease`,
 	},
 	{
 		options: {

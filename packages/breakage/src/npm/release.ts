@@ -93,33 +93,31 @@ export async function previousManifest(
 	config: NpmConfig,
 	directory: string,
 ): Promise<Manifest | undefined> {
-	if (`firstRelease` in config.baseline) return undefined
+	const baseline = config.baseline
 	const git = simpleGit(directory)
 	let commit: string
-	if (config.baseline.baselineFile) {
+	if (baseline.baselineFile) {
 		commit = (
 			await readBaseline(
 				git,
-				path.resolve(directory, config.baseline.baselineFile),
-				config.baseline,
+				path.resolve(directory, baseline.baselineFile),
+				baseline,
 			)
 		).commit
 	} else {
 		const tags = await git.listRemote([`--tags`, `origin`])
-		const ref = latestReleaseTag(tags, config.baseline.tagPattern)
-		if (!ref)
-			throw new Error(
-				`No npm release baseline found; configure a tag pattern or explicitly declare firstRelease.`,
+		const refs = new Map<string, string>()
+		for (const line of tags.trim().split(`\n`)) {
+			if (!line) continue
+			const match = /^([a-f0-9]{40}(?:[a-f0-9]{24})?)\t(refs\/tags\/\S+)$/.exec(
+				line,
 			)
-		const refs = new Map(
-			tags
-				.trim()
-				.split(`\n`)
-				.map((line) => {
-					const [sha, name] = line.split(`\t`)
-					return [name, sha]
-				}),
-		)
+			if (!match) throw new Error(`Invalid npm release history from origin.`)
+			refs.set(match[2]!, match[1]!)
+		}
+		const ref = latestReleaseTag(tags, baseline.tagPattern)
+		// Only a successful lookup without applicable releases establishes this.
+		if (!ref) return undefined
 		const resolved = refs.get(`${ref}^{}`) ?? refs.get(ref)
 		if (!resolved || !/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(resolved))
 			throw new Error(`Invalid release commit for ${ref}.`)

@@ -31,9 +31,7 @@ const config: { npm: NpmConfig } = {
 				artifact: "artifacts/minimatch-host-2.0.0.tgz",
 			},
 		},
-		baseline: {
-			firstRelease: true,
-		},
+		baseline: {},
 	},
 }
 export default config
