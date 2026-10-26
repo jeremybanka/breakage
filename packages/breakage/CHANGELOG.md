@@ -2,6 +2,13 @@
 
 Breakage continues break-check's version sequence. Historical source and `break-check@` release tags are included in this repository; see the [history guide](../../docs/history/README.md) for provenance and commit mappings. Historical changelog commit IDs refer to the original [Wayforge](https://github.com/jeremybanka/wayforge) commits.
 
+## 0.10.0
+
+### Minor Changes
+
+- 1e3f2e1: Move the Changesets helpers from `breakage/changesets` into `@breakage/changesets`, which owns its Changesets and workspace-discovery dependencies. Install `@breakage/changesets` alongside `breakage` and update helper imports; the helper API is unchanged. Core no longer declares Changesets optional peers. Verify the integration against minimum and current Changesets 3 environments.
+- c0b0f90: Remove npm.baseline.firstRelease and infer first-release status from a successful lookup of release tags on origin, automatically comparing support after publication. Replace the removed option with a package-specific tagPattern or an empty baseline object; lookup failures remain setup errors.
+
 ## 0.9.1
 
 ### Patch Changes
