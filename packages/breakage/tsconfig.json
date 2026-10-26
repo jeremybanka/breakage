@@ -10,6 +10,9 @@
 		"paths": {
 			"breakage": [
 				"./src/breakage.ts"
+			],
+			"@breakage/changesets": [
+				"../changesets/src/changesets.ts"
 			]
 		},
 		"allowJs": false,
