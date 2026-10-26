@@ -2,9 +2,11 @@ import { execFileSync, spawnSync } from "node:child_process"
 import {
 	cpSync,
 	existsSync,
+	mkdirSync,
 	mkdtempSync,
 	readFileSync,
 	rmSync,
+	symlinkSync,
 	writeFileSync,
 } from "node:fs"
 import { createRequire } from "node:module"
@@ -283,16 +285,12 @@ it(`binds ignored contracts and rejects incomplete coverage before preparation`,
 it(`keeps Changesets release evidence and candidate identities before and after versioning`, async () => {
 	const f = fixture()
 	const require = createRequire(import.meta.url)
-	const packageRoot = path.dirname(require.resolve(`breakage/package.json`))
-	// Public contracts run against source in a fresh checkout, without dist/.
-	f.write(`tsconfig.json`, {
-		compilerOptions: {
-			paths: {
-				breakage: [path.join(packageRoot, `src/breakage.ts`)],
-				"breakage/changesets": [path.join(packageRoot, `src/changesets.ts`)],
-			},
-		},
-	})
+	for (const name of [`breakage`, `@breakage/changesets`]) {
+		const packageRoot = path.dirname(require.resolve(`${name}/package.json`))
+		const installed = path.join(f.directory, `node_modules`, name)
+		mkdirSync(path.dirname(installed), { recursive: true })
+		symlinkSync(packageRoot, installed, `dir`)
+	}
 	f.update(`package.json`, { private: false, version: `0.1.0` })
 	git(f.directory, `add`, `.`)
 	git(f.directory, `commit`, `-m`, `Released support for both host eras`)
