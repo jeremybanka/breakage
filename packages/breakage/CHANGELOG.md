@@ -2,6 +2,12 @@
 
 Breakage continues break-check's version sequence. Historical source and `break-check@` release tags are included in this repository; see the [history guide](../../docs/history/README.md) for provenance and commit mappings. Historical changelog commit IDs refer to the original [Wayforge](https://github.com/jeremybanka/wayforge) commits.
 
+## 0.9.1
+
+### Patch Changes
+
+- e1fbda9: Add optional npm matrix planning, portable candidate archive bundles, per-environment execution receipts, and aggregate verification through TypeScript APIs and `breakage npm plan`, `execute`, and `verify`, reusing shared release evidence before and after Changesets versioning.
+
 ## 0.9.0
 
 ### Minor Changes
