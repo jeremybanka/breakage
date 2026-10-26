@@ -4,6 +4,7 @@ import {
 	cpSync,
 	mkdtempSync,
 	readFileSync,
+	realpathSync,
 	rmSync,
 	writeFileSync,
 } from "node:fs"
@@ -14,10 +15,43 @@ import path from "node:path"
 import {
 	changesetsReleaseDelta,
 	readChangesetsReleasePlan,
-} from "breakage/changesets"
-import { semverPolicy, versionDelta, versionTransition } from "breakage"
+} from "@breakage/changesets"
+import {
+	loadConfig,
+	semverPolicy,
+	versionDelta,
+	versionTransition,
+} from "breakage"
 
 const require = createRequire(import.meta.url)
+const integrationManifest = require(`@breakage/changesets/package.json`) as {
+	dependencies: Record<string, string>
+	peerDependencies: Record<string, string>
+}
+assert.deepEqual(Object.keys(integrationManifest.peerDependencies), [
+	`breakage`,
+])
+const integrationRequire = createRequire(
+	require.resolve(`@breakage/changesets`),
+)
+const consumerManifest = JSON.parse(readFileSync(`package.json`, `utf8`)) as {
+	dependencies?: Record<string, string>
+}
+for (const name of Object.keys(integrationManifest.dependencies)) {
+	// Ensure the integration actually uses each pinned lower/current dependency.
+	const pin = consumerManifest.dependencies?.[name]
+	if (pin === undefined) continue
+	assert.equal(
+		realpathSync(integrationRequire.resolve(name)),
+		realpathSync(require.resolve(name)),
+	)
+	const installed = JSON.parse(
+		readFileSync(path.join(`node_modules`, name, `package.json`), `utf8`),
+	) as { version: string }
+	assert.equal(installed.version, pin)
+}
+const config = await loadConfig(path.resolve(`breakage.config.ts`))
+assert.equal(typeof config.release?.resolveDelta, `function`)
 const cli = path.join(
 	path.dirname(require.resolve(`@changesets/cli/package.json`)),
 	`bin.js`,
@@ -50,10 +84,20 @@ for (const prerelease of [false, true]) {
 		)
 		assert.equal(plan.get(`peer-core`), target)
 		assert.equal(
+			(
+				await changesetsReleaseDelta({ directory })({
+					packageName: `peer-core`,
+					packageDirectory: path.join(directory, `missing`),
+					currentVersion: `0.53.3`,
+				})
+			).version,
+			target,
+		)
+		assert.equal(
 			plan.get(`peer-integration`),
 			prerelease ? `1.0.1-next.0` : `1.0.1`,
 		)
-		const resolver = changesetsReleaseDelta()
+		const resolver = config.release!.resolveDelta!
 		const context = {
 			packageName: `peer-core`,
 			packageDirectory: path.join(directory, `packages/core`),
@@ -81,7 +125,9 @@ for (const prerelease of [false, true]) {
 		if (!prerelease)
 			assert.equal((await readChangesetsReleasePlan(directory)).size, 0)
 		writeFileSync(path.join(directory, `.changeset/config.json`), `{ invalid`)
-		await assert.rejects(() => resolver({ ...context, currentVersion: target }))
+		await assert.rejects(async () =>
+			resolver({ ...context, currentVersion: target }),
+		)
 	} finally {
 		rmSync(directory, { recursive: true, force: true })
 	}

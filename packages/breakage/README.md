@@ -64,7 +64,7 @@ Create `breakage.config.ts` with a default export. Public checks, `prelude`, and
 
 ```ts
 import { defineConfig, semverPolicy } from "breakage"
-import { changesetsReleaseDelta } from "breakage/changesets"
+import { changesetsReleaseDelta } from "@breakage/changesets"
 
 export default defineConfig({
 	tagPattern: "refs/tags/my-library@",
@@ -91,7 +91,7 @@ A custom resolver can compose the plan reader with the transition helper:
 
 ```ts
 import { defineConfig, semverPolicy, versionTransition } from "breakage"
-import { readChangesetsReleasePlan } from "breakage/changesets"
+import { readChangesetsReleasePlan } from "@breakage/changesets"
 
 export default defineConfig({
 	release: {
@@ -122,17 +122,19 @@ Relative `baseDirname` values resolve from the configuration file's directory, w
 
 Omitting `release` leaves detected breaks unapproved. Configure `release: { policy: semverPolicy({ beforeV1: "minor" }) }` to use a versioned manifest without a custom resolver. See [migration to the release model](#migration-to-the-release-model) for removed certification hooks and JSON configuration.
 
-### Optional Changesets helpers
+### Changesets integration
 
-The `breakage/changesets` subpath provides two independent helpers: `readChangesetsReleasePlan(directory?)` returns a map of package names to planned versions, and `changesetsReleaseDelta({ directory? })` returns a release-delta resolver. The resolver discovers the workspace from each package directory unless given an explicit directory, reads a fresh plan, and compares its intended version (or the current manifest after versioning) with the supplied baseline. Without a baseline it compares against the current manifest, which supplies candidate identity without claiming a historical compatibility decision. The plan uses Changesets' own assembly logic, configuration, dependency propagation, and prerelease state. Errors reading the plan fail setup instead of silently falling back to the manifest.
+The separate [`@breakage/changesets`](../changesets/README.md) package provides two independent helpers: `readChangesetsReleasePlan(directory?)` returns a map of package names to planned versions, and `changesetsReleaseDelta({ directory? })` returns a release-delta resolver. The resolver discovers the workspace from each package directory unless given an explicit directory, reads a fresh plan, and compares its intended version (or the current manifest after versioning) with the supplied baseline. Without a baseline it compares against the current manifest, which supplies candidate identity without claiming a historical compatibility decision. The plan uses Changesets' own assembly logic, configuration, dependency propagation, and prerelease state. Errors reading the plan fail setup instead of silently falling back to the manifest.
 
-These helpers use optional peer dependencies. Install them alongside Breakage when using the subpath:
+Install the integration alongside Breakage. It owns its Changesets and workspace-discovery dependencies; no individual helper libraries need to be installed:
 
 ```sh
-npm install --save-dev @changesets/assemble-release-plan@^7 @changesets/config@^4 @changesets/pre@^3 @changesets/read@^1 @manypkg/get-packages@^3
+npm install --save-dev breakage @breakage/changesets
 ```
 
-The main `breakage` export and commands do not import these dependencies. You can compose the plan reader with your own delta resolver or use the core release model with any other release process.
+The core `breakage` package does not depend on the integration or its libraries. You can compose the plan reader with your own delta resolver or use the core release model with any other release process.
+
+Migrating from `breakage/changesets`: install `@breakage/changesets` and change the import specifier. Both helper APIs are unchanged. Remove the old five optional peer installations if nothing else uses them. Keep `@changesets/cli` for your normal Changesets commands.
 
 `defineConfig` shares a top-level `release` with `npm` checks unless `npm.release` is explicitly configured. Both workflows apply the same version comparison and policy to their own historical manifests. npm preparation, installation, and suite commands are shell strings; see the [npm guide](npm.md#shared-release-configuration).
 

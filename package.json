@@ -5,6 +5,7 @@
 	"type": "module",
 	"scripts": {
 		"build": "vp run -r build",
+		"build:release": "vp run @breakage/changesets#build",
 		"change": "changeset",
 		"check": "pnpm run \"/^check:.*/\"",
 		"check:fmt": "dprint check",
@@ -12,18 +13,19 @@
 		"check:vp": "vp run check:vp:run",
 		"fmt": "dprint fmt",
 		"prepare": "vp config --hooks --no-agent",
-		"release:publish": "vp run breakage#build && changeset publish",
+		"release:publish": "pnpm run build:release && changeset publish",
 		"release:version": "changeset version",
 		"staged": "vp staged",
 		"test": "vp run -r test",
-		"test:breakage": "node scripts/check-compatibility.node.ts",
+		"test:breakage": "pnpm run build:release && node scripts/check-compatibility.node.ts",
+		"test:breakage:npm": "vp run @breakage/changesets#test:breakage:npm",
 		"test:prepare": "vp run -r test:prepare",
 		"test:public": "vp run -r test:public",
 		"test:watch": "vp run -r test:watch",
-		"workflows:update": "node scripts/update-workflows.node.ts",
-		"test:breakage:npm": "vp run breakage#test:breakage:npm"
+		"workflows:update": "node scripts/update-workflows.node.ts"
 	},
 	"devDependencies": {
+		"@breakage/changesets": "workspace:*",
 		"@changesets/cli": "3.0.3",
 		"@changesets/config": "4.0.1",
 		"@dprint/json": "0.25.2",

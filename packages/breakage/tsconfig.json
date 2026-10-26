@@ -8,8 +8,9 @@
 	],
 	"compilerOptions": {
 		"paths": {
-			"breakage": ["./src/breakage.ts"],
-			"breakage/changesets": ["./src/changesets.ts"]
+			"breakage": [
+				"./src/breakage.ts"
+			]
 		},
 		"allowJs": false,
 		"types": [

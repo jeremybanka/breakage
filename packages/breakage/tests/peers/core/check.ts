@@ -6,6 +6,7 @@ import { loadConfig, resolveReleaseDelta, versionTransition } from "breakage"
 
 const require = createRequire(import.meta.url)
 for (const peer of [
+	`@breakage/changesets`,
 	`@changesets/assemble-release-plan`,
 	`@changesets/config`,
 	`@changesets/pre`,
@@ -14,8 +15,8 @@ for (const peer of [
 ]) {
 	assert.throws(() => require.resolve(peer), { code: `MODULE_NOT_FOUND` })
 }
-await assert.rejects(() => import("breakage/changesets"), {
-	code: `ERR_MODULE_NOT_FOUND`,
+assert.throws(() => require.resolve(`breakage/changesets`), {
+	code: `MODULE_NOT_FOUND`,
 })
 const config = await loadConfig(path.resolve(`breakage.config.ts`))
 assert.equal(config.test, `node --test public/*.ts`)
@@ -36,5 +37,5 @@ assert.match(
 	/USAGE/,
 )
 console.log(
-	`Packed core and async TypeScript config work without Changesets peers.`,
+	`Packed core and async TypeScript config work without the Changesets integration.`,
 )

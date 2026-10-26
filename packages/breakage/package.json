@@ -20,10 +20,6 @@
 			"types": "./dist/breakage.d.ts",
 			"default": "./dist/breakage.js"
 		},
-		"./changesets": {
-			"types": "./dist/changesets.d.ts",
-			"default": "./dist/changesets.js"
-		},
 		"./*": "./*"
 	},
 	"main": "dist/breakage.js",
@@ -53,38 +49,9 @@
 		"takua": "0.2.3"
 	},
 	"devDependencies": {
-		"@changesets/assemble-release-plan": "7.0.0",
-		"@changesets/config": "4.0.1",
-		"@changesets/pre": "3.0.0",
-		"@changesets/read": "1.0.1",
-		"@manypkg/get-packages": "3.1.0",
 		"@types/bun": "npm:bun-types@1.4.4",
 		"@types/semver": "7.8.0",
 		"typescript": "7.0.2"
-	},
-	"peerDependencies": {
-		"@changesets/assemble-release-plan": "^7",
-		"@changesets/config": "^4",
-		"@changesets/pre": "^3",
-		"@changesets/read": "^1",
-		"@manypkg/get-packages": "^3"
-	},
-	"peerDependenciesMeta": {
-		"@changesets/assemble-release-plan": {
-			"optional": true
-		},
-		"@changesets/config": {
-			"optional": true
-		},
-		"@changesets/pre": {
-			"optional": true
-		},
-		"@changesets/read": {
-			"optional": true
-		},
-		"@manypkg/get-packages": {
-			"optional": true
-		}
 	},
 	"publishConfig": {
 		"access": "public"

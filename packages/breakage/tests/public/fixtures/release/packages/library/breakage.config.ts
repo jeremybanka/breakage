@@ -1,5 +1,5 @@
 import { defineConfig, semverPolicy } from "breakage"
-import { changesetsReleaseDelta } from "breakage/changesets"
+import { changesetsReleaseDelta } from "@breakage/changesets"
 
 export default defineConfig({
 	tagPattern: `refs/tags/release-library@`,

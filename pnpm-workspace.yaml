@@ -26,6 +26,7 @@ minimumReleaseAgeExclude:
   # Consumed jeremybanka packages are exempt at every version.
   # Keep aligned with the npm rule in renovate.json.
   - breakage
+  - "@breakage/changesets"
   - comline
   - takua
   - treetrunks

@@ -125,7 +125,7 @@ Create a separate representative that explicitly names candidate peers. Leave an
 Set `release.resolveDelta` to a synchronous/asynchronous resolver receiving `packageName`, `packageDirectory`, and `currentVersion`. For Changesets, use the optional helper:
 
 ```ts
-import { changesetsReleaseDelta } from "breakage/changesets"
+import { changesetsReleaseDelta } from "@breakage/changesets"
 import { semverPolicy } from "breakage"
 
 const release = {
@@ -154,7 +154,7 @@ Use `defineConfig` to share a release resolver and policy with public checks:
 
 ```ts
 import { defineConfig, semverPolicy } from "breakage"
-import { changesetsReleaseDelta } from "breakage/changesets"
+import { changesetsReleaseDelta } from "@breakage/changesets"
 
 export default defineConfig({
 	testPattern: "tests/public/**/*",
@@ -181,7 +181,7 @@ export default defineConfig({
 
 `defineConfig` inherits the top-level `release` into `npm.release`; an explicit `npm.release` overrides it. Programmatic callers can pass the resulting `config.npm` to `npmCheck` or `npmTest`. Both npm and public CLI commands use the same config loader. npm paths remain relative to the config file's directory, or to `npm.packageDirectory` resolved from it.
 
-`npm.release.resolveDelta` replaces `releaseIntent` and returns `{ previousVersion, version, delta }` or `undefined`. Resolution is cached per package and baseline context for each npm invocation. Support checks supply `baseline: { version }` from the integration's historical manifest; Breakage rejects a transition whose `previousVersion` disagrees with that baseline. Local-peer candidate checks have no historical baseline and use the transition's target version for candidate identity and coordination obligations. `changesetsReleaseDelta()` is a factory that returns the resolver, comparing the supplied baseline (or current manifest) with the planned version before Changesets versioning and the manifest version afterward. Because the manifest fallback also supplies a target for an unchanged registered local peer, using it opts those peers into candidate coverage too. A custom resolver can return `undefined` for packages that should have no local release intent. See the [release configuration guide](README.md#typescript-configuration-and-release-intent) for optional Changesets dependencies and standalone helpers.
+`npm.release.resolveDelta` replaces `releaseIntent` and returns `{ previousVersion, version, delta }` or `undefined`. Resolution is cached per package and baseline context for each npm invocation. Support checks supply `baseline: { version }` from the integration's historical manifest; Breakage rejects a transition whose `previousVersion` disagrees with that baseline. Local-peer candidate checks have no historical baseline and use the transition's target version for candidate identity and coordination obligations. `changesetsReleaseDelta()` is a factory that returns the resolver, comparing the supplied baseline (or current manifest) with the planned version before Changesets versioning and the manifest version afterward. Because the manifest fallback also supplies a target for an unchanged registered local peer, using it opts those peers into candidate coverage too. A custom resolver can return `undefined` for packages that should have no local release intent. See the [release configuration guide](README.md#typescript-configuration-and-release-intent) for the separate Changesets integration and standalone helpers.
 
 `npm.release.policy` replaces `certifyBreaking`. The default requires a major increment; `semverPolicy({ beforeV1: "minor" })` permits pre-1.0 minor increments too. Missing evidence or a compatible version delta leaves a support drop unapproved. Invalid evidence and resolver/policy errors fail setup. Compatibility failures against still-declared peers remain failures even when the integration has a breaking release. The old `releaseIntent` and `certifyBreaking` hooks are removed and fail with migration guidance. Policies must be functions and receive `{ previousVersion, version, delta }`.
 

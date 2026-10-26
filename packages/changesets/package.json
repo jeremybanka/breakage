@@ -1,0 +1,51 @@
+{
+	"name": "@breakage/changesets",
+	"version": "0.1.0",
+	"description": "Changesets release intent for Breakage.",
+	"homepage": "https://github.com/jeremybanka/breakage#readme",
+	"bugs": "https://github.com/jeremybanka/breakage/issues",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/jeremybanka/breakage.git",
+		"directory": "packages/changesets"
+	},
+	"license": "MPL-2.0",
+	"author": {
+		"name": "Jeremy Banka",
+		"email": "hello@jeremybanka.com"
+	},
+	"type": "module",
+	"exports": {
+		".": {
+			"types": "./dist/changesets.d.ts",
+			"default": "./dist/changesets.js"
+		},
+		"./package.json": "./package.json"
+	},
+	"main": "dist/changesets.js",
+	"types": "dist/changesets.d.ts",
+	"files": [
+		"dist",
+		"src"
+	],
+	"scripts": {
+		"build": "vp run build:run",
+		"postversion": "dprint fmt package.json"
+	},
+	"dependencies": {
+		"@changesets/assemble-release-plan": "^7",
+		"@changesets/config": "^4",
+		"@changesets/pre": "^3",
+		"@changesets/read": "^1",
+		"@manypkg/get-packages": "^3"
+	},
+	"devDependencies": {
+		"breakage": "workspace:*"
+	},
+	"peerDependencies": {
+		"breakage": "^0.9.0 || ^0.10.0"
+	},
+	"publishConfig": {
+		"access": "public"
+	}
+}

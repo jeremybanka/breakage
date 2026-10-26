@@ -8,7 +8,7 @@ import {
 	versionTransition,
 	type ReleaseDeltaContext,
 	type VersionTransition,
-} from "./release.ts"
+} from "breakage"
 
 /** Read the actual Changesets plan, including dependent bumps and prerelease state. */
 export async function readChangesetsReleasePlan(
