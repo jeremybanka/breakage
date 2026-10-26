@@ -1,0 +1,6 @@
+{
+	"name": "changesets-consumer",
+	"private": true,
+	"type": "module",
+	"devDependencies": { "@changesets/cli": "3.0.3" }
+}

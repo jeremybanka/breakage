@@ -46,12 +46,17 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup
-      - run: pnpm exec vp run breakage#build
+      - name: Build packages and test public contracts
+        run: pnpm run test:public
       - name: Pack release artifacts
         working-directory: packages/breakage
         run: pnpm pack --pack-destination /tmp
 
-      - name: Check Changesets peer environments and optional installation
+      - name: Pack Changesets integration
+        working-directory: packages/changesets
+        run: pnpm pack --pack-destination /tmp
+
+      - name: Check Changesets environments and independent installations
         run: pnpm run test:breakage:npm
 
   Tests:

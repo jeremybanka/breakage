@@ -19,6 +19,9 @@ import { fileURLToPath } from "node:url"
 
 const require = createRequire(import.meta.url)
 const packageRoot = path.dirname(require.resolve(`breakage/package.json`))
+const integrationRoot = path.dirname(
+	require.resolve(`@breakage/changesets/package.json`),
+)
 const configuredEntrypoint = process.env.BREAKAGE_CLI_ENTRYPOINT
 if (!configuredEntrypoint)
 	throw new Error(`BREAKAGE_CLI_ENTRYPOINT is required`)
@@ -51,6 +54,12 @@ export function releaseFixture(
 	const library = path.join(directory, `packages/library`)
 	mkdirSync(path.join(directory, `node_modules`))
 	symlinkSync(packageRoot, path.join(directory, `node_modules/breakage`), `dir`)
+	mkdirSync(path.join(directory, `node_modules/@breakage`))
+	symlinkSync(
+		integrationRoot,
+		path.join(directory, `node_modules/@breakage/changesets`),
+		`dir`,
+	)
 	const git = (...args: string[]): string =>
 		execFileSync(`git`, args, {
 			cwd: directory,
@@ -92,17 +101,10 @@ export function releaseFixture(
 		read,
 		commit,
 		run: (...args) =>
-			spawnSync(
-				process.execPath,
-				[
-					`--tsconfig-override`,
-					path.join(packageRoot, `tsconfig.json`),
-					cli,
-					`--`,
-					...args,
-				],
-				{ cwd: directory, encoding: `utf8` },
-			),
+			spawnSync(process.execPath, [cli, `--`, ...args], {
+				cwd: directory,
+				encoding: `utf8`,
+			}),
 		version: () => {
 			execFileSync(`node`, [changesets, `version`], {
 				cwd: directory,

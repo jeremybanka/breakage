@@ -38,7 +38,8 @@
 				"breakage",
 				"comline",
 				"takua",
-				"treetrunks"
+				"treetrunks",
+				"@breakage/changesets"
 			],
 			"minimumReleaseAge": null
 		},
@@ -112,6 +113,27 @@
 				"@changesets/config",
 				"changesets/action"
 			]
+		},
+		{
+			"description": "Preserve minimum dependency versions in the Changesets 3.0.0 compatibility environment",
+			"matchFileNames": [
+				"packages/changesets/environments/changesets-3.0.0/**"
+			],
+			"matchPackageNames": [
+				"@changesets/*",
+				"@manypkg/get-packages"
+			],
+			"enabled": false
+		},
+		{
+			"description": "Keep the current Changesets 3.x environment within its supported dependency majors",
+			"matchFileNames": [
+				"packages/changesets/environments/changesets-3.x/**"
+			],
+			"matchUpdateTypes": [
+				"major"
+			],
+			"enabled": false
 		},
 		{
 			"matchManagers": [

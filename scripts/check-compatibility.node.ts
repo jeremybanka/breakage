@@ -5,7 +5,7 @@ import { appendFile } from "node:fs/promises"
 import type { BreakageBaseline, BreakageOutcome } from "breakage-supervisor"
 import { breakage, breakagePrelude } from "breakage-supervisor"
 
-import { changesetsReleaseDelta } from "../packages/breakage/src/changesets.ts"
+import { changesetsReleaseDelta } from "../packages/changesets/src/changesets.ts"
 import {
 	semverPolicy,
 	versionDelta,

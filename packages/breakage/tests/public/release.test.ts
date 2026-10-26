@@ -13,7 +13,7 @@ import {
 import {
 	changesetsReleaseDelta,
 	readChangesetsReleasePlan,
-} from "breakage/changesets"
+} from "@breakage/changesets"
 
 import { releaseFixture } from "./release-fixture.ts"
 import fixtureConfig from "./fixtures/release/packages/library/breakage.config.ts"

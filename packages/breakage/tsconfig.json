@@ -7,10 +7,6 @@
 		"**/*.config.ts"
 	],
 	"compilerOptions": {
-		"paths": {
-			"breakage": ["./src/breakage.ts"],
-			"breakage/changesets": ["./src/changesets.ts"]
-		},
 		"allowJs": false,
 		"types": [
 			"bun",
