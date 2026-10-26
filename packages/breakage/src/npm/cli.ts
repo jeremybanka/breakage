@@ -16,6 +16,7 @@ type CommonOptions = {
 	json?: boolean | undefined
 	release?: import("../release.ts").ReleaseConfig
 	npm?: import("./types.ts").NpmConfig
+	npmMatrix?: import("./matrix-model.ts").NpmMatrixConfig
 }
 type CheckOptions = CommonOptions & { coverageOnly?: boolean | undefined }
 type TestOptions = CommonOptions & { representative?: string | undefined }
@@ -23,6 +24,7 @@ type TestOptions = CommonOptions & { representative?: string | undefined }
 const common = {
 	release: configOptions.optionConfigs.release,
 	npm: configOptions.optionConfigs.npm,
+	npmMatrix: configOptions.optionConfigs.npmMatrix,
 	config: {
 		schema: type(`string`),
 		required: false,
@@ -47,6 +49,7 @@ export const npmCheckManual: OptionsGroup<CheckOptions> = options(
 		"coverageOnly?": `boolean`,
 		"release?": configOptions.optionsSchema.get(`release`),
 		"npm?": configOptions.optionsSchema.get(`npm`),
+		"npmMatrix?": configOptions.optionsSchema.get(`npmMatrix`),
 	}),
 	{
 		...common,
@@ -69,6 +72,7 @@ export const npmTestManual: OptionsGroup<TestOptions> = options(
 		"representative?": `string`,
 		"release?": configOptions.optionsSchema.get(`release`),
 		"npm?": configOptions.optionsSchema.get(`npm`),
+		"npmMatrix?": configOptions.optionsSchema.get(`npmMatrix`),
 	}),
 	{
 		...common,

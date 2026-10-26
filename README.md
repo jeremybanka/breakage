@@ -13,7 +13,7 @@ npx breakage \
 
 See the [package documentation](packages/breakage/README.md) for configuration, consumer contracts, shell completion, and migration from break-check.
 
-For independently released npm packages, the optional [`breakage npm` commands](packages/breakage/npm.md) test current contracts against complete peer environments and check changes in declared support. The [accepted specification](docs/npm-compatibility-spec.md) records the design and release-intent contract.
+For independently released npm packages, the optional [`breakage npm` commands](packages/breakage/npm.md) test current contracts against complete peer environments and check changes in declared support. The optional [matrix protocol](packages/breakage/npm.md#ci-and-caching) audits packages, prepares one portable archive bundle, executes each environment, and verifies complete matching receipts across runners. The [accepted specification](docs/npm-compatibility-spec.md) records the design and release-intent contract.
 
 ## Development
 

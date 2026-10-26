@@ -317,7 +317,7 @@ If a process is forcibly interrupted or restoration fails, breakage retains reco
 
 ## options
 
-The optional [`breakage npm` command family](./npm.md) checks peer compatibility and end-of-support changes for npm packages. Its representatives and packed candidates apply only to that namespace; the release model is shared with public checks. The ordinary public check retains the adoption conditions and behavior described above. Both commands can use `breakage.config.ts`; default discovery uses it, and an explicit `.ts` configuration path wins. TypeScript configuration uses the runtime's native support for erasable TypeScript.
+The optional [`breakage npm` command family](./npm.md) checks peer compatibility and end-of-support changes for npm packages. Its representatives and packed candidates apply only to that namespace; the release model is shared with public checks. For distributed matrices, [`npm plan`, `npm execute`, and `npm verify`](./npm.md#ci-and-caching) provide coverage audits, a shared archive bundle, and complete execution receipt verification. Configure discovery and archive preparation through `npmMatrix` in TypeScript. The ordinary public check retains the adoption conditions and behavior described above. Both commands can use `breakage.config.ts`; default discovery uses it, and an explicit `.ts` configuration path wins. TypeScript configuration uses the runtime's native support for erasable TypeScript.
 
 | Check option     | Shorthand | Required           | Purpose                                           |
 | ---------------- | --------- | ------------------ | ------------------------------------------------- |

@@ -27,6 +27,12 @@ import {
 import { breakage, breakagePrelude } from "./breakage.ts"
 import { errorMessage } from "./task.ts"
 import { npmCheckManual, npmTestManual, runNpmCli } from "./npm/cli.ts"
+import {
+	npmPlanManual,
+	npmExecuteManual,
+	npmVerifyManual,
+	runNpmMatrixCli,
+} from "./npm/matrix-cli.ts"
 
 // Either command spelling can override the other spelling in a config file.
 const commandOverrides = new Set<`test` | `testCommand`>()
@@ -37,6 +43,7 @@ const BREAKAGE_MANUAL = options(
 	{
 		release: { configOnly: true },
 		npm: { configOnly: true },
+		npmMatrix: { configOnly: true },
 		out: { configOnly: true },
 		tagPattern: {
 			schema: configFields.tagPattern,
@@ -151,6 +158,9 @@ const parse = cli(
 			npm: optional({
 				help: null,
 				check: null,
+				plan: null,
+				execute: required({ $id: null }),
+				verify: null,
 				test: optional({ $peer: required({ $range: null }) }),
 			}),
 			prelude: optional({ $configPath: null }),
@@ -163,6 +173,9 @@ const parse = cli(
 			npm: noOptions(`Show npm compatibility commands.`),
 			"npm/help": noOptions(`Show npm compatibility commands.`),
 			"npm/check": npmCheckManual,
+			"npm/plan": npmPlanManual,
+			"npm/execute/$id": npmExecuteManual,
+			"npm/verify": npmVerifyManual,
 			"npm/test": npmTestManual,
 			"npm/test/$peer/$range": npmTestManual,
 			prelude: PRELUDE_MANUAL,
@@ -205,6 +218,19 @@ if (completion !== undefined) {
 				break
 			case `npm/check`:
 				process.exitCode = await runNpmCli(`check`, inputs.opts)
+				break
+			case `npm/plan`:
+				process.exitCode = await runNpmMatrixCli(`plan`, inputs.opts)
+				break
+			case `npm/execute/$id`:
+				process.exitCode = await runNpmMatrixCli(
+					`execute`,
+					inputs.opts,
+					inputs.params.id,
+				)
+				break
+			case `npm/verify`:
+				process.exitCode = await runNpmMatrixCli(`verify`, inputs.opts)
 				break
 			case `npm/test`:
 				process.exitCode = await runNpmCli(`test`, inputs.opts)

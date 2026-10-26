@@ -42,6 +42,23 @@ export type { CommandResult } from "./task.ts"
 export type { BreakageBaseline, BreakagePreludeOptions } from "./baseline.ts"
 export { breakagePrelude } from "./baseline.ts"
 export { formatNpmReport, npmCheck, npmTest } from "./npm/check.ts"
+export {
+	npmPlan,
+	npmExecute,
+	npmVerify,
+	npmMatrix,
+	verifyNpmReceipts,
+} from "./npm/matrix.ts"
+export type {
+	NpmMatrixConfig,
+	NpmMatrixLabelContext,
+	NpmPrepareContext,
+	NpmArchiveRequest,
+	NpmPlan,
+	NpmReceipt,
+	NpmVerification,
+	NpmMatrixLocation,
+} from "./npm/matrix.ts"
 export type {
 	NpmConfig,
 	NpmPeerEvidence,
