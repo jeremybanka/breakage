@@ -101,17 +101,10 @@ export function releaseFixture(
 		read,
 		commit,
 		run: (...args) =>
-			spawnSync(
-				process.execPath,
-				[
-					`--tsconfig-override`,
-					path.join(packageRoot, `tsconfig.json`),
-					cli,
-					`--`,
-					...args,
-				],
-				{ cwd: directory, encoding: `utf8` },
-			),
+			spawnSync(process.execPath, [cli, `--`, ...args], {
+				cwd: directory,
+				encoding: `utf8`,
+			}),
 		version: () => {
 			execFileSync(`node`, [changesets, `version`], {
 				cwd: directory,

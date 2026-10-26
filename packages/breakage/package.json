@@ -37,7 +37,7 @@
 		"check": "vp run -w check",
 		"postversion": "dprint fmt package.json",
 		"test": "vp run test:run",
-		"test:public": "BREAKAGE_CLI_ENTRYPOINT=./src/breakage.x.ts bun test -- ./tests/public",
+		"test:public": "vp run test:public:run",
 		"test:watch": "vp run test:run --watch"
 	},
 	"dependencies": {

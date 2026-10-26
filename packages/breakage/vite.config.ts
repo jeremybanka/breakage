@@ -16,12 +16,18 @@ const config: UserConfig = defineConfig({
 	},
 	run: {
 		tasks: {
+			"test:public:run": {
+				command:
+					"BREAKAGE_CLI_ENTRYPOINT=./dist/breakage.x.js bun test -- ./tests/public",
+				dependsOn: ["build", "@breakage/changesets#build:run"],
+				cache: false,
+			},
 			"test:run": {
 				command:
-					"BREAKAGE_CLI_ENTRYPOINT=./src/breakage.x.ts bun test ./__tests__ ./tests/public",
+					"BREAKAGE_CLI_ENTRYPOINT=./dist/breakage.x.js bun test ./__tests__ ./tests/public",
 				dependsOn: [
 					"build",
-					"@breakage/changesets#build",
+					"@breakage/changesets#build:run",
 					"minimatch-integration#test:prepare",
 				],
 				cache: false,
