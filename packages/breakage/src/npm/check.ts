@@ -133,6 +133,7 @@ async function runRepresentative(
 	directory: string,
 	coverageOnly: boolean,
 	selection?: NpmTestSelection,
+	plannedSuites?: readonly string[],
 ): Promise<NpmRepresentativeResult> {
 	const label = path.relative(base, directory).split(path.sep).join(`/`)
 	const result: NpmRepresentativeResult = {
@@ -196,6 +197,7 @@ async function runRepresentative(
 			const peers = Object.keys(config.suites).filter((peer) => {
 				const evidence = result.peers[peer]
 				if (!evidence) return false
+				if (plannedSuites !== undefined) return plannedSuites.includes(peer)
 				if (selection && `peer` in selection) return peer === selection.peer
 				if (selection && `representative` in selection) return true
 				return matches(evidence.version, manifest.peerDependencies![peer]!)
@@ -257,6 +259,7 @@ async function run(
 	baseDirectory: string,
 	coverageOnly: boolean,
 	selection?: NpmTestSelection,
+	plannedSuites?: readonly string[],
 ): Promise<NpmReport> {
 	const report: NpmReport = {
 		package: { name: `(unresolved)`, version: `(unresolved)` },
@@ -330,6 +333,7 @@ async function run(
 						directory,
 						coverageOnly,
 						selection,
+						plannedSuites,
 					),
 				),
 			),
@@ -409,6 +413,21 @@ export async function npmTest(
 		options.baseDirectory ?? process.cwd(),
 		false,
 		selection,
+	)
+}
+
+/** Internal matrix entrypoint: keep the full config for validation and peer identity checks. */
+export async function npmTestPlanned(
+	config: NpmConfig,
+	selection: { representative: string; suites: readonly string[] },
+	options: { baseDirectory?: string } = {},
+): Promise<NpmReport> {
+	return await run(
+		config,
+		options.baseDirectory ?? process.cwd(),
+		false,
+		{ representative: selection.representative },
+		selection.suites,
 	)
 }
 

@@ -20,7 +20,7 @@ import {
 	type ReleaseDeltaContext,
 } from "../release.ts"
 import { prepare, errorMessage } from "../task.ts"
-import { npmCheck, npmTest, formatNpmReport } from "./check.ts"
+import { npmCheck, npmTestPlanned, formatNpmReport } from "./check.ts"
 import { validateConfig } from "./config.ts"
 import { discover, within } from "./environment.ts"
 import { readManifest } from "./manifest.ts"
@@ -577,9 +577,9 @@ export async function npmExecute(
 				]),
 			),
 		}
-		receipt.report = await npmTest(
+		receipt.report = await npmTestPlanned(
 			effective,
-			{ representative: env.representative },
+			{ representative: env.representative, suites: env.suites },
 			{ baseDirectory },
 		)
 		receipt.exitCode = receipt.report.exitCode
