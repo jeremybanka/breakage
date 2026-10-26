@@ -48,6 +48,9 @@ it(`discovers multiple packages and executes all coupled relationship suites fro
 		git(workspace, `init`, `--initial-branch=main`)
 		git(workspace, `config`, `user.name`, `Matrix Tests`)
 		git(workspace, `config`, `user.email`, `tests@example.invalid`)
+		const origin = path.join(workspace, `.git`, `test-origin.git`)
+		git(workspace, `init`, `--bare`, origin)
+		git(workspace, `remote`, `add`, `origin`, origin)
 		git(workspace, `add`, `.`)
 		git(workspace, `commit`, `-m`, `Workspace with two integration packages`)
 		const location = { rootDirectory: workspace }

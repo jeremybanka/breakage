@@ -276,7 +276,7 @@ describe(`npm environment safety`, () => {
 		f.baseline({ host: `^1 || ^2 || ^3` })
 		const remote = path.join(f.directory, `remote.git`)
 		execFileSync(`git`, [`init`, `--bare`, remote], { stdio: `ignore` })
-		git(f.directory, `remote`, `add`, `origin`, remote)
+		git(f.directory, `remote`, `set-url`, `origin`, remote)
 		git(f.directory, `push`, `origin`, `--tags`)
 		f.config.baseline = { tagPattern: `refs/tags/integration@` }
 		const result = await npmCheck(f.config, {

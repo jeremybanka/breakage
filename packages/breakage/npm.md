@@ -91,7 +91,9 @@ export default {
 
 Every file glob must select at least one regular file. Remove the fixture glob if you have no fixtures. `packageDirectory` defaults to the config file's directory; all npm paths resolve from that package directory. Glob discovery uses paths as labels and installed versions as evidence. Register local peer directories in `localPeers`; each declared local peer must have a suite, and its planned upcoming releases must be supported and exercised by a coordinated representative. External peer suites are an explicit opt-in. No matrix is inferred from registry metadata.
 
-The previous manifest comes from the newest matching release tag. An existing core `baselineFile` may pin a fetched release. For a package's first publication, explicitly use `baseline: { firstRelease: true }` and remove that exception after publishing; missing baseline evidence never silently passes.
+The previous manifest comes from the newest matching release tag on `origin`. Configure `baseline: { tagPattern: "refs/tags/my-integration@" }` before the first publication and retain it afterward; a successful lookup with no matching semantic-version release tags reports `first-release`, and subsequent runs automatically compare against the newest matching release. `baseline: {}` searches all release tags, so use a package-specific pattern in a monorepo. The configured Git history is authoritative: publish release tags to `origin` alongside packages. Authentication, network, malformed-data, fetch, and manifest failures are setup errors. An existing core `baselineFile` may pin a fetched release; a missing or invalid snapshot remains a setup error.
+
+`baseline: { firstRelease: true }` has been removed and produces a configuration error. Replace it with a package-specific `tagPattern` or `{}`; no configuration edit is needed when the first release appears.
 
 Run the package check or a focused test:
 

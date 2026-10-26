@@ -24,11 +24,11 @@ export const npmConfigSchema = type({
 	"localPeers?": {
 		"[string]": { "+": `reject`, directory: `string`, artifact: `string` },
 	},
-	baseline: type({ "+": `reject`, firstRelease: `true` }).or({
+	baseline: {
 		"+": `reject`,
 		"tagPattern?": `string`,
 		"baselineFile?": `string`,
-	}),
+	},
 })
 
 function nonempty(value: unknown): value is string {
@@ -38,6 +38,10 @@ function nonempty(value: unknown): value is string {
 export function validateConfig(value: unknown): asserts value is NpmConfig {
 	if (!record(value)) throw new Error(`Configuration must have an npm object.`)
 	rejectCertificationOptions(value)
+	if (record(value.baseline) && `firstRelease` in value.baseline)
+		throw new Error(
+			`npm.baseline.firstRelease has been removed. Configure tagPattern or {} to discover first-release status from release history on origin.`,
+		)
 	npmConfigSchema.assert(value)
 	for (const key of [`artifact`, `lockfile`] as const) {
 		if (!nonempty(value[key]))
@@ -86,16 +90,13 @@ export function validateConfig(value: unknown): asserts value is NpmConfig {
 	}
 	if (
 		!record(value.baseline) ||
-		(`firstRelease` in value.baseline
-			? value.baseline.firstRelease !== true ||
-				Object.keys(value.baseline).length !== 1
-			: Object.entries(value.baseline).some(
-					([key, item]) =>
-						![`tagPattern`, `baselineFile`].includes(key) || !nonempty(item),
-				))
+		Object.entries(value.baseline).some(
+			([key, item]) =>
+				![`tagPattern`, `baselineFile`].includes(key) || !nonempty(item),
+		)
 	) {
 		throw new Error(
-			`Configure npm.baseline with tagPattern/baselineFile or { firstRelease: true }.`,
+			`Configure npm.baseline with tagPattern/baselineFile or {} for default release history.`,
 		)
 	}
 	if (value.localPeers !== undefined) {

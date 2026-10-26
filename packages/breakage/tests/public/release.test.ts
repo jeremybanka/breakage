@@ -187,7 +187,7 @@ it(`shares a release object with npm while preserving explicit overrides`, () =>
 				command: `node test.ts`,
 			},
 		},
-		baseline: { firstRelease: true as const },
+		baseline: {},
 	}
 	expect(defineConfig({ release, npm }).npm!.release).toBe(release)
 	const override: import("breakage").ReleaseConfig = {
