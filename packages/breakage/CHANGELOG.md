@@ -2,6 +2,12 @@
 
 Breakage continues break-check's version sequence. Historical source and `break-check@` release tags are included in this repository; see the [history guide](../../docs/history/README.md) for provenance and commit mappings. Historical changelog commit IDs refer to the original [Wayforge](https://github.com/jeremybanka/wayforge) commits.
 
+## 0.10.1
+
+### Patch Changes
+
+- 0bee937: Allow dropping peer prerelease support, including release candidates, without requiring a breaking release. Stable support drops and newly required peers still require breaking release evidence, and still-declared prereleases retain their coverage and compatibility requirements.
+
 ## 0.10.0
 
 ### Minor Changes

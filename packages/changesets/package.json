@@ -43,7 +43,7 @@
 		"breakage": "workspace:*"
 	},
 	"peerDependencies": {
-		"breakage": "^0.10.0"
+		"breakage": "^0.10.1"
 	},
 	"publishConfig": {
 		"access": "public"
