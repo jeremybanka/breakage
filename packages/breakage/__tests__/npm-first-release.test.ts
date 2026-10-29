@@ -22,7 +22,7 @@ const baselines: NpmConfig[`baseline`][] = [
 ]
 
 it.each(baselines)(
-	`discovers first publication and detects dropped prerelease support with unchanged config %j`,
+	`discovers first publication and protects stable support while allowing RC replacement with unchanged config %j`,
 	async (baseline) => {
 		const f = (fixture = npmFixture())
 		f.config.baseline = baseline
@@ -56,6 +56,18 @@ it.each(baselines)(
 			recursive: true,
 		})
 		f.representative(`rc`, `2.0.0-rc.18`)
+		const replaced = await npmCheck(f.config, options)
+		expect(replaced.exitCode, JSON.stringify(replaced)).toBe(0)
+		expect(replaced.errors).toEqual([])
+		expect(replaced.support).toEqual({
+			status: `unchanged`,
+			previousVersion: `0.1.1`,
+			changes: [],
+		})
+
+		f.update(`package.json`, {
+			peerDependencies: { host: `2.0.0-rc.18` },
+		})
 		const narrowed = await npmCheck(f.config, options)
 		expect(narrowed.exitCode, JSON.stringify(narrowed)).toBe(1)
 		expect(narrowed.errors).toEqual([])
@@ -67,7 +79,7 @@ it.each(baselines)(
 					peer: `host`,
 					reason: `narrowed-range`,
 					previous: `^1.9.0 || 2.0.0-rc.17`,
-					current: `^1.9.0 || 2.0.0-rc.18`,
+					current: `2.0.0-rc.18`,
 				},
 			],
 		})
