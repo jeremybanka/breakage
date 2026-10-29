@@ -22,30 +22,25 @@ export async function releaseVersion(
 }
 
 /**
- * Compare the union, including adjacent alternatives. semver.subset compares each
- * conjunction to a single conjunction and cannot prove coverage by their union.
- * Membership can change only at comparator boundaries or prerelease tuple gates.
+ * Compare stable support across the union, including adjacent alternatives.
+ * Prerelease support can be dropped without requiring a breaking release.
+ * semver.subset compares each conjunction to a single conjunction and cannot
+ * prove coverage by their union.
+ * Stable membership can change only at comparator bases or their next patches.
  */
 export function includesRange(current: string, previous: string): boolean {
 	const ranges = [new semver.Range(previous), new semver.Range(current)]
-	const samples = new Set<string>([`0.0.0`, `0.0.0-0`])
+	const samples = new Set<string>([`0.0.0`])
 	for (const range of ranges) {
 		for (const conjunction of range.set) {
 			for (const comparator of conjunction) {
 				const version = comparator.semver
 				if (typeof version === `symbol`) continue
 				const base = `${version.major}.${version.minor}.${version.patch}`
-				samples.add(version.version)
 				samples.add(base)
-				samples.add(`${base}-0`)
-				// The immediate successor in a prerelease sequence appends numeric zero.
-				if (version.prerelease.length) samples.add(`${version.version}.0`)
-				// Stable versions are discrete; the next patch starts another tuple gate.
+				// Include the next stable version for exclusive comparator boundaries.
 				const next = semver.inc(base, `patch`)
-				if (next) {
-					samples.add(next)
-					samples.add(`${next}-0`)
-				}
+				if (next) samples.add(next)
 			}
 		}
 	}

@@ -7,6 +7,26 @@ import { assertStagesRemoved, npmFixture } from "./npm-fixture.ts"
 let project: NpmFixture | undefined
 afterEach(() => project?.clean())
 
+it(`allows dropping release candidate support without breaking release evidence`, async () => {
+	project = npmFixture()
+	project.representative(`oldest`, `1.0.0`)
+	project.representative(`current`, `2.0.0`)
+	project.baseline({ host: `^1 || ^2 || 3.0.0-rc.1` })
+	const report = await npmCheck(project.config, {
+		baseDirectory: project.directory,
+	})
+	expect(report.exitCode, JSON.stringify(report)).toBe(0)
+	expect(report.support).toEqual({
+		status: `unchanged`,
+		previousVersion: `1.0.0`,
+		changes: [],
+	})
+	expect(
+		report.representatives.every((result) => result.status === `passed`),
+	).toBe(true)
+	assertStagesRemoved(project, report)
+}, 30_000)
+
 it(`tests every matching peer formulation through consumer imports in the environment`, async () => {
 	project = npmFixture()
 	project.representative(`oldest`, `1.0.0`)

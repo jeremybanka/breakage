@@ -253,9 +253,18 @@ describe(`support sets`, () => {
 		[`>=1.2.1 <2`, `^1.2.0`, false],
 		[`^1.2.0`, `>=1.2.1 <2`, true],
 		[`^1`, `*`, false],
-		[`>=2.0.0-beta.2 <2.0.0`, `>=2.0.0-beta.1 <2.0.0`, false],
+		[`>=2.0.0-beta.2 <2.0.0`, `>=2.0.0-beta.1 <2.0.0`, true],
 		[`2.0.0-beta.1 || ^2`, `2.0.0-beta.1`, true],
-		[`^2`, `2.0.0-beta.1 || ^2`, false],
+		[`^2`, `2.0.0-beta.1 || ^2`, true],
+		[`^1 || ^2`, `^1 || 2.0.0-rc.1`, true],
+		[`^1 || 2.0.0-rc.2`, `^1 || 2.0.0-rc.1`, true],
+		[`^1`, `^1 || 2.0.0-rc.1+build.7`, true],
+		[`^2`, `^2.0.0-rc.1`, true],
+		[`>2.0.0`, `>=2.0.0-rc.1`, false],
+		[`^1`, `^1 || ^2.0.0-rc.1`, false],
+		[`^2`, `^1 || 2.0.0-rc.1`, false],
+		[`2.0.0-rc.2`, `^2`, false],
+		[`^1`, `0.0.0`, false],
 	])(`compares %s against %s`, (current, previous, expected) => {
 		expect(includesRange(current, previous)).toBe(expected)
 	})
