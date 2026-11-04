@@ -27,7 +27,11 @@ export type ReleaseDeltaResolver = (
 	context: ReleaseDeltaContext,
 ) => VersionTransition | undefined | Promise<VersionTransition | undefined>
 export type VersionDelta = VersionTransition & { breaking: boolean }
-export type SemverPolicyOptions = { beforeV1?: `major` | `minor` | `patch` }
+export type SemverPolicyOptions = {
+	beforeV1?: `major` | `minor` | `patch`
+	/** Override the minimum increment for a 0.0.x baseline; defaults to beforeV1. */
+	beforeV0_1?: `major` | `minor` | `patch`
+}
 export type ReleasePolicyFunction = (delta: VersionTransition) => boolean
 export type ReleasePolicy = ReleasePolicyFunction
 export const releaseSchema = type({
@@ -40,17 +44,22 @@ export type ReleaseConfig = typeof releaseSchema.infer
 /** Choose which version increments permit breaking changes. Prerelease-only increments do not. */
 export function semverPolicy({
 	beforeV1 = `major`,
+	beforeV0_1 = beforeV1,
 }: SemverPolicyOptions = {}): ReleasePolicyFunction {
 	if (![`major`, `minor`, `patch`].includes(beforeV1))
 		throw new Error(`Invalid beforeV1 policy.`)
+	if (![`major`, `minor`, `patch`].includes(beforeV0_1))
+		throw new Error(`Invalid beforeV0_1 policy.`)
 	return ({ previousVersion, version }) => {
 		const previous = new semver.SemVer(previousVersion)
 		const next = new semver.SemVer(version)
 		if (next.major > previous.major) return true
-		if (previous.major !== 0 || beforeV1 === `major`) return false
+		if (previous.major !== 0) return false
+		const minimum = previous.minor === 0 ? beforeV0_1 : beforeV1
+		if (minimum === `major`) return false
 		return (
 			next.minor > previous.minor ||
-			(beforeV1 === `patch` && next.patch > previous.patch)
+			(minimum === `patch` && next.patch > previous.patch)
 		)
 	}
 }

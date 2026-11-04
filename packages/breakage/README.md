@@ -85,6 +85,8 @@ Breakage validates both versions, requires the target to be at least the current
 
 `semverPolicy()` permits major increments by default. `beforeV1: "minor"` additionally permits minor increments while the baseline major is zero; `beforeV1: "patch"` also permits patch increments there. A prerelease identifier change alone does not permit a break. At and after 1.0, the policy always requires a major increment. Equal and older versions never permit breaking changes.
 
+Use `beforeV0_1` to override the minimum increment for a `0.0.x` baseline. It accepts `"major"`, `"minor"`, or `"patch"` and inherits `beforeV1` when omitted. For example, `semverPolicy({ beforeV1: "minor", beforeV0_1: "patch" })` permits breaks in `0.0.3 → 0.0.4`, requires a minor increment for `0.1.x` and later pre-1.0 releases, and requires a major increment from 1.0 onward. The previous version selects the threshold, including transitions out of `0.0.x`; setting `beforeV0_1: "major"` requires a major increment even for `0.0.3 → 0.1.0`. Prerelease-only increments still do not permit breaks.
+
 Use `versionTransition(previousVersion, version)` to construct evidence without applying policy. Its `delta` is a semver release type or `"none"` for equal versions. `resolveReleaseDelta(release, context)` invokes and validates the resolver without applying policy. `versionDelta(previousVersion, version, policy?)` independently obtains `{ previousVersion, version, delta, breaking }`; a custom policy receives the transition and returns a boolean, and is called only for advancing versions.
 
 A custom resolver can compose the plan reader with the transition helper:
