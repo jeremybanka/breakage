@@ -2,6 +2,12 @@
 
 Breakage continues break-check's version sequence. Historical source and `break-check@` release tags are included in this repository; see the [history guide](../../docs/history/README.md) for provenance and commit mappings. Historical changelog commit IDs refer to the original [Wayforge](https://github.com/jeremybanka/wayforge) commits.
 
+## 0.10.2
+
+### Patch Changes
+
+- 91f5e8e: Add a beforeV0_1 option to semverPolicy to override the breaking-release threshold for 0.0.x baselines, inheriting beforeV1 when omitted.
+
 ## 0.10.1
 
 ### Patch Changes
