@@ -9,6 +9,7 @@ import {
 	defineConfig,
 	semverPolicy,
 	versionDelta,
+	type SemverPolicyOptions,
 } from "breakage"
 import {
 	changesetsReleaseDelta,
@@ -27,6 +28,11 @@ it.each([
 	[`0.53.3`, `0.54.0`, `minor`, true],
 	[`0.53.3`, `0.53.4`, `minor`, false],
 	[`0.53.3`, `0.53.4`, `patch`, true],
+	[`0.0.3`, `0.0.4`, `major`, false],
+	[`0.0.3`, `0.0.4`, `minor`, false],
+	[`0.0.3`, `0.0.4`, `patch`, true],
+	[`0.0.3`, `0.1.0`, `major`, false],
+	[`0.0.3`, `0.1.0`, `minor`, true],
 	[`1.2.3`, `1.3.0`, `patch`, false],
 	[`1.2.3`, `2.0.0`, `major`, true],
 	[`1.2.3`, `1.2.3`, `major`, false],
@@ -38,6 +44,53 @@ it.each([
 		expect(
 			versionDelta(previous, next, semverPolicy({ beforeV1 })).breaking,
 		).toBe(breaking)
+	},
+)
+
+it.each([
+	[`0.0.0`, `0.0.1`, `minor`, `patch`, true],
+	[`0.0.3`, `0.0.4`, `minor`, `patch`, true],
+	[`0.0.3`, `0.1.0`, `minor`, `patch`, true],
+	[`0.0.3`, `1.0.0`, `minor`, `patch`, true],
+	[`0.0.3`, `0.0.4`, `patch`, `minor`, false],
+	[`0.0.3`, `0.1.0`, `patch`, `minor`, true],
+	[`0.0.3`, `0.1.0`, `minor`, `major`, false],
+	[`0.0.3`, `1.0.0`, `minor`, `major`, true],
+	[`0.1.3`, `0.1.4`, `minor`, `patch`, false],
+	[`0.1.3`, `0.2.0`, `minor`, `patch`, true],
+	[`0.1.3`, `0.1.4`, `patch`, `major`, true],
+	[`1.2.3`, `1.2.4`, `patch`, `patch`, false],
+	[`1.2.3`, `1.3.0`, `minor`, `patch`, false],
+	[`1.2.3`, `2.0.0`, `minor`, `patch`, true],
+	[`0.0.3`, `0.0.3`, `minor`, `patch`, false],
+	[`0.0.3`, `0.0.2`, `minor`, `patch`, false],
+	[`0.0.3-beta.1`, `0.0.3-beta.2`, `minor`, `patch`, false],
+	[`0.0.3-beta.1`, `0.0.3`, `minor`, `patch`, false],
+] as const)(
+	`compares %s -> %s with beforeV1=%s and beforeV0_1=%s`,
+	(previous, next, beforeV1, beforeV0_1, breaking) => {
+		expect(
+			versionDelta(previous, next, semverPolicy({ beforeV1, beforeV0_1 }))
+				.breaking,
+		).toBe(breaking)
+	},
+)
+
+it(`preserves defaults while allowing a 0.0.x-only override`, () => {
+	expect(versionDelta(`0.0.3`, `0.0.4`).breaking).toBe(false)
+	expect(versionDelta(`0.0.3`, `0.1.0`).breaking).toBe(false)
+	const policy = semverPolicy({ beforeV0_1: `patch` })
+	expect(versionDelta(`0.0.3`, `0.0.4`, policy).breaking).toBe(true)
+	expect(versionDelta(`0.1.3`, `0.2.0`, policy).breaking).toBe(false)
+})
+
+it.each([`beforeV1`, `beforeV0_1`] as const)(
+	`rejects invalid %s thresholds`,
+	(option) => {
+		for (const value of [`invalid`, null, false, 0])
+			expect(() =>
+				semverPolicy({ [option]: value } as unknown as SemverPolicyOptions),
+			).toThrow(`Invalid ${option} policy.`)
 	},
 )
 
