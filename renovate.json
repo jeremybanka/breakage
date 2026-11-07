@@ -30,6 +30,10 @@
 	],
 	"packageRules": [
 		{
+			"groupName": "dprint",
+			"matchPackageNames": ["dprint", "@dprint/*", "/^dprint-plugin-/"]
+		},
+		{
 			"description": "Exempt consumed jeremybanka packages at every version; keep aligned with pnpm-workspace.yaml",
 			"matchDatasources": [
 				"npm"
