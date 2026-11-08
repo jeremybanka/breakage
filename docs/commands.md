@@ -44,3 +44,9 @@ Breakage's uncached `test:run` task depends on both publishable package builds a
 Vite Plus upgrades must use the target release's official `vp migrate --no-interactive`; preserve the existing lockfile until that command runs.
 
 The optional [npm peer workflow](../packages/breakage/npm.md) provides `breakage npm check`, `breakage npm check --coverage-only`, `breakage npm test <peer> <range>`, and `breakage npm test --representative <path>`. For repository-wide or distributed matrices, `breakage npm plan` audits packages and prepares one archive bundle, `breakage npm execute <id>` writes an execution receipt, and `breakage npm verify` requires the complete matching receipt set. Release compatibility scripts keep the `test:breakage` name, with `test:breakage:npm` available as a separate required gate. The existing `test:breakage:prelude` remains for historical public checks; the npm workflow has no new prelude. The test suite exercises the built npm CLI and real offline npm packing and frozen installations in disposable repositories.
+
+## Unused code
+
+Run `pnpm run check:unused` to check workspace files, exports, types, and dependencies. Run `pnpm run check:unused:production` to check production entrypoints without tests, examples, or contributor scripts keeping source code reachable. Both commands participate in `check` and run sequentially in a dedicated Knip CI job alongside the other static checks. Findings fail the check; neither command deletes code.
+
+`knip.ts` preserves published entrypoint exports and accounts for executable configuration, workers, examples, and fixture projects. Review findings against public API and dynamically loaded inputs before removing code; source reachability does not measure final bundle size.
