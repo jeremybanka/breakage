@@ -40,17 +40,16 @@ minimumReleaseAgeExclude:
   - "@oxfmt/*"
   - vitest
   - "@vitest/*"
+  - tsrs
+  - "@tsrs/*"
 
 verifyDepsBeforeRun: error
 
 peerDependencyRules:
-  allowAny:
-    - vite
   allowedVersions:
     typescript: ^5.0.0 || ^6.0.0 || ^7.0.0
-    vite: "*"
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@1.6.0
-  vite-plus: 1.6.0
+  vite: npm:@voidzero-dev/vite-plus-core@8.3.8000
+  vite-plus: 1.7.0
 overrides:
   vite@*: "catalog:"
