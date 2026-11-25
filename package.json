@@ -34,7 +34,7 @@
 		"@dprint/markdown": "0.29.0",
 		"@dprint/oxc": "0.52.0",
 		"@dprint/toml": "0.10.0",
-		"@types/node": "26.6.6",
+		"@types/node": "26.6.7",
 		"breakage": "workspace:*",
 		"breakage-supervisor": "npm:breakage@0.8.2",
 		"cspell": "10.5.2",
