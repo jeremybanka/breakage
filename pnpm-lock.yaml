@@ -368,7 +368,7 @@ importers:
         version: 4.0.1
       '@changesets/pre':
         specifier: ^3
-        version: 3.0.0
+        version: 3.0.1
       '@changesets/read':
         specifier: ^1
         version: 1.0.1
@@ -450,8 +450,8 @@ packages:
     resolution: {integrity: sha512-P0iaMb9p9CRYZiTgAllEIF9AUMQHIy1G72tKlcIqJp61icZSsKQNiOPdxAMZG8m/DvZwt/oz5xEbTpike//dWg==}
     engines: {node: ^22.11 || ^24 || >=26}
 
-  '@changesets/pre@3.0.0':
-    resolution: {integrity: sha512-Zm/6YliV/a2oeWTqHJf6KxLrQwgcK1i/BRDl2m0EKZvbnxV5fG9QRhwJJGshjsZTUTS6dkfURQ2K6aAvgNw/3Q==}
+  '@changesets/pre@3.0.1':
+    resolution: {integrity: sha512-4LXYgB0jPeL/NRLzuDDFW+cTrPmr+9HJM0bV9baRlDvoy5Lt+dTxArg9SMfqeKkWKNMxDNg2RcZI2vw4BJAJLw==}
     engines: {node: ^22.11 || ^24 || >=26}
 
   '@changesets/read@1.0.1':
@@ -464,6 +464,10 @@ packages:
 
   '@changesets/types@7.0.0':
     resolution: {integrity: sha512-c5GoiQyt3pxiXjrWSNoP8/GRf4kG+VnKzovx1OQM8dYYALlSwgedmkPmJ+ZqGxqwg9D3Bkj85Uo4KLd5BN3A0w==}
+    engines: {node: ^22.11 || ^24 || >=26}
+
+  '@changesets/types@7.1.0':
+    resolution: {integrity: sha512-UmpOTft7EIMCJRpLy5oy8rLNXdyhTBMMOaNi5t4B/2zEiluyys3pKc1jBXDE22SXmmwMgKtJ/m2qxgD/w1iJJA==}
     engines: {node: ^22.11 || ^24 || >=26}
 
   '@changesets/write@1.0.1':
@@ -2569,7 +2573,7 @@ snapshots:
       '@changesets/errors': 1.0.0
       '@changesets/get-dependents-graph': 3.0.0
       '@changesets/git': 4.0.1
-      '@changesets/pre': 3.0.0
+      '@changesets/pre': 3.0.1
       '@changesets/read': 1.0.1
       '@changesets/should-skip-package': 1.0.0
       '@changesets/types': 7.0.0
@@ -2617,10 +2621,10 @@ snapshots:
       '@changesets/types': 7.0.0
       yaml: 2.9.1
 
-  '@changesets/pre@3.0.0':
+  '@changesets/pre@3.0.1':
     dependencies:
       '@changesets/errors': 1.0.0
-      '@changesets/types': 7.0.0
+      '@changesets/types': 7.1.0
       '@manypkg/get-packages': 3.1.0
 
   '@changesets/read@1.0.1':
@@ -2634,6 +2638,8 @@ snapshots:
       '@changesets/types': 7.0.0
 
   '@changesets/types@7.0.0': {}
+
+  '@changesets/types@7.1.0': {}
 
   '@changesets/write@1.0.1':
     dependencies:
