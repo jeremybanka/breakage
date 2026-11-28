@@ -4,7 +4,7 @@
 	"private": true,
 	"type": "module",
 	"dependencies": {
-		"@changesets/assemble-release-plan": "7.0.0",
+		"@changesets/assemble-release-plan": "7.1.0",
 		"@changesets/config": "4.0.1",
 		"@changesets/pre": "3.0.0",
 		"@changesets/read": "1.0.1",
